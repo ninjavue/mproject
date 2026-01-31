@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { METHOD } from "../../api/zirhrpc";
-import { sendRpcRequest } from "../../api/webClient";
 import { useZirhStref } from "../../context/ZirhContext";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const ViewProfile = () => {
   const { stRef } = useZirhStref();
@@ -12,7 +12,7 @@ const ViewProfile = () => {
     const getUser = async () => {
       const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
       if (resU.status === METHOD.OK) {
-        setUser(resU.result[1]);
+        setUser(resU[1]);
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
       }

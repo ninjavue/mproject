@@ -1,13 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
-
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
-
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
 
 /* App.css */
 
@@ -779,6 +776,97 @@ table.depart-table {
   height: 965px !important;
 }
 
+/* docx-preview layout fixes (avoid global box-sizing affecting Word layout) */
+.docx-wrapper,
+.docx-wrapper * {
+  box-sizing: content-box;
+}
+
+.docx-wrapper {
+  background: #f1f1f1;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.docx-wrapper > section {
+  background-color: #ffffff;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
+  margin: 0 auto 24px;
+  width: 100%;
+  max-width: 794px;
+}
+
+.docx-wrapper article {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.docx {
+  color: #000;
+}
+
+.docx-preview-container {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  width: 100%;
+}
+
+/* Keep docx-preview styles as-is, only minor cleanup */
+.docx-preview-container .docx {
+  text-rendering: optimizeLegibility;
+  font-family: initial;
+  font-size: initial;
+}
+
+.docx-preview-container .docx * {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.docx-preview-container .docx p {
+  margin: 0;
+}
+
+.docx-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  display: block;
+}
+
+/* Preserve leading spaces in split spans */
+.docx-preview-container .docx span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.docx-tabbed {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  gap: 16px;
+}
+
+.docx-tabbed .docx-tab-left,
+.docx-tabbed .docx-tab-right {
+  white-space: nowrap;
+}
+
+.docx-tabbed .docx-tab-right {
+  margin-left: auto;
+  text-align: right;
+}
+
 
 .editing .a4 {
   height: auto !important;
@@ -916,4 +1004,30 @@ object #save {
 background-item.is-visible:not(.backwards) {
   transition: opacity var(--transition-standard-in);
   opacity: 1;
+}
+
+/* .docx-wrapper{
+  background: white !important;
+}
+
+.docx-wrapper>section.docx{
+  background: none !important;
+  box-shadow: none !important;
+}
+
+
+.docs{
+  width: auto;
+  padding-right: 63px;
+}
+
+
+.docx-preview-container {
+  margin-left: -24px;
+} */
+
+
+.docx-wrapper{
+  min-height: 97.5vh;
+  background-color: #333 !important;
 }

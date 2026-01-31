@@ -9,13 +9,13 @@ import Slide from "@mui/material/Slide";
 import Captcha from "../../components/captcha";
 import { ec as EC } from "elliptic";
 import { METHOD } from "../../api/zirhrpc";
-import { sendRpcRequest } from "../../api/webClient";
 import { useZirhStref } from "../../context/ZirhContext";
 import SHA256 from "crypto-js/sha256";
+import BN from "bn.js";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const ec = new EC("secp256k1");
-const BN = require("bn.js");
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -42,7 +42,6 @@ const SignIn = () => {
   const [isRunning, setIsRunning] = useState(false);
 
   const refreshCaptchaFromParent = () => {
-    console.log("test captcha");
     captchaRef.current?.refreshCaptcha();
   };
 
@@ -72,8 +71,7 @@ const SignIn = () => {
 
       const key = deriveKeyPairFromPassword(password);
 
-      const k = ec.genKeyPair().getPrivate(); // Tasodifiy k
-      console.log("K:", k);
+      const k = ec.genKeyPair().getPrivate(); 
       const R = ec.g.mul(k).encode("hex", false);
 
       const res1 = await sendRpcRequest(stRef, METHOD.LOGIN_CHECK, {
@@ -106,15 +104,15 @@ const SignIn = () => {
         setIsRunning(true);
       }
 
-      const uuidR = res1.result["1"].id;
+      const uuidR = res1[1].id;
 
       const x = new BN(key, "hex");
-      const c = new BN(res1.result["1"].c, "hex");
+      const c = new BN(res1[1].c, "hex");
       const n = ec.curve.n;
       const s = k.add(c.mul(x)).umod(n);
 
       const newS = s.toString("hex");
-
+    
       const res2 = await sendRpcRequest(stRef, METHOD.LOGIN_GET_OTP, {
         1: uuidR,
         2: newS,
@@ -127,7 +125,7 @@ const SignIn = () => {
         return;
       }
       if (res2.status === METHOD.OK) {
-        setUuidCaptcha(res2.result[1].uuid);
+        setUuidCaptcha(res2[1].uuid);
         setStep(2);
         setOpen(false);
       }
@@ -164,7 +162,6 @@ const SignIn = () => {
     try {
       refreshCaptchaFromParent();
 
-      console.log({ uuidCaptcha, x, y, captchaId });
       const res = await sendRpcRequest(stRef, METHOD.LOGIN_VERIFY_OTP, {
         1: uuidCaptcha,
         2: code,
@@ -172,10 +169,20 @@ const SignIn = () => {
         5: x,
         6: y,
       });
+
       if (res.status === METHOD.OK) {
         toast.success("Muvaffaqiyatli tizimga kirdingiz");
-        localStorage.setItem("checkUser", randomText);
-        navigate("/page/dashboard");
+        localStorage.setItem(
+          "checkUser",
+          randomText ||
+            "dWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0",
+        );
+        // notify router in the same window and other tabs
+        window.dispatchEvent(new Event("authChanged"));
+        try {
+          window.localStorage && window.localStorage.setItem("_lastAuth", Date.now());
+        } catch (e) {}
+        navigate("/");
       } else {
         if (res.status == METHOD.OTP_ERR) {
           toast.error("Tasdiqlash kodi xato!");
@@ -187,11 +194,14 @@ const SignIn = () => {
         }
       }
       setOpen2(false);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const handleClickOpen = (e) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    refreshCaptchaFromParent();
+
 
     if (!emailRegex.test(email)) {
       setOpen(false);
@@ -221,7 +231,6 @@ const SignIn = () => {
     await handleLogin(x, y, captchaId);
   };
   const handleCaptchaSolve2 = async ({ x, y, captchaId }) => {
-    console.log({ x, y, captchaId });
     await handleLogin2(x, y, captchaId);
   };
 
@@ -231,7 +240,7 @@ const SignIn = () => {
 
     ws.onopen = () => console.log("✅ WS connected");
     ws.onmessage = (e) => console.log("📩 message", e.data);
-    ws.onerror = (err) => console.error("❌ WS error", err);
+    ws.onerror = (err) => console.error("❌ WS error");
 
     return () => ws.close();
   }, []);

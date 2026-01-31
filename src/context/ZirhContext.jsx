@@ -1,15 +1,12 @@
 import React, { createContext, useContext, useRef, useEffect } from "react";
-import { getSuperFingerprint8 } from "../api/zirhrpc";
-import { initWebSocket } from "../api/webClient";
+import { initWebSocket } from "../transport/wsClient";
+import { getSuperFingerprint8 } from "../protocol/zirhRpc";
 
 const ZirhContext = createContext(null);
 
-// new
 const WS_URL = "ws://10.10.115.40:8080/wsock";
 const LABEL = "zirhwebproto";
 const MAX_RETRY_DELAY = 30000;
-
-// new end
 
 export const ZirhProvider = ({ children }) => {
   const stRef = useRef({
@@ -24,43 +21,35 @@ export const ZirhProvider = ({ children }) => {
     clientId: null,
   });
 
- useEffect(() => {
-  let canceled = false;
+  useEffect(() => {
+    let canceled = false;
 
-  const init = async () => {
-    try {
-      // clientId olish
-      const cid = await getSuperFingerprint8();
-      if (canceled) return;
+    (async () => {
+      try {
+        const cid = await getSuperFingerprint8();
+        stRef.current.clientId = cid;
 
-      stRef.current.clientId = cid;
+        await initWebSocket(stRef, {
+          WS_URL,
+          LABEL,
+          MAX_RETRY_DELAY,
+          emitGlobalEvent: (name, data) => {
+            window.dispatchEvent(
+              new CustomEvent(`zirh:${name}`, { detail: data }),
+            );
+          },
+        });
 
-      // WS + WASM init
-      await initWebSocket(stRef, {
-        WS_URL,
-        LABEL,
-        MAX_RETRY_DELAY,
-        emitGlobalEvent: (name, data) =>
-          window.dispatchEvent(new CustomEvent(`zirh:${name}`, { detail: data })),
-      });
+        if (!canceled) console.log("✅ WS init ok");
+      } catch (e) {
+        console.error("❌ Zirh init error:", e);
+      }
+    })();
 
-      if (!canceled) console.log("✅ WS + WASM init ok");
-    } catch (e) {
-      console.log("Zirh init error", e);
-    }
-  };
-
-  init();
-
-  return () => {
-    canceled = true;
-    // WS clientni tozalash
-    if (stRef.current.wsClient) {
-      stRef.current.wsClient.disconnect?.();
-    }
-  };
-}, []);
-
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   return (
     <ZirhContext.Provider value={{ stRef }}>{children}</ZirhContext.Provider>

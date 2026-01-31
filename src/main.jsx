@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "react-hot-toast";
 import AppRouter from "./router";
 import { ZirhProvider } from "./context/ZirhContext";
+import ErrorBoundary from "./components/ErrorBoundary";
 import './styles/app.css'
 
 function App() {
@@ -43,6 +44,8 @@ const root = createRoot(rootElement);
 
 root.render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 );

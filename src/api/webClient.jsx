@@ -347,16 +347,14 @@ export const sendRpcRequest = (stRef, methodId, params = {}) => {
   const state = stRef.current;
 
   return new Promise((resolve, reject) => {
-    if (!ws || state.phase !== 3) return reject("Offline");
+    if (!state.wc || state.phase !== 3) return reject("Offline");
 
     state.rpcId = (state.rpcId + 1) & 0xffff;
     const rpcId = state.rpcId;
 
     state.rpcPending.set(rpcId, { resolve, reject });
 
-
-    // new ---------------------------------------------------
-
+    // ✅ JS’da frame build qilamiz (msgpack mapping shu yerda)
     const buf = buildRequestFrame(rpcId, methodId, params, state.clientId); // ArrayBuffer
     const u8 = new Uint8Array(buf);
 
@@ -367,13 +365,6 @@ export const sendRpcRequest = (stRef, methodId, params = {}) => {
       state.rpcPending.delete(rpcId);
       reject(e);
     }
-    // new end---------------------------------------------------
-
-
-    // const rpcFrame = new Uint8Array(
-    //   buildRequestFrame(rpcId, methodId, params, state.clientId)
-    // );
-    // sendAppMessage(rpcFrame, state);
   });
 };
 

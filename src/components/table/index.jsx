@@ -5,7 +5,7 @@ import jsPDF from "jspdf";
 import htmlToPdfmake from "html-to-pdfmake";
 
 import { useZirhStref } from "../../context/ZirhContext";
-import { downloadFileViaRpcNew } from "../../api/webClient";
+import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
 
 const CellValue = ({
   text,

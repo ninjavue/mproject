@@ -8,11 +8,11 @@ import DialogTitle from "@mui/material/DialogTitle";
 import Slide from "@mui/material/Slide";
 import Captcha from "../../components/captcha";
 import { ec as EC } from "elliptic";
-import { sendRpcRequest } from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import SHA256 from "crypto-js/sha256";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 const ec = new EC("secp256k1");
 
 const Transition = React.forwardRef(function Transition(props, ref) {
@@ -50,18 +50,17 @@ const ForgotPassword = () => {
       });
 
       if (res.status == METHOD.OK) {
-        setUuidCaptcha(res.result[1].uuid);
+        setUuidCaptcha(res[1].uuid);
         toast.success("Pochta manzilingizga tasdiqlash kodi yuborildi");
         setOpen(false);
         setStep(2);
       } else {
-        console.log(res);
         if (res.status == METHOD.CAPTCHA_ERR) {
           toast.error("Captcha natijasi xato!");
           setOpen(false);
           refreshCaptchaFromParent();
         } else if (res.status == METHOD.Not_Found) {
-          if (res.result["1"] == "user not found") {
+          if (res["1"] == "user not found") {
             setOpen(false);
             refreshCaptchaFromParent();
             toast.error("Bunday foydalanuvchi mavjud emas!");

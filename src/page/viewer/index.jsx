@@ -91,7 +91,27 @@ export default function Viewer() {
         const container = document.createElement("div");
         document.body.appendChild(container);
         await renderAsync(buffer, container);
+
+        // Fix table header text colors (white text on dark background)
+        const cells = container.querySelectorAll("td");
+        cells.forEach((td) => {
+          const bgColor = td.style.backgroundColor;
+          if (
+            bgColor &&
+            bgColor !== "transparent" &&
+            bgColor !== "white" &&
+            bgColor !== "rgb(255, 255, 255)" &&
+            bgColor !== "rgba(0, 0, 0, 0)"
+          ) {
+            td.style.color = "white";
+            td.querySelectorAll("p, span, b, strong, i, em").forEach((el) => {
+              el.style.color = "white";
+            });
+          }
+        });
+
         setDocxHtml(container.innerHTML);
+        document.body.removeChild(container);
       }
     };
     renderDocx();

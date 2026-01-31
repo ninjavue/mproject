@@ -1,4 +1,4 @@
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "../dashboard/dashboard.css";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
@@ -11,14 +11,11 @@ import { DesktopDatePicker } from "@mui/x-date-pickers/DesktopDatePicker";
 import Select from "react-select";
 
 import ExpertizaTable from "../../components/table";
-import {
-  downloadFileViaRpc,
-  sendRpcRequest,
-  uploadFileViaRpc,
-} from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
+import { downloadFileViaRpc, uploadFileViaRpc } from "../../rpc/fileRpc";
 
 const Card = ({ label, value, icon, accent = "teal" }) => {
   function hexToRgba(hex, alpha) {
@@ -91,7 +88,7 @@ const STATUS_STEPS = [
 
 const ITEMS_PER_PAGE = 10;
 
-const Mobil = () => {
+const Mobile = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -218,10 +215,10 @@ const Mobil = () => {
   };
 
   const handleModal = (id) => {
-    console.log(id);
+    // console.log(id);
     const exp = expertize.find((item) => item.id === id);
     setSingleExp(exp);
-    console.log(exp);
+    // console.log(exp);
     handleNewCreate(exp);
     setIsModalOpen(!isModalOpen);
     if (isModalOpen) {
@@ -248,7 +245,7 @@ const Mobil = () => {
   };
 
   const handleCreate = async () => {
-    console.log(formData);
+    // console.log(formData);
     // return
     if (
       !formData.orgName ||
@@ -285,7 +282,7 @@ const Mobil = () => {
     );
     // console.log(formData);
 
-    formData.contract = doneRes.result["fileId"];
+    formData.contract = doneRes.fileId
     // console.log(doneRes);
     const payload = {
       1: formData.orgName,
@@ -366,7 +363,7 @@ const Mobil = () => {
         3: 2,
       });
       if (res.status == METHOD.OK) {
-        const page = formatBufferToId(res.result[1].cursorId);
+        const page = formatBufferToId(res[1].cursorId);
         if (page != null) {
           setIsPage(page);
         }
@@ -374,12 +371,12 @@ const Mobil = () => {
 
         // if()
 
-        const list = res?.result[1]?.docs;
+        const list = res[1]?.docs;
 
-        console.log(res.result[1]);
+        // console.log(res[1]);
 
         if (!Array.isArray(list)) {
-          console.error("docs kelmadi yoki array emas", res);
+          // console.error("docs kelmadi yoki array emas", res);
           return;
         }
 
@@ -421,7 +418,7 @@ const Mobil = () => {
         const res = await sendRpcRequest(stRef, METHOD.USER_GET_FULL, {});
         if (res.status === METHOD.OK) {
           const mappedItems = await Promise.all(
-            res.result[1].map(async (user, index) => {
+            res[1].map(async (user, index) => {
               const info = user["4"] || [];
 
               let imageFileId = info[5] || "";
@@ -464,7 +461,7 @@ const Mobil = () => {
 
     getAllUser();
 
-    console.log(expertize);
+    // console.log(expertize);
   }, []);
 
   const totalItems = expertize?.length || 0;
@@ -633,7 +630,6 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
   };
 
   const handleEdit = async (item) => {
-    console.log(item);
     try {
       if (item) {
         setFormData({
@@ -703,7 +699,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           },
         );
 
-        formData.contract = uploadRes.result["fileId"];
+        formData.contract = uploadRes.fileId
       }
       if (formData.permLetter && formData.permLetter instanceof File) {
         setUploadProgress(0);
@@ -719,7 +715,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           },
         );
 
-        formData.permLetter = uploadRes.result["fileId"];
+        formData.permLetter = uploadRes.fileId
       }
       if (formData.consentLetter && formData.consentLetter instanceof File) {
         setUploadProgress(0);
@@ -735,7 +731,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           },
         );
 
-        formData.consentLetter = uploadRes.result["fileId"];
+        formData.consentLetter = uploadRes.fileId
       }
 
       // console.log(formData)
@@ -765,7 +761,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       Object.keys(fieldMap).forEach((key) => {
         if (formData[key] !== editItemOld[key]) {
           const code = fieldMap[key];
-          console.log(code);
+          // console.log(code);
           if (code == 6.3 || code == 6.1) {
             payload[code] = {
               1: formData[key],
@@ -790,9 +786,9 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         return;
       }
 
-      console.log("Payload:", payload);
+      // console.log("Payload:", payload);
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
-      console.log(res);
+      // console.log(res);
 
       if (res.status === METHOD.OK) {
         setItems((prev) =>
@@ -812,7 +808,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         toast.error("Xatolik: Server ma'lumotni qabul qilmadi");
       }
     } catch (err) {
-      console.error("Update Error:", err);
+      // console.error("Update Error:", err);
       toast.error("Foydalanuvchi yangilanmadi, tizim xatosi");
     }
   };
@@ -902,7 +898,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
 
   const handleFileOpen = (item) => {
     try {
-      console.log(item)
+      // console.log(item)
     } catch (error) {
       console.log(error);
     }
@@ -1753,4 +1749,4 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
   );
 };
 
-export default Mobil;
+export default Mobile;

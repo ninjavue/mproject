@@ -1,14 +1,11 @@
-import React, { use, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal } from "../../components";
 import { useZirhStref } from "../../context/ZirhContext";
 import { useZirhEvent } from "../../api/useZirh";
-import {
-  downloadFileViaRpc,
-  sendRpcRequest,
-  uploadFileViaRpc,
-} from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
+import { downloadFileViaRpc, uploadFileViaRpc } from "../../rpc/fileRpc";
 
 const UserAdd = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -127,7 +124,9 @@ const UserAdd = () => {
       },
     );
 
-    formData.image = doneRes.result["fileId"];
+    console.log(doneRes);
+
+    formData.image = doneRes.fileId;
     const res = await sendRpcRequest(stRef, METHOD.USER_CREATE, {
       1: formData.surname,
       2: formData.name,
@@ -170,12 +169,13 @@ const UserAdd = () => {
     };
 
     const getAllUser = async () => {
+      console.log("get all user")
       try {
         const res = await sendRpcRequest(stRef, METHOD.USER_GET_FULL, {});
-        // console.log(res);
+        console.log(res);
         if (res.status === METHOD.OK) {
           const mappedItems = await Promise.all(
-            res.result[1].map(async (user, index) => {
+            res[1].map(async (user, index) => {
               const info = user["4"] || [];
 
               let imageFileId = info[5] || "";

@@ -5,10 +5,10 @@ import { useReactToPrint } from "react-to-print";
 import { useParams } from "react-router-dom";
 import { expertEtaps, inExperts } from "../../api";
 import ExpertizeModal from "../../components/expertize";
-import { sendRpcRequest } from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 const A4_HEIGHT = 1120;
 const A4_CONTENT_HEIGHT = 1120; // A4 content height px
 const A4_WIDTH = 794;
@@ -986,16 +986,15 @@ const Word = () => {
     try {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
       if (res.status === METHOD.OK) {
-        setContractDate(formatDate(res.result[1]?.[2][0]));
-        setHtmlContent(res.result[1]?.[8]);
-        setContractName(res.result[1]?.[10]);
-        setOrgTypeName(res.result[1]?.[1][6]);
-        setOrgName(res.result[1]?.[1][0]);
-        setAppName(res.result[1]?.[1][3]);
-        setExpertize(res.result[1]?.[1]);
-        const raw = res.result[1]?.[13];
-
-        const apkName = res.result[1]?.[8][0];
+        setContractDate(formatDate(res[1]?.[2][0]));
+        setHtmlContent(res[1]?.[8]);
+        setContractName(res[1]?.[10]);
+        setOrgTypeName(res[1]?.[1][6]);
+        setOrgName(res[1]?.[1][0]);
+        setAppName(res[1]?.[1][3]);
+        setExpertize(res[1]?.[1]);
+        const raw = res[1]?.[13];
+        const apkName = res[1]?.[8][0];
         const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i);
         const apkName1 = match ? match[0] : null;
         setApkFileName(apkName1);
@@ -1007,7 +1006,7 @@ const Word = () => {
         // console.log("Topilgan fayl:", apkName1);
 
         // Field 8 ning 0-indexidan table ma'lumotlarini va qolganini paged sifatida olish
-        const field8Data = res.result[1]?.[8] || [];
+        const field8Data = res[1]?.[8] || [];
         let vulnData = field8Data;
 
         // Agar field 8 array bo'lsa va 0-index string bo'lsa, bu table ma'lumotlari
@@ -1047,21 +1046,21 @@ const Word = () => {
 
         setHighVuln(highVuln1);
 
-        const raw1 = res.result[1]?.[12];
+        const raw1 = res[1]?.[12];
 
         const mV = Array.isArray(raw1)
           ? raw1.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
           : [{ a1: raw1.a1, a2: raw1.a2, a3: raw1.a3 }];
         setMediumVuln(mV);
 
-        const raw2 = res.result[1]?.[11];
+        const raw2 = res[1]?.[11];
 
         const lV = Array.isArray(raw2)
           ? raw2.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
           : [{ a1: raw2.a1, a2: raw2.a2, a3: raw2.a3 }];
         setLowVuln(lV);
 
-        // console.log(res.result[1]?.[13]);
+        // console.log(res[1]?.[13]);
         setAllVuln([...highVuln1, ...mV, ...lV]);
 
         // Table ma'lumotlari field 8 ning 0-indexidan olingan

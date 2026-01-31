@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { sendRpcRequest, uploadFileViaRpc } from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import Select from "react-select";
+import { sendRpcRequest } from "../../rpc/rpcClient";
+import { uploadFileViaRpc } from "../../rpc/fileRpc";
 
 const vulnLevelOptions = [
   { value: "1", label: "Yuqori" },
@@ -54,29 +55,6 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    return;
-
-    const map = {
-      surname: 4.2,
-      name: 4.3,
-      partName: 4.4,
-      role: 3,
-      department: 4.1,
-      phone: 4.5,
-      image: 4.6,
-    };
-
-    // const code = map[name];
-    // if (!code) return;
-
-    // if (value === editItemOld[name]) {
-    //   setChangedFields((prev) => prev.filter((c) => c !== code));
-    // } else {
-    // //   setChangedFields((prev) =>
-    //     prev.includes(code) ? prev : [...prev, code],
-    //   );
-    // }
   };
 
   const saveAllPages = async () => {
@@ -95,7 +73,7 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
           },
         );
 
-        formData.contract = uploadRes.result["fileId"];
+        formData.contract = uploadRes.fileId;
       }
 
      
@@ -115,15 +93,15 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
     try {
       const res = await sendRpcRequest(stRef, METHOD.VULN_GET, { 1: 1 });
       if (res.status === METHOD.OK) {
-        // console.log(res.result[1]);
-        const high = res.result[1].filter((v) => v[1]?.[0] === 1);
-        const middle = res.result[1].filter((v) => v[1]?.[0] === 2);
-        const low = res.result[1].filter((v) => v[1]?.[0] === 3);
+        // console.log(res[1]);
+        const high = res[1].filter((v) => v[1]?.[0] === 1);
+        const middle = res[1].filter((v) => v[1]?.[0] === 2);
+        const low = res[1].filter((v) => v[1]?.[0] === 3);
         setHighVuln(high);
         setMiddleVuln(middle);
         setLowVuln(low);
-        setVuln(res.result[1]);
-        // console.log(res.result[1]);
+        setVuln(res[1]);
+        // console.log(res[1]);
         // console.log(low);
       }
     } catch (error) {

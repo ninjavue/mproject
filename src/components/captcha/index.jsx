@@ -8,8 +8,8 @@ import React, {
 import Loader from "../loader";
 import "../../styles/captcha.css";
 import { METHOD } from "../../api/zirhrpc";
-import { sendRpcRequest } from "../../api/webClient";
 import { useZirhStref } from "../../context/ZirhContext";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const GRID_SIZE = 10;
 
@@ -26,35 +26,46 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
   const startPosition = useRef({ x: 0, y: 0 });
   const { stRef } = useZirhStref();
   const [oldCaptcha, setOldCaptcha] = useState(null);
+  const retryCountRef = useRef(0);
 
-  // Captchani yangilash funksiyasi
-  const fetchCaptcha = async () => {
+  const fetchCaptcha = async (retryAttempt = 0) => {
     try {
-      // Yangilashdan oldin eski holatlarni tozalaymiz
+      if (!stRef) {
+        if (retryAttempt < 1) {
+          await new Promise(r => setTimeout(r, 300 * (retryAttempt + 1)));
+          return fetchCaptcha(retryAttempt + 1);
+        }
+        return;
+      }
+
       setCaptcha(null); 
+
       
       const res = await sendRpcRequest(stRef, METHOD.CAPTCHA_GET, {});
-      // console.log(res);
-      if (res.status === METHOD.OK) {
-
-        
-        setCaptcha(res.result[1]);
+      if (res && res.status === METHOD.OK && res[1]) {
+        setCaptcha(res[1]);
         setPosition({ x: 20, y: 230 }); // Puzzleni joyiga qaytarish
         setDragging(false);            // Draggingni to'xtatish
-        setTimer(30);                  // Timerni yangilash
+        setTimer(30);    
+        retryCountRef.current = 0;
+      } else if (res && res.status !== METHOD.OK && retryAttempt < 3) {
+        await new Promise(r => setTimeout(r, 500));
+        return fetchCaptcha(retryAttempt + 1);
       }
     } catch (error) {
-      console.error("Captcha yuklashda xatolik:", error);
+      if (retryAttempt < 1) {
+        await new Promise(r => setTimeout(r, 500));
+        return fetchCaptcha(retryAttempt + 1);
+      }
     }
   };
 
-  // Tashqaridan (ref orqali) chaqirish uchun
   useImperativeHandle(ref, () => ({
     refreshCaptcha: fetchCaptcha,
   }));
 
   useEffect(() => {
-    fetchCaptcha();
+    fetchCaptcha(0);
   }, []);
 
   useEffect(() => {
@@ -118,7 +129,8 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
       <div className="d-center" style={{ height: "300px", minWidth: "300px"}}>
         <Loader />
       </div>
-    );}
+    );
+  }
 
   return (
     <div style={{ width: "300px" }}>

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { sendRpcRequest } from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const Header = () => {
   const location = useLocation();
@@ -37,7 +37,6 @@ const Header = () => {
   const handleLogout = async () => {
     try {
       const res = await sendRpcRequest(stRef, METHOD.LOGIN_LOG_OUT, {});
-      console.log(res);
       if (res.status == METHOD.OK) {
         localStorage.removeItem("AUTH_KEY_B64");
         localStorage.removeItem("data");
@@ -56,8 +55,9 @@ const Header = () => {
     const getUser = async () => {
      try {
        const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
+      
       if (resU.status === METHOD.OK) {
-        setUser(resU.result[1]);
+        setUser(resU[1]);
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
       }

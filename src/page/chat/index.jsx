@@ -1,25 +1,18 @@
-import React, { useRef, useState, useEffect, use } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/TextLayer.css";
-import "react-pdf/dist/Page/AnnotationLayer.css";
+import React, { useRef, useState, useEffect } from "react";
 import JSZip, { file } from "jszip";
+import html2canvas from "html2canvas";
+import { useReactToPrint } from "react-to-print";
 import { renderAsync } from "docx-preview";
 import toast from "react-hot-toast";
 import Select from "react-select";
 import { useZirhStref } from "../../context/ZirhContext";
 import { METHOD } from "../../api/zirhrpc";
-import {
-  downloadFileViaRpc,
-  downloadFileViaRpcNew,
-  sendRpcRequest,
-  uploadFileViaRpc,
-} from "../../api/webClient";
 import Avatar from "@mui/material/Avatar";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import { useZirhEvent } from "../../api/useZirh";
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.mjs`;
+import { sendRpcRequest } from "../../rpc/rpcClient";
+import { downloadFileViaRpcNew, uploadFileViaRpc } from "../../rpc/fileRpc";
 
 const ChatPage = () => {
   const fileInputRef = useRef(null);
@@ -39,8 +32,9 @@ const ChatPage = () => {
   const [viewerFileType, setViewerFileType] = useState(null);
   const [viewerZipEntries, setViewerZipEntries] = useState([]);
   const [viewerSelectedFile, setViewerSelectedFile] = useState(null);
-  const [viewerNumPages, setViewerNumPages] = useState(null);
+  const [viewerFileUrl, setViewerFileUrl] = useState(null);
   const [viewerDocxHtml, setViewerDocxHtml] = useState(null);
+  const [viewerError, setViewerError] = useState(null);
   const [user, setUser] = useState(null);
   const [channelOpen, setChannelOpen] = useState(false);
   const [open1, setOpen1] = useState(false);
@@ -50,6 +44,15 @@ const ChatPage = () => {
   const [userId, setUserId] = useState(null);
   const [groupId, setGroupId] = useState(null);
   const [isUpdateGroup, setIsUpdateGroup] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printImages, setPrintImages] = useState([]);
+  const printComponentRef = useRef(null);
+  
+  const handleReactToPrint = useReactToPrint({
+    contentRef: printComponentRef,
+    documentTitle: "Hujjat",
+  });
+
   const [singleGroup, setSinglGroup] = useState(null);
   const [showLeft, setShowLeft] = useState(false);
   const [groupAll, setGroupAll] = useState([]);
@@ -66,6 +69,7 @@ const ChatPage = () => {
   const [userEmail, setUserEmail] = useState("");
   const [privateId, setPrivateId] = useState(null);
   const [countD, setCountD] = useState(0);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const bottomRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
@@ -75,6 +79,7 @@ const ChatPage = () => {
   const skipNextScrollRef = useRef(false);
   const scrollTypeRef = useRef("initial"); // 'initial' | 'top' | 'bottom'
   const scrollContainerRef = useRef(null);
+  const viewerBackgroundUrlRef = useRef(null);
 
   const { stRef } = useZirhStref();
 
@@ -132,6 +137,13 @@ const ChatPage = () => {
 
     setSelected(item);
     setMessages(sampleMessagesFor(item));
+
+    // Clear unread count when opening this conversation
+    const activeChatId = item?.userId || item?.id;
+    setUnreadCounts((prev) => ({
+      ...prev,
+      [activeChatId]: 0,
+    }));
   };
 
   useEffect(() => {
@@ -172,17 +184,48 @@ const ChatPage = () => {
   useZirhEvent(null, async (data) => {
     console.log(data);
     if (data.methodId == METHOD.CHAT_SEND_MSG_SERVER) {
+      // determine conversation id of incoming message
+      const incomingConvId = formatBufferToId(data.params[1]);
+      const senderId = formatBufferToId(data.params[2]);
+      const userId = user?.id;
+      const isOwnMessage = userId && senderId === userId;
+
+      console.log("Message event:", {
+        incomingConvId,
+        senderId,
+        userId,
+        isOwnMessage,
+        convId,
+        shouldIncrementUnread: !isOwnMessage && (!convId || incomingConvId !== convId),
+      });
+
+      // If message is from another conversation and not from me, increment unread count
+      if (!isOwnMessage && (!convId || incomingConvId !== convId)) {
+        console.log("Incrementing unread for:", incomingConvId);
+        setUnreadCounts((prev) => {
+          const updated = {
+            ...prev,
+            [incomingConvId]: (prev[incomingConvId] || 0) + 1,
+          };
+          console.log("Updated unread counts:", updated);
+          return updated;
+        });
+      }
+
+      // only append message if it belongs to the currently opened conversation
+      if (!convId || incomingConvId !== convId) {
+        // message is for another conversation; ignore here (UI shows other convs separately)
+        return;
+      }
+
       // mark as incoming so effect will auto-scroll
       scrollTypeRef.current = "initial";
       const message = {
         id: formatBufferToId(data.params._id),
-        id2: formatBufferToId(data.params[1]),
-        id3: formatBufferToId(data.params[2]),
+        id2: incomingConvId,
+        id3: senderId,
         type: data.params[3][1] === 1 ? "text" : "file",
-        sender:
-          formatBufferToId(data.params[2]) === user.id
-            ? "me"
-            : formatBufferToId(data.params[2]),
+        sender: isOwnMessage ? "me" : senderId,
         text: data.params[3][2],
         file: {
           id: data.params[3][3]?.[1],
@@ -191,7 +234,7 @@ const ChatPage = () => {
           mime: "application/pdf",
           url: null,
         },
-        read: formatBufferToId(data.params[2]) === user.id ? true : false,
+        read: isOwnMessage ? true : false,
         progress: 0,
         status: "done",
       };
@@ -402,7 +445,7 @@ const ChatPage = () => {
       },
     );
 
-    const fileId = doneRes.result["fileId"];
+    const fileId = doneRes.fileId
     if (fileId && file.type.startsWith("image/")) {
       const url = await downloadFileAll(fileId);
       newMsg.file.id = url;
@@ -421,7 +464,6 @@ const ChatPage = () => {
       4: null,
     });
 
-    console.log(file?.name?.length)
     console.log(res)
     setMessages((s) => [...s, newMsg]);
     // ensure autoscroll for sent file messages
@@ -526,9 +568,9 @@ const ChatPage = () => {
         3: msgId,
       };
       const res = await sendRpcRequest(stRef, METHOD.CHAT_GET_MSG, payload);
-      console.log(res.result[1]);
+      console.log(res[1]);
       if (res.status === METHOD.OK) {
-        const raw = res.result[1];
+        const raw = res[1];
         setCountD(raw?.count);
 
         const list = Array.isArray(raw)
@@ -570,7 +612,10 @@ const ChatPage = () => {
             fileName?.endsWith(".pdf") ||
             fileName?.endsWith(".zip")
           ) {
-            item.file.url = null;
+            const url = await downloadFileAll(item.file.id);
+            console.log(url)
+            item.file.url = url;
+            setPreviewUrl(url);
           } else {
             if (item.file.id) {
               item.file.id = await downloadFileAll(item.file.id);
@@ -593,11 +638,13 @@ const ChatPage = () => {
       console.log(error);
     }
   };
-  const onPdfLoadSuccess = ({ numPages }) => setViewerNumPages(numPages);
 
   const openViewer = async (message) => {
     if (!message || !message.file) return;
+    if (viewerFileUrl) URL.revokeObjectURL(viewerFileUrl);
+    setViewerFileUrl(null);
     try {
+      setViewerError(null);
       let blob;
       if (message.file.blob) {
         blob = message.file.blob;
@@ -610,15 +657,19 @@ const ChatPage = () => {
         setIsUploading(false);
       }
 
+      const fileName = (message.file.name || "").toLowerCase();
       const mime = message.file.mime || blob.type || "";
 
-      if (mime === "application/zip" || message.file.name?.endsWith(".zip")) {
+      if (fileName.endsWith(".zip")) {
         const zip = await JSZip.loadAsync(blob);
         const entries = [];
         for (const p of Object.keys(zip.files)) {
           const entry = zip.files[p];
           const name = p.split("/").pop();
-          if (!entry.dir && (name.endsWith(".pdf") || name.endsWith(".docx"))) {
+          if (
+            !entry.dir &&
+            (name.endsWith(".pdf") || name.endsWith(".docx") || name.endsWith(".doc"))
+          ) {
             const fileBlob = await entry.async("blob");
             entries.push({ name, blob: fileBlob });
           }
@@ -626,31 +677,31 @@ const ChatPage = () => {
         setViewerZipEntries(entries);
         setViewerFileType("application/zip");
         setViewerSelectedFile(null);
-        setViewerNumPages(null);
         setViewerDocxHtml(null);
         setViewerOpen(true);
         return;
       }
 
-      if (mime === "application/pdf" || message.file.name?.endsWith(".pdf")) {
-        setViewerSelectedFile(blob);
+      if (fileName.endsWith(".pdf")) {
+        const pdfBlob = new Blob([blob], { type: "application/pdf" });
+        const url = URL.createObjectURL(pdfBlob);
+        setViewerSelectedFile(pdfBlob);
+        setViewerFileUrl(url);
         setViewerFileType("application/pdf");
-        setViewerNumPages(null);
         setViewerDocxHtml(null);
         setViewerOpen(true);
         return;
       }
 
-      if (
-        mime ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        message.file.name?.endsWith(".docx")
-      ) {
+      const isDocx = fileName.endsWith(".docx");
+      const isDoc = fileName.endsWith(".doc");
+      if (isDocx || isDoc) {
         setViewerSelectedFile(blob);
         setViewerFileType(
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          isDocx
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "application/msword",
         );
-        setViewerNumPages(null);
         setViewerDocxHtml(null);
         setViewerOpen(true);
         return;
@@ -661,13 +712,95 @@ const ChatPage = () => {
   };
 
   const openZipEntry = async (entry) => {
-    setViewerSelectedFile(entry.blob);
-    const mime = entry.name.endsWith(".pdf")
+    const isPdf = entry.name.endsWith(".pdf");
+    const mime = isPdf
       ? "application/pdf"
-      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      : entry.name.endsWith(".doc")
+        ? "application/msword"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    
+    const finalBlob = isPdf ? new Blob([entry.blob], { type: "application/pdf" }) : entry.blob;
+    if (isPdf) {
+      if (viewerFileUrl) URL.revokeObjectURL(viewerFileUrl);
+      const url = URL.createObjectURL(finalBlob);
+      setViewerFileUrl(url);
+    }
+    
+    setViewerSelectedFile(finalBlob);
     setViewerFileType(mime);
     setViewerDocxHtml(null);
-    setViewerNumPages(null);
+  };
+
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    try {
+      if (viewerFileType === "application/pdf" && viewerFileUrl) {
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = viewerFileUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          iframe.contentWindow.print();
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            setIsPrinting(false);
+          }, 1000);
+        };
+      } else if (docxContainerRef.current) {
+        const container = docxContainerRef.current;
+        const sections = container.querySelectorAll("section.docx");
+        
+        if (sections.length === 0) {
+          toast.error("Hujjat tarkibi topilmadi");
+          setIsPrinting(false);
+          return;
+        }
+
+        const images = [];
+        for (const section of sections) {
+          const canvas = await html2canvas(section, {
+            scale: 3, // Sifatni maksimal darajaga ko'tarish
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff",
+            onclone: (clonedDoc) => {
+              // Jadval chiziqlari va o'lchamlari buzilmasligi uchun
+              const tables = clonedDoc.querySelectorAll("table");
+              tables.forEach(table => {
+                table.style.borderCollapse = "collapse";
+                table.querySelectorAll("td, th").forEach(cell => {
+                  cell.style.boxSizing = "border-box";
+                });
+              });
+            }
+          });
+          images.push(canvas.toDataURL("image/png"));
+        }
+        
+        setPrintImages(images);
+        
+        // ReactToPrint ni chaqirishdan oldin renderingni kutish
+        setTimeout(() => {
+          handleReactToPrint();
+          setIsPrinting(false);
+        }, 800);
+      }
+    } catch (e) {
+      console.error("Print error:", e);
+      toast.error("Chop etishda xatolik yuz berdi");
+      setIsPrinting(false);
+    }
+  };
+
+  const handleCloseViewer = () => {
+    if (viewerFileUrl) {
+      URL.revokeObjectURL(viewerFileUrl);
+      setViewerFileUrl(null);
+    }
+    setViewerOpen(false);
+    setViewerSelectedFile(null);
+    setViewerFileType(null);
   };
 
   const getAllChat = async () => {
@@ -677,7 +810,7 @@ const ChatPage = () => {
       if (res.status === METHOD.OK) {
         const groupsData = Array.from(
           new Map(
-            res.result[1]
+            res[1]
               .filter((item) => item[1] === 2)
               .map((item) => [
                 formatBufferToId(item._id),
@@ -693,7 +826,7 @@ const ChatPage = () => {
 
         const usersData = Array.from(
           new Map(
-            res.result[1]
+            res[1]
               .filter(
                 (item) =>
                   item[1] === 1 &&
@@ -729,7 +862,7 @@ const ChatPage = () => {
 
         const channelData = Array.from(
           new Map(
-            res.result[1]
+            res[1]
               .filter((item) => item[1] === 3)
               .map((item) => [
                 formatBufferToId(item._id),
@@ -747,9 +880,9 @@ const ChatPage = () => {
 
         setChannels(channelData);
         setUserAll(usersData);
-        setGroupAll(res.result[1]);
+        setGroupAll(res[1]);
         setGroups(groupsData);
-        setChats(res.result[1]);
+        setChats(res[1]);
       } else {
         console.log("Xatolik yuz berdi");
       }
@@ -760,20 +893,40 @@ const ChatPage = () => {
 
   useEffect(() => {
     const renderDocx = async () => {
-      if (
-        viewerSelectedFile &&
+      const isWordDoc =
         viewerFileType ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ) {
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        viewerFileType === "application/msword";
+      if (viewerSelectedFile && isWordDoc) {
         try {
           const buffer = await viewerSelectedFile.arrayBuffer();
           if (docxContainerRef.current) {
             docxContainerRef.current.innerHTML = "";
-            await renderAsync(buffer, docxContainerRef.current);
+            await renderAsync(buffer, docxContainerRef.current, null, {
+              className: "docx",
+              inWrapper: true,
+              ignoreWidth: false,
+              ignoreHeight: false,
+              ignoreFonts: false,
+              breakPages: true,
+              ignoreLastRenderedPageBreak: false,
+              experimental: true,
+              renderHeaders: true,
+              renderFooters: true,
+              renderFootnotes: true,
+              renderEndnotes: true,
+              renderComments: false,
+              useBase64URL: true,
+            });
+            await applyDocxBackgroundImage(buffer, docxContainerRef.current);
+            normalizeDocxSpans(docxContainerRef.current);
             setViewerDocxHtml(docxContainerRef.current.innerHTML);
           }
         } catch (e) {
           console.error("docx render err", e);
+          setViewerError(
+            "Word faylini ochishda xatolik. Iltimos .docx formatida yuboring.",
+          );
         }
       }
     };
@@ -803,11 +956,11 @@ const ChatPage = () => {
       try {
         const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
         if (resU.status === METHOD.OK) {
-          resU.result[1].id = formatBufferToId(resU.result[1]._id);
+          resU[1].id = formatBufferToId(resU[1]._id);
           const full_name =
-            resU.result[1]?.[4]?.[1] + " " + resU.result[1]?.[4]?.[2];
+            resU[1]?.[4]?.[1] + " " + resU[1]?.[4]?.[2];
           setFullName(full_name);
-          setUser(resU.result[1]);
+          setUser(resU[1]);
         }
       } catch (error) {
         console.log(error);
@@ -911,7 +1064,7 @@ const ChatPage = () => {
         const res = await sendRpcRequest(stRef, METHOD.USER_GET_FULL, {});
         if (res.status === METHOD.OK) {
           const mappedItems = await Promise.all(
-            res.result[1].map(async (user, index) => {
+            res[1].map(async (user, index) => {
               const info = user["4"] || [];
 
               return {
@@ -981,6 +1134,322 @@ const ChatPage = () => {
     }
   };
 
+  const normalizeDocxSpans = (container) => {
+    if (!container) return;
+
+    // Fix table header text colors (white text on dark background)
+    const cells = container.querySelectorAll("td");
+    cells.forEach((td) => {
+      const bgColor = td.style.backgroundColor;
+      if (
+        bgColor &&
+        bgColor !== "transparent" &&
+        bgColor !== "white" &&
+        bgColor !== "rgb(255, 255, 255)" &&
+        bgColor !== "rgba(0, 0, 0, 0)"
+      ) {
+        td.style.color = "white";
+        td.querySelectorAll("p, span, b, strong, i, em").forEach((el) => {
+          el.style.color = "white";
+        });
+      }
+    });
+
+    const paragraphs = container.querySelectorAll("p");
+    paragraphs.forEach((p) => {
+      const hasInlineFontSize = p.querySelector("[style*='font-size']");
+      if (hasInlineFontSize) {
+        return;
+      }
+      const originalBoldNodes = Array.from(p.querySelectorAll("b, strong"));
+      const inlineTags = new Set(["b", "strong", "span", "i", "em"]);
+      const hasOnlyInlineChildren = Array.from(p.childNodes).every((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent.trim().length === 0;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return true;
+        return inlineTags.has(node.tagName.toLowerCase());
+      });
+
+      if (
+        originalBoldNodes.length === 2 &&
+        hasOnlyInlineChildren &&
+        (p.textContent || "").trim().length <= 80
+      ) {
+        const leftText = originalBoldNodes[0].textContent;
+        const rightText = originalBoldNodes[1].textContent;
+        p.innerHTML = "";
+        p.classList.add("docx-tabbed");
+        const leftSpan = document.createElement("span");
+        leftSpan.className = "docx-tab-left";
+        const leftBold = document.createElement("b");
+        leftBold.textContent = leftText;
+        leftSpan.appendChild(leftBold);
+        const rightSpan = document.createElement("span");
+        rightSpan.className = "docx-tab-right";
+        const rightBold = document.createElement("b");
+        rightBold.textContent = rightText;
+        rightSpan.appendChild(rightBold);
+        p.appendChild(leftSpan);
+        p.appendChild(rightSpan);
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      const extraNodes = [];
+      let alignOverride = "";
+      const pAlign = window.getComputedStyle ? window.getComputedStyle(p).textAlign : "";
+      if (pAlign === "right" || pAlign === "center") {
+        // keep original layout for aligned paragraphs to avoid breaking positioning
+        console.log("docx aligned paragraph:", pAlign, p.outerHTML);
+        return;
+      }
+
+      const appendText = (text) => {
+        if (!text) return;
+        fragment.appendChild(document.createTextNode(text));
+      };
+
+      const appendStyled = (text, { bold = false, italic = false } = {}) => {
+        if (!text) return;
+        let node = document.createTextNode(text);
+        if (italic) {
+          const i = document.createElement("i");
+          i.appendChild(node);
+          node = i;
+        }
+        if (bold) {
+          const b = document.createElement("b");
+          b.appendChild(node);
+          node = b;
+        }
+        fragment.appendChild(node);
+      };
+
+      const updateAlignOverride = (el) => {
+        const textAlign =
+          el.style?.textAlign ||
+          (window.getComputedStyle ? window.getComputedStyle(el).textAlign : "");
+        if (textAlign === "right") {
+          alignOverride = "right";
+        } else if (!alignOverride && textAlign === "center") {
+          alignOverride = "center";
+        }
+      };
+
+      const walkNode = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          appendText(node.textContent);
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const el = node;
+        const tag = el.tagName.toLowerCase();
+        updateAlignOverride(el);
+
+        if (tag === "br") {
+          return;
+        }
+
+        if (tag === "b" || tag === "strong") {
+          appendStyled(el.textContent, { bold: true });
+          return;
+        }
+
+        if (tag === "i" || tag === "em") {
+          appendStyled(el.textContent, { italic: true });
+          return;
+        }
+
+        if (tag === "span") {
+          const weight =
+            el.style?.fontWeight ||
+            (window.getComputedStyle ? window.getComputedStyle(el).fontWeight : "");
+          const isBold = weight === "bold" || Number(weight) >= 600;
+          const style =
+            el.style?.fontStyle ||
+            (window.getComputedStyle ? window.getComputedStyle(el).fontStyle : "");
+          const isItalic = style === "italic" || style === "oblique";
+          if (isBold || isItalic) {
+            appendStyled(el.textContent, { bold: isBold, italic: isItalic });
+          } else {
+            el.childNodes.forEach((child) => walkNode(child));
+          }
+          return;
+        }
+
+        extraNodes.push(el.cloneNode(true));
+      };
+
+      p.childNodes.forEach((child) => walkNode(child));
+
+      p.innerHTML = "";
+      if (alignOverride) {
+        p.style.textAlign = alignOverride;
+      }
+
+      const fragmentNodes = Array.from(fragment.childNodes);
+      const hasElements =
+        fragmentNodes.some((n) => n.nodeType === Node.ELEMENT_NODE) || extraNodes.length > 0;
+      const textValue = fragmentNodes.map((n) => n.textContent || "").join("");
+      const tabParts = textValue.split(/\s{2,}/).filter((v) => v.trim().length > 0);
+
+      if (!hasElements && tabParts.length >= 2 && textValue.length <= 120) {
+        p.classList.add("docx-tabbed");
+        const leftSpan = document.createElement("span");
+        leftSpan.className = "docx-tab-left";
+        leftSpan.textContent = tabParts[0];
+        const rightSpan = document.createElement("span");
+        rightSpan.className = "docx-tab-right";
+        rightSpan.textContent = tabParts[tabParts.length - 1];
+        p.appendChild(leftSpan);
+        p.appendChild(rightSpan);
+      } else {
+        if (fragment.childNodes.length > 0) {
+          const pre = document.createElement("pre");
+          pre.className = "docx-pre";
+          pre.appendChild(fragment);
+          p.appendChild(pre);
+        }
+        extraNodes.forEach((node) => p.appendChild(node));
+      }
+    });
+  };
+
+  const applyDocxBackgroundImage = async (buffer, container) => {
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      const parseXml = (xmlText) =>
+        new DOMParser().parseFromString(xmlText, "application/xml");
+
+      const findRelId = (xmlDoc) => {
+        const fillNodes = [
+          ...Array.from(xmlDoc.getElementsByTagName("v:fill")),
+          ...Array.from(xmlDoc.getElementsByTagName("fill")),
+        ];
+        for (const node of fillNodes) {
+          const rel =
+            node.getAttribute("r:id") ||
+            node.getAttribute("r:embed") ||
+            node.getAttribute("id");
+          if (rel) return rel;
+        }
+        const imgNodes = [
+          ...Array.from(xmlDoc.getElementsByTagName("v:imagedata")),
+          ...Array.from(xmlDoc.getElementsByTagName("imagedata")),
+        ];
+        for (const node of imgNodes) {
+          const rel =
+            node.getAttribute("r:id") ||
+            node.getAttribute("r:embed") ||
+            node.getAttribute("id");
+          if (rel) return rel;
+        }
+        return null;
+      };
+
+      const getRelTarget = (relsDoc, relId) => {
+        const rels = Array.from(relsDoc.getElementsByTagName("Relationship"));
+        const rel = rels.find((r) => r.getAttribute("Id") === relId);
+        return rel ? rel.getAttribute("Target") : null;
+      };
+
+      const normalizeTarget = (target) => {
+        if (!target) return null;
+        let t = target.replace(/^\/+/, "");
+        if (t.startsWith("../")) {
+          t = t.replace(/^(\.\.\/)+/, "");
+        }
+        if (!t.startsWith("word/")) {
+          t = `word/${t}`;
+        }
+        return t;
+      };
+
+      let relId = null;
+      const headerTargets = [];
+      const docXmlFile = zip.file("word/document.xml");
+      if (docXmlFile) {
+        const docXml = await docXmlFile.async("text");
+        relId = findRelId(parseXml(docXml));
+      }
+
+      let relsTarget = null;
+      if (relId) {
+        const relsFile = zip.file("word/_rels/document.xml.rels");
+        if (relsFile) {
+          const relsXml = await relsFile.async("text");
+          relsTarget = getRelTarget(parseXml(relsXml), relId);
+        }
+      }
+
+      const headerFiles = Object.keys(zip.files).filter((f) =>
+        /^word\/header\d+\.xml$/.test(f),
+      );
+      for (const headerFile of headerFiles) {
+        const headerXml = await zip.file(headerFile).async("text");
+        const headerRelId = findRelId(parseXml(headerXml));
+        if (!headerRelId) continue;
+        const relsPath = headerFile.replace(
+          /^word\/(.+)\.xml$/,
+          "word/_rels/$1.xml.rels",
+        );
+        const headerRels = zip.file(relsPath);
+        if (!headerRels) continue;
+        const relsXml = await headerRels.async("text");
+        const target = getRelTarget(parseXml(relsXml), headerRelId);
+        if (target) headerTargets.push(target);
+      }
+
+      const targets = headerTargets.length > 0 ? headerTargets : relsTarget ? [relsTarget] : [];
+      if (targets.length === 0) return;
+
+      const urls = [];
+      for (const t of targets) {
+        const targetPath = normalizeTarget(t);
+        if (!targetPath) continue;
+        const imageFile = zip.file(targetPath);
+        if (!imageFile) continue;
+        const blob = await imageFile.async("blob");
+        const url = URL.createObjectURL(blob);
+        urls.push(url);
+      }
+
+      if (urls.length === 0) return;
+      if (viewerBackgroundUrlRef.current) {
+        URL.revokeObjectURL(viewerBackgroundUrlRef.current);
+      }
+      viewerBackgroundUrlRef.current = urls[0];
+
+      const sections = Array.from(
+        container.querySelectorAll(".docx-wrapper > section, section"),
+      );
+      if (sections.length === 0) return;
+
+      const applyBackground = (section, url) => {
+        if (!section || !url) return;
+        if (section.style.backgroundImage) return;
+        section.style.backgroundImage = `url(${url})`;
+        section.style.backgroundRepeat = "no-repeat";
+        section.style.backgroundPosition = "center";
+        section.style.backgroundSize = "cover";
+      };
+
+      if (urls.length === 1) {
+        // apply only to first page to avoid painting all pages
+        applyBackground(sections[0], urls[0]);
+      } else {
+        sections.forEach((section, idx) => {
+          const url = urls[Math.min(idx, urls.length - 1)];
+          applyBackground(section, url);
+        });
+      }
+    } catch (e) {
+      console.log("docx background parse failed", e);
+    }
+  };
+
   const closeModal = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
@@ -1006,13 +1475,15 @@ const ChatPage = () => {
   const senders = [...new Set(messages.map((m) => m.sender))];
 
   const getUserAvatar = async (id) => {
+    console.log("userId: ", id)
     if (id === "me") {
       return user.avatar;
     }
 
     const res = await sendRpcRequest(stRef, METHOD.USER_GET_PHOTO, { 1: id });
+    console.log("avatar res: ", res)
 
-    const foundAvatar = res.result[1];
+    const foundAvatar = res[1];
     let avatarUrl = null;
     if (res.status === METHOD.OK) {
       avatarUrl = await downloadFileAll(foundAvatar);
@@ -1043,7 +1514,7 @@ const ChatPage = () => {
         1: userEmail,
       });
       const user = people.find(
-        (item) => item.userId === formatBufferToId(res.result[1]),
+        (item) => item.userId === formatBufferToId(res[1]),
       );
 
       if (user) {
@@ -1051,7 +1522,7 @@ const ChatPage = () => {
         return;
       }
       if (res.status === METHOD.OK) {
-        setPrivateId(formatBufferToId(res.result[1]));
+        setPrivateId(formatBufferToId(res[1]));
       } else {
         setPrivateId("1");
         toast.error("Foydalanuvchi topilmadi");
@@ -1442,42 +1913,46 @@ const ChatPage = () => {
               <TabButtons />
             </div>
 
-            <div className="chat-all-list flex flex-col gap-1.5 mt-3 max-h-[70vh] min-h-[70vh] overflow-y-auto">
+            <div className="chat-all-list flex flex-col gap-1.5 mt-3 max-h-[65vh] min-h-[65vh] overflow-y-auto">
               {(activeTab === "shaxsiy"
                 ? people
                 : activeTab === "guruh"
                   ? groups
                   : channels
-              ).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    selectConversation(item);
-                  }}
-                  className={`flex items-center justify-between gap-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-600 px-6 py-2.5 ${selected?.id === item.id ? "bg-neutral-100 dark:bg-neutral-700" : ""}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Avatar />
-                    <div className="info">
-                      <h6 className="text-base mb-1 line-clamp-1 text-start font-medium text-[#6b6b6b]">
-                        {item.name}
-                      </h6>
-                      <p className="mb-0 text-xs line-clamp-1">{item.last}</p>
+              ).map((item) => {
+                const chatId = item?.userId || item?.id;
+                const unreadCount = unreadCounts[chatId] || 0;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      selectConversation(item);
+                    }}
+                    className={`flex items-center justify-between gap-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-600 px-6 py-2.5 ${selected?.id === item.id ? "bg-neutral-100 dark:bg-neutral-700" : ""}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Avatar />
+                      <div className="info">
+                        <h6 className="text-base mb-1 line-clamp-1 text-start font-medium text-[#6b6b6b]">
+                          {item.name}
+                        </h6>
+                        <p className="mb-0 text-xs line-clamp-1">{item.last}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="shrink-0 text-end">
-                    <p className="mb-0 text-neutral-400 text-xs lh-1">
-                      {item.time}
-                    </p>
-                    {item.unread > 0 && (
-                      <span className="w-4 h-4 text-xs rounded-full bg-warning-600 text-white inline-flex items-center justify-center">
-                        {item.unread}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
+                    <div className="shrink-0 text-end">
+                      <p className="mb-0 text-neutral-400 text-xs lh-1">
+                        {item.time}
+                      </p>
+                      {unreadCount > 0 && (
+                        <span className="w-5 h-5 text-xs rounded-full bg-red-600 text-white inline-flex items-center justify-center font-semibold">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             <div
@@ -1837,13 +2312,29 @@ const ChatPage = () => {
 
                   {viewerOpen && (
                     <div className="fixed inset-0 bg-black/70 dark:bg-black/80 flex items-center justify-center z-50 ">
-                      <div className="w-[790px] h-[100vh] max-w-[1100px] bg-white dark:bg-[#1e1f25] shadow-xl overflow-auto">
-                        <button
-                          onClick={() => setViewerOpen(false)}
-                          className=" text-white absolute top-8 right-[40px] text-7xl p-2 rounded px-3"
-                        >
-                          ✕
-                        </button>
+                       <div className="absolute top-8 right-[40px] flex gap-4 z-50">
+                          <button
+                            onClick={handlePrint}
+                            disabled={isPrinting}
+                            className={`text-white ${isPrinting ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"} p-3 rounded-full flex items-center justify-center shadow-lg`}
+                            title="Chop etish"
+                          >
+                            {isPrinting ? (
+                              <iconify-icon icon="line-md:loading-twotone-loop" width="32" />
+                            ) : (
+                              <iconify-icon icon="material-symbols:print-outline" width="32" />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={handleCloseViewer}
+                            className="text-white bg-red-600 hover:bg-red-700 p-3 rounded-full flex items-center justify-center shadow-lg"
+                          >
+                            <iconify-icon icon="ic:round-close" width="32" />
+                          </button>
+                        </div>
+                      <div className="docs w-[1000px] h-[100vh] max-w-[1100px] overflow-auto relative">
+                       
 
                         {/* ZIP listing */}
                         {viewerFileType === "application/zip" && (
@@ -1870,28 +2361,30 @@ const ChatPage = () => {
                         )}
 
                         {/* PDF viewer */}
-                        {viewerSelectedFile &&
+                        {viewerFileUrl &&
                           viewerFileType === "application/pdf" && (
-                            <Document
-                              file={viewerSelectedFile}
-                              onLoadSuccess={onPdfLoadSuccess}
+                            <object
+                              data={viewerFileUrl + "#toolbar=0&navpanes=0&scrollbar=1"}
+                              type="application/pdf"
+                              className="w-full h-full border-none"
+                              style={{ minHeight: "calc(100vh - 40px)" }}
+                              onContextMenu={(e) => e.preventDefault()}
                             >
-                              {Array.from(new Array(viewerNumPages), (_, i) => (
-                                <Page
-                                  key={`p_${i}`}
-                                  pageNumber={i + 1}
-                                  className="mb-4 flex justify-center"
-                                />
-                              ))}
-                            </Document>
+                              <p>PDF ochishda xatolik yuz berdi.</p>
+                            </object>
                           )}
 
                         {/* DOCX viewer */}
                         {viewerSelectedFile &&
-                          viewerFileType ===
-                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && (
-                            <div>
-                              <div ref={docxContainerRef} />
+                          (viewerFileType ===
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                            viewerFileType === "application/msword") && (
+                            <div className="docx-preview-container">
+                              {viewerError ? (
+                                <p className="text-red-500 p-4">{viewerError}</p>
+                              ) : (
+                                <div ref={docxContainerRef} />
+                              )}
                             </div>
                           )}
 
@@ -1986,6 +2479,42 @@ const ChatPage = () => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+      {/* Chop etish uchun maxsus komponent (Word page dagi kabi) */}
+      <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+        <div ref={printComponentRef}>
+          <style>
+            {`
+              @media print {
+                @page { margin: 0; size: A4; }
+                .print-page-a4 {
+                  width: 210mm;
+                  height: 297mm;
+                  page-break-after: always;
+                  display: flex;
+                  justify-content: center;
+                  align-items: flex-start;
+                  background: white;
+                  overflow: hidden;
+                }
+                .print-page-a4 img {
+                  width: 100%;
+                  height: auto;
+                  max-height: 100%;
+                  object-fit: contain;
+                }
+                .print-page-a4:last-child {
+                  page-break-after: auto;
+                }
+              }
+            `}
+          </style>
+          {printImages.map((img, idx) => (
+            <div key={idx} className="print-page-a4">
+              <img src={img} alt={`Page ${idx + 1}`} />
+            </div>
+          ))}
         </div>
       </div>
     </>
