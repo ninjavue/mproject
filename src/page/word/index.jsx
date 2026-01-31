@@ -153,7 +153,11 @@ const Word = () => {
   const [vuln, setVuln] = useState([]);
   const [contractDate, setContractDate] = useState("");
   const [allVuln, setAllVuln] = useState([]);
-  const [newVuln, setNewVuln] = useState([]);
+  const [newVuln, setNewVuln] = useState({
+    android: [],
+    ios: [],
+    umumiy: [],
+  });
   const [pages1, setPages1] = useState([]);
   const [tableData, setTableData] = useState({});
   const [rows, setRows] = useState([]);
@@ -952,7 +956,35 @@ const Word = () => {
                 return item;
               })
           : [];
-        setNewVuln(flatVulnData);
+        const splitVulnByPlatform = (blocks) => {
+          const grouped = { android: [], ios: [], umumiy: [] };
+          let currentPlatform = "android";
+
+          blocks.forEach((block) => {
+            if (block.includes('class="title"')) {
+              const titleText = stripHtml(block).toLowerCase();
+              if (titleText.includes("android")) {
+                currentPlatform = "android";
+              } else if (titleText.includes("ios")) {
+                currentPlatform = "ios";
+              } else if (
+                titleText.includes("mobil ilova va server") ||
+                titleText.includes("umumiy")
+              ) {
+                currentPlatform = "umumiy";
+              }
+            }
+
+            if (!grouped[currentPlatform]) {
+              grouped[currentPlatform] = [];
+            }
+            grouped[currentPlatform].push(block);
+          });
+
+          return grouped;
+        };
+
+        setNewVuln(splitVulnByPlatform(flatVulnData));
 
         const highVuln1 = Array.isArray(raw)
           ? raw.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
@@ -1112,7 +1144,8 @@ const Word = () => {
 
   const handleSaveDocFromModal = (docVuln) => {
     // console.log("Childdan keldi:", docVuln);
-    generateVulnHtml(docVuln.vuln);
+    setPlatform(docVuln.platform);
+    generateVulnHtml(docVuln.vuln, docVuln.platform);
     const html = vulnerabilityTemplates[docVuln.type];
     // console.log("HTML:", html);
 
@@ -1135,7 +1168,7 @@ const Word = () => {
     return doc.body.textContent || "";
   };
 
-  const generateVulnHtml = (vulnData) => {
+  const generateVulnHtml = (vulnData, platformKey) => {
     const level = vulnData?.[1]?.[0];
     const title = stripHtml(vulnData?.[1]?.[1]);
     const result = stripHtml(vulnData?.[1]?.[2]);
@@ -1144,10 +1177,19 @@ const Word = () => {
 
     const levelText = level === 1 ? "Yuqori" : level === 2 ? "O‘rta" : "Past";
 
+    const platformTitleMap = {
+      android: `2.2. “${appName}” android mobil ilovasi ekspertizasi natijalari bo‘yicha batafsil izoh`,
+      ios: `2.2. “${appName}” iOS mobil ilovasi ekspertizasi natijalari bo‘yicha batafsil izoh`,
+      umumiy: `2.2. “${appName}” mobil ilova va server o‘rtasidagi so‘rovlarni o‘rganish natijalari bo‘yicha batafsil izoh`,
+    };
+
+    const platformTitle =
+      platformTitleMap[platformKey] || platformTitleMap.android;
+
     let newInnerHtml = "";
-    if (newVuln.length == 0) {
+    if ((newVuln?.[platformKey] || []).length === 0) {
       newInnerHtml = `
-    <div class="title">2.2. “${appName}” android mobil ilovasi ekspertizasi natijalari bo‘yicha batafsil izoh</div>
+    <div class="title">${platformTitle}</div>
     <div class="exp-title">2.2.${vulnCounter} ${title}</div>
     <div class="exp-d"><b>Xavflilik darajasi:</b> ${levelText}</div>
     <div class="text">${result}</div>
@@ -1183,7 +1225,10 @@ const Word = () => {
       }
     });
 
-    setNewVuln((prev) => [...prev, ...blocks]);
+    setNewVuln((prev) => ({
+      ...prev,
+      [platformKey]: [...(prev?.[platformKey] || []), ...blocks],
+    }));
     vulnCounter += 1;
 
     // console.log(newVuln);
@@ -1305,19 +1350,56 @@ const Word = () => {
   };
 
   useEffect(() => {
-    if (newVuln?.length) {
-      const result = paginateContent(newVuln);
-      if (platform == "android") {
-        setPages1(result);
-      } else if (platform == "ios") {
-        setPages2(result);
-      } else if (platform == "umumiy") {
-        setPages3(result);
-      } else {
-        console.log(result);
-        setPages1(result);
-      }
-    }
+    const getLevelOrder = (block) => {
+      const text = stripHtml(block);
+      if (text.includes("Yuqori")) return 1;
+      if (text.includes("O‘rta") || text.includes("O'rta")) return 2;
+      if (text.includes("Past")) return 3;
+      return 99;
+    };
+
+    const sortVulnBlocks = (blocks = []) => {
+      const headerBlocks = [];
+      const groups = [];
+      let current = null;
+
+      blocks.forEach((block) => {
+        if (block.includes('class="title"') && block.includes("2.2.")) {
+          headerBlocks.push(block);
+          return;
+        }
+
+        if (block.includes('class="exp-title"')) {
+          if (current) groups.push(current);
+          current = { blocks: [block], levelOrder: 99 };
+          return;
+        }
+
+        if (!current) {
+          headerBlocks.push(block);
+          return;
+        }
+
+        current.blocks.push(block);
+        if (block.includes('class="exp-d"')) {
+          current.levelOrder = getLevelOrder(block);
+        }
+      });
+
+      if (current) groups.push(current);
+
+      groups.sort((a, b) => a.levelOrder - b.levelOrder);
+
+      return [...headerBlocks, ...groups.flatMap((g) => g.blocks)];
+    };
+
+    const androidBlocks = sortVulnBlocks(newVuln?.android || []);
+    const iosBlocks = sortVulnBlocks(newVuln?.ios || []);
+    const umumiyBlocks = sortVulnBlocks(newVuln?.umumiy || []);
+
+    setPages1(androidBlocks.length ? paginateContent(androidBlocks) : []);
+    setPages2(iosBlocks.length ? paginateContent(iosBlocks) : []);
+    setPages3(umumiyBlocks.length ? paginateContent(umumiyBlocks) : []);
   }, [newVuln]);
 
   const handleInput = (pageContent) => {
@@ -1510,14 +1592,7 @@ const Word = () => {
     ]);
   };
 
-  const currentPages =
-    platform === "android"
-      ? pages1
-      : platform === "ios"
-        ? pages2
-        : platform === "umumiy"
-          ? pages3
-          : pages1;
+  const currentPages = [...pages1, ...pages2, ...pages3];
   return (
     <>
       <ExpertizeModal
