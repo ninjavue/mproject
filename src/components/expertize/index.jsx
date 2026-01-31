@@ -274,7 +274,7 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
                   placeholder="Zaiflik turini tanlang..."
                   isSearchable
                   isClearable
-                  value={vulnOptions.find((o) => o._id === selectedVuln)}
+                  value={vulnOptions.find((o) => o.value === selectedVuln)}
                   onChange={handleVulnChange}
                 />
               </div>

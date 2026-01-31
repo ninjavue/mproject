@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -401,10 +401,7 @@ const Word = () => {
     const editables = document.querySelectorAll(".editable");
 
     const attachImageResizeHandler = () => {
-      // Faqat hali handler biriktirilmagan rasmlarni olamiz
-      const images = document.querySelectorAll(
-        ".page-content img:not([data-resize-attached])",
-      );
+      const images = document.querySelectorAll(".page-content img");
 
       images.forEach((img) => {
         // Marker qo‘yamiz – bu rasmga handler biriktirilganligini bildiradi
@@ -427,7 +424,7 @@ const Word = () => {
           img.style.maxWidth = "none"; // muhim – % dan chiqarib yuboramiz
         };
 
-        const onPointerUp = (e) => {
+        const onPointerUp = () => {
           document.removeEventListener("pointermove", onPointerMove);
           document.removeEventListener("pointerup", onPointerUp);
           handlePageOverflow?.(); // agar funksiya mavjud bo‘lsa
@@ -456,7 +453,9 @@ const Word = () => {
         // Eski handler bo‘lsa – olib tashlaymiz (xavfsizlik)
         img.removeEventListener("pointerdown", img._resizeHandler);
         img._resizeHandler = onPointerDown;
-        img.addEventListener("pointerdown", onPointerDown, { passive: false });
+        img.addEventListener("pointerdown", onPointerDown, {
+          passive: false,
+        });
 
         // Vizual holatni yangilash
         img.style.cursor = editing ? "ew-resize" : "default";
@@ -466,21 +465,15 @@ const Word = () => {
     };
 
     const updateAllImagesVisual = () => {
-      document
-        .querySelectorAll(".page-content img[data-resize-handler]")
-        .forEach((img) => {
-          img._updateVisual?.();
-        });
+      document.querySelectorAll(".page-content img").forEach((img) => {
+        img.style.cursor = editing ? "ew-resize" : "default";
+        img.style.border = editing ? "1px dashed #aaa" : "none";
+        img.style.userSelect = "none";
+      });
     };
 
-      attachImageResizeHandler();
-      updateAllImagesVisual();
-    if (editing) {
-      attachImageResizeHandler();
-      updateAllImagesVisual();
-    } else {
-      updateAllImagesVisual();
-    }
+    attachImageResizeHandler();
+    updateAllImagesVisual();
     const handleInput = (e) => {
       // Just handle images on input, don't trigger page overflow
       handleImageResize();
@@ -576,96 +569,13 @@ const Word = () => {
                 setTimeout(() => {
                   // Ensure image is in DOM before attaching handler
                   if (imgElement && imgElement.parentNode) {
-                    // Use the same approach as makeImagesResizable for consistency
-                    if (imgElement.dataset.resizable) {
-                      // Already has handler, just update styles
-                      imgElement.style.cursor = editing
-                        ? "ew-resize"
-                        : "default";
-                      imgElement.style.border = editing
-                        ? "1px solid #ddd"
-                        : "none";
-                    } else {
-                      // Mark as resizable
-                      imgElement.dataset.resizable = "true";
-                      imgElement.style.cursor = editing
-                        ? "ew-resize"
-                        : "default";
-                      imgElement.style.display = "inline-block";
-                      imgElement.style.userSelect = "none";
-                      imgElement.style.border = editing
-                        ? "1px solid #ddd"
-                        : "none";
-                      imgElement.style.margin = "10px auto";
-
-                      // Use pointer events for better compatibility (same as makeImagesResizable)
-                      let startX, startY, startWidth, startHeight;
-
-                      const onPointerMove = (e) => {
-                        if (!editing) return;
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        const deltaX = e.clientX - startX;
-                        const newWidth = Math.max(
-                          100,
-                          Math.min(800, startWidth + deltaX),
-                        );
-                        const aspectRatio = startHeight / startWidth;
-                        const newHeight = newWidth * aspectRatio;
-
-                        imgElement.style.width = `${newWidth}px`;
-                        imgElement.style.height = `${newHeight}px`;
-                        imgElement.style.display = "inline-block";
-                        imgElement.style.maxWidth = "100%";
-                      };
-
-                      const onPointerUp = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        document.removeEventListener(
-                          "pointermove",
-                          onPointerMove,
-                        );
-                        document.removeEventListener("pointerup", onPointerUp);
-
-                        // Trigger reflow after resize
-                        editables.forEach((el) => {
-                          void el.offsetHeight;
-                        });
-
-                        // Handle page overflow after resize
-                        handlePageOverflow();
-                      };
-
-                      imgElement.addEventListener(
-                        "pointerdown",
-                        (e) => {
-                          if (!editing) return;
-
-                          e.preventDefault();
-                          e.stopPropagation();
-
-                          startX = e.clientX;
-                          startY = e.clientY;
-                          startWidth =
-                            imgElement.offsetWidth ||
-                            parseInt(imgElement.style.width) ||
-                            imgElement.width;
-                          startHeight =
-                            imgElement.offsetHeight ||
-                            parseInt(imgElement.style.height) ||
-                            imgElement.height;
-
-                          document.addEventListener(
-                            "pointermove",
-                            onPointerMove,
-                          );
-                          document.addEventListener("pointerup", onPointerUp);
-                        },
-                        { once: false, passive: false },
-                      );
-                    }
+                    imgElement.style.cursor = editing ? "ew-resize" : "default";
+                    imgElement.style.display = "inline-block";
+                    imgElement.style.userSelect = "none";
+                    imgElement.style.border = editing
+                      ? "1px solid #ddd"
+                      : "none";
+                    imgElement.style.margin = "10px auto";
                   }
 
                   // Also call attachImageResizeHandler to ensure all images have handlers
@@ -957,7 +867,9 @@ const Word = () => {
       if (measure.scrollHeight > 950) {
         const lastChild = currentPage.lastChild;
         if (lastChild) {
-          currentPage.removeChild(lastChild);
+          if (lastChild.parentNode === currentPage) {
+            currentPage.removeChild(lastChild);
+          }
 
           pagesResult.push(currentPage.innerHTML);
 
@@ -971,7 +883,9 @@ const Word = () => {
       pagesResult.push(currentPage.innerHTML);
     }
 
-    document.body.removeChild(measure);
+    if (measure.parentNode) {
+      measure.parentNode.removeChild(measure);
+    }
     setPages(pagesResult);
   };
 
@@ -1384,7 +1298,9 @@ const Word = () => {
     });
 
     if (currentPage.length) pages.push(currentPage);
-    document.body.removeChild(tempDiv);
+    if (tempDiv.parentNode) {
+      tempDiv.parentNode.removeChild(tempDiv);
+    }
     return pages;
   };
 
