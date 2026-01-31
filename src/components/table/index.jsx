@@ -1,8 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import mammoth from "mammoth";
-import jsPDF from "jspdf";
-import htmlToPdfmake from "html-to-pdfmake";
+import { renderAsync } from "docx-preview";
+import html2canvas from "html2canvas";
+import { useReactToPrint } from "react-to-print";
 
 import { useZirhStref } from "../../context/ZirhContext";
 import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
@@ -21,7 +21,7 @@ const CellValue = ({
       {url ? (
         <div
           className="flex items-center gap-2 font-bold text-gray-500"
-          onClick={() => onOpen?.(url)}
+          onClick={() => onOpen?.(url, text)}
         >
           {text}
           {badge && (
@@ -106,13 +106,23 @@ const Row4 = ({ label1, value1, label2, value2 }) => (
   </div>
 );
 
-const ExpertizaTable = ({ expData, link='word' }) => {
+const ExpertizaTable = ({ expData, link = "word" }) => {
   const { stRef } = useZirhStref();
   const [uploadProgress, setUploadProgress] = React.useState(0);
   const [isUploading, setIsUploading] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState(null);
-  const [wordUrl, setWordUrl] = React.useState(null);
+  const [wordBlob, setWordBlob] = React.useState(null);
+  const [wordError, setWordError] = React.useState(null);
   const [open, setOpen] = React.useState(false);
+  const docxContainerRef = React.useRef(null);
+  const [isPrinting, setIsPrinting] = React.useState(false);
+  const [printImages, setPrintImages] = React.useState([]);
+  const printComponentRef = React.useRef(null);
+
+  const handleReactToPrint = useReactToPrint({
+    contentRef: printComponentRef,
+    documentTitle: "Hujjat",
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
@@ -125,21 +135,36 @@ const ExpertizaTable = ({ expData, link='word' }) => {
     return `${day}.${month}.${year}`;
   };
 
-  const openDoc = async (url) => {
+  const openDoc = async (url, name) => {
     const blob = await downloadFileAll(url);
-    const blobUrl = URL.createObjectURL(blob);
+    const fileName = (name || "").toLowerCase();
+    const mime = blob.type || "";
 
-
-    if (blob.type === "application/pdf") {
+    if (mime === "application/pdf" || fileName.endsWith(".pdf")) {
+      const blobUrl = URL.createObjectURL(blob);
       setPreviewUrl(blobUrl);
-    } else if (blob.type === "application/octet-stream") {
-      setWordUrl(blobUrl);
-    } else {
-      return alert("Fayl turi aniqlanmadi");
+      setWordBlob(null);
+      setWordError(null);
+      setOpen(true);
+      return;
     }
 
+    if (
+      fileName.endsWith(".docx") ||
+      fileName.endsWith(".doc") ||
+      mime ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mime === "application/msword" ||
+      mime === "application/octet-stream"
+    ) {
+      setPreviewUrl(null);
+      setWordBlob(blob);
+      setWordError(null);
+      setOpen(true);
+      return;
+    }
 
-    setOpen(true);
+    alert("Fayl turi aniqlanmadi");
   };
 
   const downloadFileAll = async (id) => {
@@ -161,50 +186,149 @@ const ExpertizaTable = ({ expData, link='word' }) => {
   const closeModal = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setWordBlob(null);
+    setWordError(null);
     setOpen(false);
   };
 
+  React.useEffect(() => {
+    const renderDocx = async () => {
+      if (!wordBlob || !docxContainerRef.current) return;
+      try {
+        const buffer = await wordBlob.arrayBuffer();
+        docxContainerRef.current.innerHTML = "";
+        await renderAsync(buffer, docxContainerRef.current, null, {
+          className: "docx",
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          ignoreFonts: false,
+          breakPages: true,
+          ignoreLastRenderedPageBreak: false,
+          experimental: true,
+        });
+      } catch (e) {
+        console.error("docx render err", e);
+        setWordError(
+          "Word faylini ochishda xatolik. Iltimos .docx formatida yuboring.",
+        );
+      }
+    };
+    renderDocx();
+  }, [wordBlob]);
 
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    setIsPrinting(true);
+    try {
+      if (previewUrl) {
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = previewUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          iframe.contentWindow.print();
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            setIsPrinting(false);
+          }, 1000);
+        };
+        return;
+      }
+
+      if (docxContainerRef.current) {
+        const container = docxContainerRef.current;
+        const sections = container.querySelectorAll("section.docx");
+        if (sections.length === 0) {
+          setIsPrinting(false);
+          return;
+        }
+
+        const images = [];
+        for (const section of sections) {
+          const canvas = await html2canvas(section, {
+            scale: 3,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "#ffffff",
+            onclone: (clonedDoc) => {
+              const tables = clonedDoc.querySelectorAll("table");
+              tables.forEach((table) => {
+                table.style.borderCollapse = "collapse";
+                table.querySelectorAll("td, th").forEach((cell) => {
+                  cell.style.boxSizing = "border-box";
+                });
+              });
+            },
+          });
+          images.push(canvas.toDataURL("image/png"));
+        }
+
+        setPrintImages(images);
+        setTimeout(() => {
+          handleReactToPrint();
+          setIsPrinting(false);
+        }, 800);
+      }
+    } catch (e) {
+      console.error("Print error:", e);
+      setIsPrinting(false);
+    }
+  };
 
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* backdrop */}
-          <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
+        <div className="fixed inset-0 bg-black/70 dark:bg-black/80 flex items-center justify-center z-50">
+          <div className="absolute top-8 right-[40px] flex gap-4 z-50">
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className={`text-white ${isPrinting ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"} p-3 rounded-full flex items-center justify-center shadow-lg`}
+              title="Chop etish"
+            >
+              {isPrinting ? (
+                <iconify-icon
+                  icon="line-md:loading-twotone-loop"
+                  width="32"
+                />
+              ) : (
+                <iconify-icon
+                  icon="material-symbols:print-outline"
+                  width="32"
+                />
+              )}
+            </button>
 
-          {/* modal box */}
-          <div className="relative z-10 w-[60vw] h-[95vh] bg-white rounded-xl shadow-xl overflow-hidden">
-            {/* header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h2 className="font-semibold text-gray-700">Fayl ko‘rish</h2>
-
-              <button
-                onClick={closeModal}
-                className="text-gray-500 hover:text-red-500 text-xl"
-              >
-                ✕
-              </button>
-            </div>
-
+            <button
+              onClick={closeModal}
+              className="text-white bg-red-600 hover:bg-red-700 p-3 rounded-full flex items-center justify-center shadow-lg"
+            >
+              <iconify-icon icon="ic:round-close" width="32" />
+            </button>
+          </div>
+          <div className="docs w-[1000px] h-[100vh] max-w-[1100px] overflow-auto relative">
             {previewUrl && (
               <object
-                data={previewUrl}
+                data={previewUrl + "#toolbar=0&navpanes=0&scrollbar=1"}
                 type="application/pdf"
-                className="w-full h-full"
+                className="w-full h-full border-none"
+                style={{ minHeight: "calc(100vh - 40px)" }}
                 onContextMenu={(e) => e.preventDefault()}
               >
-                <p>Fayl ochilmadi</p>
+                <p>PDF ochishda xatolik yuz berdi.</p>
               </object>
             )}
-            {wordUrl && (
-              <iframe
-                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(wordUrl)}`}
-                width="100%"
-                height="600px"
-                frameBorder="0"
-              ></iframe>
+            {wordBlob && (
+              <div className="docx-preview-container">
+                {wordError ? (
+                  <p className="text-red-500 p-4">{wordError}</p>
+                ) : (
+                  <div ref={docxContainerRef} />
+                )}
+              </div>
             )}
+            {!previewUrl && !wordBlob && <p>Fayl yuklanmoqda...</p>}
           </div>
         </div>
       )}
@@ -352,6 +476,42 @@ const ExpertizaTable = ({ expData, link='word' }) => {
           label2=""
           value2={<CellValue button="" />}
         />
+      </div>
+
+      <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+        <div ref={printComponentRef}>
+          <style>
+            {`
+              @media print {
+                @page { margin: 0; size: A4; }
+                .print-page-a4 {
+                  width: 210mm;
+                  height: 297mm;
+                  page-break-after: always;
+                  display: flex;
+                  justify-content: center;
+                  align-items: flex-start;
+                  background: white;
+                  overflow: hidden;
+                }
+                .print-page-a4 img {
+                  width: 100%;
+                  height: auto;
+                  max-height: 100%;
+                  object-fit: contain;
+                }
+                .print-page-a4:last-child {
+                  page-break-after: auto;
+                }
+              }
+            `}
+          </style>
+          {printImages.map((img, idx) => (
+            <div key={idx} className="print-page-a4">
+              <img src={img} alt={`Page ${idx + 1}`} />
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );
