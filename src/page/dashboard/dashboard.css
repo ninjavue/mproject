@@ -14,11 +14,10 @@
 
 /* Default page */
 .dashboard-page {
-  padding: 24px;
+  padding: 24px 24px 0;
   color: var(--text);
-  min-height: 100%;
+  min-height: auto;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background: var(--bg);
 }
 
 .dashboard-head {
@@ -198,6 +197,274 @@
 .lt-sum__label{ color:#566a7f; font-weight:600; margin-bottom:8px; font-size:18px; }
 .lt-sum__value{ font-size:26px; color:#667997; font-weight:700; }
 
+.expertise-drawer label{
+  color: #64748b;
+  font-weight: 600;
+}
+
+.expertise-drawer input,
+.expertise-drawer select,
+.expertise-drawer textarea{
+  height: 44px;
+  border: 1px solid #e6e8ef;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #475569;
+}
+
+.expertise-drawer textarea{
+  height: auto;
+  min-height: 96px;
+  padding: 10px 12px;
+}
+
+.expertise-drawer input::placeholder,
+.expertise-drawer textarea::placeholder{
+  color: #9aa4b2;
+}
+
+.expertise-drawer input:focus,
+.expertise-drawer select:focus,
+.expertise-drawer textarea:focus{
+  outline: none;
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+.expertise-drawer .select__control{
+  min-height: 44px;
+  height: 44px;
+  border: 1px solid #e6e8ef;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.expertise-drawer .select__value-container{
+  padding: 0 10px;
+  height: 44px;
+}
+
+.expertise-drawer .select__input-container{
+  margin: 0;
+  padding: 0;
+}
+
+.expertise-drawer .select__indicators{
+  height: 44px;
+}
+
+.expertise-drawer .select__placeholder{
+  color: #9aa4b2;
+}
+
+.expertise-drawer .select__indicator-separator{
+  background-color: #e6e8ef;
+}
+
+.expertise-drawer .select__control--is-focused{
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+.expertise-drawer .select__input:focus{
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+.expertise-drawer .select__menu{
+  z-index: 60;
+}
+
+.expertise-drawer .MuiInputBase-root{
+  height: 44px;
+  border: 1px solid #e6e8ef;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #475569;
+  box-shadow: none;
+}
+
+.expertise-drawer .MuiInputBase-input{
+  padding: 0;
+  height: 44px;
+}
+
+.expertise-drawer .MuiOutlinedInput-notchedOutline{
+  border: none;
+}
+
+.expertise-drawer .MuiInputBase-root.Mui-focused{
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+/* MUI DatePicker (TextField) overrides */
+.expertise-drawer .MuiTextField-root{
+  width: 100%;
+}
+
+.expertise-drawer .MuiOutlinedInput-root{
+  height: 44px;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+}
+
+.expertise-drawer .MuiOutlinedInput-root fieldset{
+  border-color: #e6e8ef;
+}
+
+.expertise-drawer .MuiOutlinedInput-root:hover fieldset{
+  border-color: #e6e8ef;
+}
+
+.expertise-drawer .MuiOutlinedInput-root.Mui-focused fieldset{
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+.expertise-drawer .MuiOutlinedInput-input{
+  padding: 0 12px;
+  height: 44px;
+  box-sizing: border-box;
+}
+
+/* MUI Pickers TextField specific class */
+.expertise-drawer .MuiPickersTextField-root{
+  width: 100%;
+}
+
+.expertise-drawer .MuiPickersTextField-root .MuiOutlinedInput-root{
+  height: 44px;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+}
+
+.expertise-drawer .MuiPickersTextField-root .MuiOutlinedInput-notchedOutline{
+  border-color: #e6e8ef;
+}
+
+.expertise-drawer .MuiPickersTextField-root .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline{
+  border-color: #e6e8ef;
+}
+
+.expertise-drawer .MuiPickersTextField-root .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline{
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+.expertise-drawer .MuiPickersTextField-root .MuiOutlinedInput-input{
+  padding: 0 12px;
+  height: 44px;
+  box-sizing: border-box;
+}
+
+/* New MUI pickers structure */
+.expertise-drawer .MuiPickersInputBase-root{
+  height: 44px;
+  border: 1px solid #e6e8ef;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+  padding: 0 12px;
+  box-shadow: none;
+}
+
+.expertise-drawer .MuiPickersInputBase-root .MuiPickersOutlinedInput-notchedOutline{
+  border: none;
+}
+
+.expertise-drawer .MuiPickersInputBase-root.Mui-focused{
+  border-color: #cbb08a;
+  box-shadow: 0 0 0 3px rgba(187, 151, 105, 0.15);
+}
+
+.expertise-drawer .MuiPickersSectionList-root{
+  height: 44px;
+  align-items: center;
+}
+
+/* MUI upload button in drawer */
+.expertise-drawer .MuiButton-root{
+  height: 44px;
+  border: 1px solid #e6e8ef;
+  background-color: #f7f8fb;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #475569;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.expertise-drawer .MuiButton-root:hover{
+  border-color: #cbb08a;
+  background-color: #f7f8fb;
+}
+
+.expertise-drawer .MuiButton-startIcon{
+  margin-right: 8px;
+  color: #7b8794;
+}
+
+.expertise-drawer .field-action-btn{
+  position: absolute;
+  top: 65%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background-color: #f7f8fb;
+  border: 1px solid #e6e8ef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.expertise-drawer .field-action-btn.edit{
+  display: none;
+}
+
+.expertise-drawer .field-action-btn.save{
+  right: -30px;
+  color: #22c55e;
+  border-color: #86efac;
+}
+
+.expertise-drawer .field-action-btn:hover{
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+/* Status steps 3D look */
+.status-step{
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.7),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+    0 4px 10px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-step-active{
+  background-image: linear-gradient(145deg, #3b82f6, #1d4ed8);
+}
+
+.status-step-inactive{
+  background-image: linear-gradient(145deg, #9ca3af, #6b7280);
+}
+
+.status-step:hover{
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.75),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.16);
+}
 
 
 @media (max-width: 900px){

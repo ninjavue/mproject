@@ -12,78 +12,150 @@ import { sendRpcRequest } from "../../rpc/rpcClient";
 const A4_HEIGHT = 1120;
 const A4_CONTENT_HEIGHT = 1120; // A4 content height px
 const A4_WIDTH = 794;
+const TOC_MAX_HEIGHT = 720;
+const SECTION_TABLE_MAX_HEIGHT = 520;
 
-const firstSection = [
+const section1Left = [
   {
-    title: "Mobil ilova",
-    desc: "Maʼlum bir platforma (iOS, Android, Windows Phone va boshqalar) uchun ishlab chiqilgan smartfonlar, planshetlar va boshqa mobil qurilmalarda ishlashga moʻljallangan dastur. ",
+    term: "Ma’lumotlar bazasi",
+    text:
+      "amaliy dasturlarga bog‘liq bo‘lmagan holda, ma’lumotlarni tavsiflash, saqlash va boshqarishning umumiy prinsiplarini ko‘zda tutadigan muayyan qoidalar bo‘yicha tashkil qilingan ma’lumotlar jamlanmasi.",
   },
   {
-    title: "iOS",
-    desc: "“Apple”ning iPhone, iPod, iPad, Apple TV uskunalarida oʻrnatilgan mobil aloqa operatsion sistemasi. ",
+    term: "Dastur zaifligi",
+    text:
+      "dasturiy ta’minotni ishlab chiqish davrida dasturchilar tomonidan yo‘l qo‘yilgan xatolik. Mazkur xatoliklar dastur funksional imkoniyatlari va saqlanayotgan ma’lumotlaridan noqonuniy foydalanish, yaxlitligini buzish va noto‘g‘ri ishlashiga olib kelish imkoniyatini beradi.",
   },
   {
-    title: "Android OS",
-    desc: "Smartfonlar, planshetlar, elektron kitoblar, raqamli pleyerlar, qoʻl soatlari, fitnes bilakuzuklar, oʻyin pristavkalari, noutbuklar, netbuklar, smartbuklar, Google Glass koʻzoynaklari, televizorlar, proyektorlar hamda boshqa qurilmalar (2015-yildan avtomobillar tizimlari va maishiy robotlarga ham oʻrnatiladi) uchun operatsion tizim hisoblanadi.",
+    term: "SQL-inyeksiya",
+    text:
+      "so‘rovlar tanasiga maxsus SQL-kodlarni kiritishga asoslangan, ma’lumotlar bazasi bilan ishlovchi veb-sayt va dasturlarga amalga oshiriladigan hujumlardan biri.",
+  },
+  {
+    term: "OS Command-inyeksiya",
+    text:
+      "zaif veb-ilovalar yordamida operatsion tizimlarda g‘arazli maqsadga yo‘naltirilgan (bajariluvchi) buyruqlarni amalga oshirishga qaratilgan hujum.",
   },
 ];
 
-const secondSection = [
+const section1Right = [
   {
-    title: "App Store",
-    desc: "iOS va iPadOS operatsion tizimlaridagi mobil ilovalar uchun Apple kompaniyasi tomonidan ishlab chiqilgan va qoʻllabquvvatlanadigan ilovalarning onlayn do‘koni.",
+    term: "Sintaksis va mantiqiy nuqsonlar",
+    text:
+      "buferning to‘lib ketishi yoki boshqa turdagi nosozliklarga olib keladi. Ularni aniqlash uzoq vaqt va mashina kodi qismlarida nuqsonlarni bartaraf etish bo‘yicha ishlarni olib borishni talab etadi.",
   },
   {
-    title: "Google Play Store",
-    desc: "Android operatsion tizimlaridagi mobil ilovalar uchun Google kompaniyasi tomonidan ishlab chiqilgan va qoʻllabquvvatlanadigan ilovalarning onlayn do‘koni. ",
+    term: "Cross-site scripting (XSS)",
+    text:
+      "veb-tizimlarga amalga oshiriladigan hujum turi bo‘lib, veb-tizim tomonidan taqdim qilinadigan ilovaga zararli kodni yuklash (mazkur kod foydalanuvchi kompyuterida u tomonidan ilova ochilganda ishga tushadi) va uning natijasida g‘araz niyatli shaxsning serveri bilan aloqа o‘rnatishga mo‘ljallangan.",
   },
   {
-    title: "Firebase",
-    desc: "Google tomonidan Android, iOS tizimlari, JavaScript, Node.js, Java, Unity, PHP va C++ ilovalariga “backend” va maʼlumotlar bazasi bulutli xizmatlarini taqdim qiladigan servis bo‘lib, real vaqtdagi maʼlumotlar bazasi, autentifikatsiya, ilovalarni integrallash va analitika xizmatlarini taklif qiladi.",
+    term: "CSRF",
+    text:
+      "HTTP protokolining zaifliklaridan foydalangan holda veb-sayt foydalanuvchilariga qaratilgan hujum turi.",
   },
   {
-    title: "“Man in the middle” hujumi",
-    desc: "Tajovuzkor ikki mashina yoki ikkita foydalanuvchi o‘rtasidagi aloqani tinglashi, manipulyatsiya qilish yoki boshqarish imkoniyatining mavjudligi. Ushbu hujum ikki tomon o‘rtasidagi aloqada paydo “Uzenergo” mobil ilovasi bo‘lgan",
-  },
-];
-
-const thirdSection = [
-  {
-    title: "",
-    desc: "tajovuzkor tomonidan o‘zini proksi yoki router sifatida ko‘rsatish orqali amalga oshiriladi.",
+    term: "Open redirect",
+    text:
+      "foydalanuvchilarni “phishing” saytlarga yo‘naltirish yoki foydali dasturiy ta’minot ko‘rinishidagi “rootkit” dasturiy to‘plamlarni (maxsus kodlar, dasturlar, konfiguratsiya (sozlama) fayllari va shu kabilar) yuklab olishga undovchi zaiflik.",
   },
   {
-    title: "Statik tahlil ",
-    desc: "Mobil ilovani (dastur) amalda ishga tushirmasdan, uning xavfsizligini tekshirish usuli. Ushbu turdagi sinov ilova kodini tiklash, kodni tahlil qilish hamda yakunda koddagi zaiflik va kamchiliklarni aniqlashni o‘z ichiga oladi.",
-  },
-  {
-    title: "Dinamik tahlil",
-    desc: "Mobil ilovada (dastur) ishlayotgan vaqtda ekspertiza sinovlarini o‘tkazishni o‘z ichiga oladi. Sinovning bu turi ilova xattiharakatlarini tahlil qilish, zaiflik va kamchiliklarni aniqlashni o‘z ichiga oladi. Dinamik tahlilning afzalliklaridan biri shundaki, u statik tahlil yordamida aniqlash qiyin bo‘lgan zaifliklarni aniqlay oladi. Misol uchun, dinamik tahlil orqali foydalanuvchining tizimga kirishi va autentifikatsiyasi bilan bog‘liq zaifliklarni aniqlashi mumkin.",
-  },
-  {
-    title: " ",
-    desc: "Ochiq standart bo‘lib, hisoblash tizimlaridagi xavfsizlik zaifliklarining",
+    term: "HTML inyeksiya",
+    text: "“Hypertext Markup Language” (HTML) -",
   },
 ];
 
-const fourthSection = [
+const htmlInjectionContinuation =
+  "gipermatnli belgilash tilida yaratilgan kontentlarga yo‘naltirilgan hujum turi bo‘lib, veb-saytga foydalanuvchi tomonidan kiritiladigan so‘rovlarni qayta ishlash bo‘yicha funksiyalarning yo‘qligi evaziga shaxsiy HTML-kodlarni yuklashga yo‘naltirilgan.";
+
+const section2LeftTerms = [
   {
-    title: "Umumiy zaifliklarni baholash tizimi (CVSS)",
-    desc: "miqdoriy ballarini “Uzenergo” mobil ilovasi hisoblash uchun ishlatiladi. Ballar bir nechta ko‘rsatkichlarga asoslangan maxsus formulalar yordamida hisoblanadi va ekspluatatsiyani amalga oshirish qulayligini va uning hisoblash tizimiga ta’sirini taxminiy baholaydi.",
+    term: "Remote code execution",
+    text:
+      "axborot tizimi yoki resursning dasturiy kodlarida xatoliklardan foydalangan holda maxsus kodlarni bajarish orqali axborot tizimi yoki resurs joylashgan serverni boshqarish imkoniyatini taqdim etuvchi hujum turi.",
   },
   {
-    title: "Ma’lumotlar bazasi",
-    desc: "Amaliy dasturlarga bog‘liq bo‘lmagan holda, maʼlumotlarni tavsiflash, saqlash va boshqarishning umumiy prinsiplarini ko‘zda tutadigan muayyan qoidalar bo‘yicha tashkil qilingan maʼlumotlar jamlanmasi.",
-  },
-  {
-    title: "SQL-inyeksiya",
-    desc: "So‘rovlar tanasiga maxsus SQLkodlarni kiritishga asoslangan, maʼlumotlar bazasi bilan ishlovchi veb-sayt va dasturlarga amalga oshiriladigan hujumlardan biri.",
-  },
-  {
-    title: "Sintaksis va mantiqiy nuqsonlar ",
-    desc: "Buferning to‘lib ketishi yoki boshqa turdagi nosozliklarga olib keladi. Ularni aniqlash uzoq vaqt va mashina kodi qismlarida nuqsonlarni bartaraf etish bo‘yicha ishlarni olib borishni talab etadi.",
+    term: "Eksployt",
+    text:
+      "kompyuter dasturiy komponentlarining zaif tomonlaridan foydalaniladigan zararli kod.",
   },
 ];
+
+const section2BasisText =
+  "“Kiberxavfsizlik markazi” davlat unitar korxonasi va O‘zbekiston Respublikasi Sport vazirligi huzuridagi “Raqamlashtirish va sertifikatlash markazi” MCHJ o‘rtasida tuzilgan 2025-yil 21-noyabrdagi “ERP sport” yagona elektron boshqaruv tizimini kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan o‘tkazish to‘g‘risidagi 1044-B-son shartnoma.";
+
+const section2ObjectLinks = [
+  "https://5tashabbus.uz",
+  "https://adm2.sport.uz",
+  "https://dash2.sport.uz",
+  "https://erp2.sport.uz",
+  "https://my2.sport.uz",
+  "https://mass2.sport.uz",
+  "https://pr2.sport.uz",
+];
+
+const section2ProcessIntro =
+  "Axborot tizimi ekspertizasi quyidagi ikki xil usulga asoslangan holda amalga oshirildi:";
+
+const section2ProcessItems = [
+  {
+    term: "“BlackBox” usuli",
+    text:
+      "“Qora quti” faqatgina axborot tizimini tashqi tomondan kiberxavfsizlik harakatlariga zaif ekanligi o‘rganiladi va ushbu usulga asoslangan o‘rganish haqiqiy vaziyatga imkon qadar yaqin.",
+  },
+  {
+    term: "“WhiteBox” usuli",
+    text:
+      "“Oq quti” axborot tizimi to‘g‘risida ma’lumotlarga, xususan axborot tizimidan foydalanish uchun login va parollar, foydalanilgan dasturiy texnologiyalar, axborot tizimi",
+  },
+];
+
+const whiteBoxContinuation =
+  "doirasidagi axborot resurslari to‘g‘risida ma’lumotlarga ega bo‘lgan holda o‘rganish.";
+
+const section3Intro =
+  "Ekspertiza davrida kiberxavfsizlik zaifliklarini aniqlash bo‘yicha ishlar olib borildi, jumladan axborot tizimida quyidagi kiberxavfsizlik zaifliklarini mavjudligi tekshirildi:";
+
+const section3BulletsLeft = [
+  "SQL-inyeksiya va uning turlari;",
+  "OS Command injeksiya;",
+  "Cross-site scripting (XSS);",
+  "bajariluvchi fayllarni yuklash;",
+  "CSRF;",
+  "Remote code execution;",
+  "Open redirect;",
+  "autentifikatsiya jarayonidagi xatoliklar;",
+  "barcha uchun ochiq holda bo‘lgan ma’lumotlar, formlar va shu kabilar;",
+];
+
+const section3BulletsRight = [
+  "avtorizatsiya jarayonining noto‘g‘ri yoki yetarli darajada bo‘lmaganlik holati;",
+  "funksional imkoniyatlarni noto‘g‘ri taqsimlash;",
+  "muhim resurslarga ruxsat berish va ulardan foydalanishni tartibga solinmaganlik holati;",
+  "katta hajmdagi autentifikatsiya urinishlarini qayta ishlashda xatoliklar;",
+  "ma’lumotlarni chiqib ketishga olib keluvchi xatoliklar;",
+  "parollar tanlovidan himoyalanmaganlik holatlari va boshqalar.",
+];
+
+const section3TableIntro =
+  "Axborot tizimi ekspertizasi 1-jadvalda taqdim etilgan ketma-ketlikda tadbirlarni amalga oshirish orqali amalga oshirildi";
+
+const section3TableRows = [
+  "Axborot tizimi to‘g‘risida ma’lumotlar to‘plash va ularni tahlil qilish",
+  "Axborot tizimi formalari, bo‘limlari va tashkil etuvchilarida zaifliklar mavjudligiga tekshirish",
+  "Axborot tizimi dasturiy ta’minotlari va xizmatlarida zaifliklar mavjudligiga tekshirish",
+  "Axborot tizimi va uning ish jarayoni hamda funksional imkoniyatlari, shuningdek axborot tizimi ma’muri tomonidan yo‘l qo‘yilgan xatoliklar mavjudligiga tekshirish",
+  "Axborot tizimida aniqlangan zaifliklar va yo‘l qo‘yilgan xatoliklar haqiqiyligini tekshirish maqsadida test sinovlari orqali ekspluatatsiya qilib ko‘rish",
+  "O‘rganish bo‘yicha yakuniy ishlarni amalga oshirish",
+  "Ekspertiza natijalariga ko‘ra hisobot tayyorlash",
+];
+
+const buildSectionTableRowHtml = (row, index) => `
+  <tr>
+    <td>${index + 1}.</td>
+    <td>${row}</td>
+  </tr>
+`;
 
 const vulnerabilityTemplates = {
   integrity: `
@@ -132,6 +204,112 @@ const parseVulnByLevel = (payloads) => {
   return { high, medium, low };
 };
 
+const buildTocItemHtml = (item) => {
+  if (item.type === "section") {
+    return `
+      <div class="content-title"><span>${item.page}</span></div>
+      <div class="mundarija-section">${item.section}</div>
+      <div class="mundarija-head">${item.head}</div>
+    `;
+  }
+
+  if (item.type === "subheader") {
+    return `
+      <div class="mundarija-row system-mundarija-row">
+        <div class="row-title large"><b>${item.title}</b></div>
+        <div class="row-num text-nowrap">${item.page || ""}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="mundarija-row system-mundarija-row">
+      <div class="row-title ${item.large ? "large" : ""}">${item.title}</div>
+      <div class="row-num text-nowrap">${item.page || ""}</div>
+    </div>
+  `;
+};
+
+const paginateTocItems = (items) => {
+  if (!items.length) return [];
+  const pages = [];
+  const measure = document.createElement("div");
+  measure.style.width = "794px";
+  measure.style.position = "absolute";
+  measure.style.visibility = "hidden";
+  measure.style.top = "-9999px";
+  measure.style.maxHeight = "none";
+  measure.style.overflow = "visible";
+
+  const measureContent = document.createElement("div");
+  measureContent.className = "mundarija-content mundarija-content-system";
+  measure.appendChild(measureContent);
+  document.body.appendChild(measure);
+
+  let currentPage = [];
+  items.forEach((itemHtml) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = itemHtml;
+    measureContent.appendChild(wrapper);
+
+    if (measureContent.scrollHeight > TOC_MAX_HEIGHT) {
+      measureContent.removeChild(wrapper);
+      if (currentPage.length) pages.push(currentPage);
+      currentPage = [itemHtml];
+      measureContent.innerHTML = itemHtml;
+    } else {
+      currentPage.push(itemHtml);
+    }
+  });
+
+  if (currentPage.length) pages.push(currentPage);
+  document.body.removeChild(measure);
+  return pages;
+};
+
+const paginateSectionTableRows = (rowsHtml) => {
+  if (!rowsHtml.length) return [];
+  const pages = [];
+  const measure = document.createElement("div");
+  measure.style.width = "794px";
+  measure.style.position = "absolute";
+  measure.style.visibility = "hidden";
+  measure.style.top = "-9999px";
+
+  const table = document.createElement("table");
+  table.className = "system-table";
+  table.innerHTML =
+    "<thead><tr><th style=\"width:50px\">T/r</th><th>Tadbir nomi</th></tr></thead><tbody></tbody>";
+
+  measure.appendChild(table);
+  document.body.appendChild(measure);
+
+  const tbody = table.querySelector("tbody");
+  let currentPage = [];
+
+  rowsHtml.forEach((rowHtml) => {
+    const temp = document.createElement("tbody");
+    temp.innerHTML = rowHtml;
+    const row = temp.firstElementChild;
+    if (!row) return;
+
+    tbody.appendChild(row);
+
+    if (table.scrollHeight > SECTION_TABLE_MAX_HEIGHT) {
+      tbody.removeChild(row);
+      if (currentPage.length) pages.push(currentPage);
+      currentPage = [rowHtml];
+      tbody.innerHTML = rowHtml;
+    } else {
+      currentPage.push(rowHtml);
+    }
+  });
+
+  if (currentPage.length) pages.push(currentPage);
+  document.body.removeChild(measure);
+  return pages;
+};
+
 const SystemWord = () => {
   const [pages, setPages] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -162,9 +340,11 @@ const SystemWord = () => {
   const [vulnAndroid, setVulnAndroid] = useState([]);
   const [vulnIOS, setVulnIOS] = useState([]);
   const [vulnUm, setVulnUm] = useState([]);
-  const [platform, setPlatform] = useState("");
+  const [platform, setPlatform] = useState("umumiy");
   const [pages2, setPages2] = useState([]);
   const [pages3, setPages3] = useState([]);
+  const [tocPages, setTocPages] = useState([]);
+  const [sectionTablePages, setSectionTablePages] = useState([]);
 
   const pdfRef = useRef();
   const { stRef } = useZirhStref();
@@ -181,7 +361,7 @@ const SystemWord = () => {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: "abm-mobil",
+    documentTitle: `${appName}-${Date.now()}`,
   });
 
   const startIndex = htmlContent.findIndex((p) =>
@@ -189,6 +369,196 @@ const SystemWord = () => {
       "2.2. Android mobil ilovasi ekspertizasi natijalari bo‘yicha batafsil izoh",
     ),
   );
+
+  const tocItems = useMemo(
+    () => [
+      {
+        type: "section",
+        page: "5",
+        section: "BIRINCHI BO‘LIM.",
+        head: "UMUMIY MA’LUMOTLAR",
+      },
+      { type: "row", title: "Atamalar va ta’riflar", page: "5" },
+      { type: "row", title: "Ekspertiza o‘tkazish uchun asos", page: "6" },
+      { type: "row", title: "Ekspertiza obyekti", page: "6" },
+      { type: "row", title: "Ekspertiza o‘tkazish tartibi", page: "6" },
+      {
+        type: "row",
+        title: "Ekspertiza yuzasidan qo‘shimcha ma’lumotlar",
+        page: "8",
+        large: true,
+      },
+      {
+        type: "section",
+        page: "10",
+        section: "IKKINCHI BO‘LIM.",
+        head: "EKSPERTIZA NATIJALARI",
+      },
+      {
+        type: "row",
+        title: "Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot",
+        page: "10",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ekspertiza natijalari bo‘yicha batafsil izoh",
+        page: "14",
+        large: true,
+      },
+      { type: "subheader", title: "“adm2.sport.uz” veb-resursi" },
+      { type: "row", title: "Sessiyaning saqlanib qolinishi", page: "14" },
+      {
+        type: "row",
+        title: "Saytlararo so‘rovlarni soxtalashtirish (CSRF)",
+        page: "15",
+        large: true,
+      },
+      { type: "row", title: "SQL inyeksiya", page: "16" },
+      {
+        type: "row",
+        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
+        page: "20",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
+        page: "22",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Sessiyaning aktivlik vaqtini uzoqligi",
+        page: "23",
+        large: true,
+      },
+      { type: "row", title: "Ma’lumotlarni ochiqlanishi", page: "24" },
+      { type: "subheader", title: "“erp2.sport.uz” veb-resursi" },
+      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "26" },
+      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "27" },
+      { type: "row", title: "SQL inyeksiya", page: "28" },
+      { type: "row", title: "Ma’lumotlarni ochiqlanishi", page: "29" },
+      {
+        type: "row",
+        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
+        page: "30",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
+        page: "32",
+        large: true,
+      },
+      { type: "subheader", title: "“dash2.sport.uz” veb-resursi" },
+      { type: "row", title: "Sessiyaning saqlanib qolinishi", page: "33" },
+      { type: "subheader", title: "“my2.sport.uz” veb-resursi" },
+      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "34" },
+      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "35" },
+      {
+        type: "row",
+        title: "Saytlararo so‘rovlarni soxtalashtirish (CSRF)",
+        page: "36",
+        large: true,
+      },
+      { type: "row", title: "Saytlararo skript (XSS)", page: "38" },
+      {
+        type: "row",
+        title: "Kiruvchi parametrlarni tekshirmaslik",
+        page: "40",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
+        page: "41",
+        large: true,
+      },
+      { type: "row", title: "Ishchi holatda bo‘lmagan qismlar", page: "43" },
+      { type: "subheader", title: "“5tashabbus2.sport.uz” veb-resursi" },
+      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "44" },
+      {
+        type: "row",
+        title: "Yagona parametr asosida shaxsga doir ma’lumotlarni qayta ishlash",
+        page: "45",
+        large: true,
+      },
+      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "47" },
+      { type: "row", title: "Saytlararo skript (XSS)", page: "48" },
+      { type: "row", title: "SQL inyeksiya", page: "49" },
+      {
+        type: "row",
+        title: "Sessiyaning aktivlik vaqtini uzoqligi",
+        page: "51",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
+        page: "52",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
+        page: "54",
+        large: true,
+      },
+      { type: "subheader", title: "“pr2.sport.uz” veb-resursi" },
+      {
+        type: "row",
+        title:
+          "“Cross origin resource sharing: arbitrary origin trusted (CORS)” zaifligi",
+        page: "56",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Muhim turdagi ma’lumotlarni ochiqlanishi",
+        page: "57",
+        large: true,
+      },
+      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "59" },
+      {
+        type: "row",
+        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
+        page: "60",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "To‘liq ajratib bajariladigan hujum (brute-force attack)",
+        page: "61",
+        large: true,
+      },
+      { type: "subheader", title: "“mass2.sport.uz” veb-resursi" },
+      {
+        type: "row",
+        title: "“CAPTCHA” mexanizmini noto‘g‘ri ishlashi",
+        page: "63",
+        large: true,
+      },
+      {
+        type: "section",
+        page: "64",
+        section: "UCHINCHI BO‘LIM.",
+        head: "UMUMIY XULOSA",
+      },
+    ],
+    [],
+  );
+
+  const tocItemHtml = useMemo(
+    () => tocItems.map((item) => buildTocItemHtml(item)),
+    [tocItems],
+  );
+
+  const sectionTableRowHtml = useMemo(
+    () => section3TableRows.map((row, index) => buildSectionTableRowHtml(row, index)),
+    [],
+  );
+
 
   const createNewA4Page = () => {
     // Get the container where pages are stored
@@ -823,8 +1193,8 @@ const SystemWord = () => {
               const block =
                 container.nodeType === Node.TEXT_NODE
                   ? container.parentElement?.closest(
-                      "p, div, li, h1, h2, h3, h4, h5, h6",
-                    )
+                    "p, div, li, h1, h2, h3, h4, h5, h6",
+                  )
                   : container.closest("p, div, li, h1, h2, h3, h4, h5, h6");
 
               if (block) {
@@ -845,8 +1215,8 @@ const SystemWord = () => {
           const currentPageContent =
             range.commonAncestorContainer.nodeType === Node.TEXT_NODE
               ? range.commonAncestorContainer.parentElement.closest(
-                  ".page-content",
-                )
+                ".page-content",
+              )
               : range.commonAncestorContainer.closest(".page-content");
 
           if (currentPageContent) {
@@ -1012,15 +1382,15 @@ const SystemWord = () => {
         let expTitleIndex = 1;
         const flatVulnData = Array.isArray(vulnData)
           ? vulnData
-              .flat()
-              .filter((item) => !item.includes("page-number"))
-              .map((item) => {
-                // exp-title ichidagi raqamni dinamik o'zgartirish
-                if (item.includes("exp-title")) {
-                  return item.replace(/2\.2\.\d+/g, `2.2.${expTitleIndex++}`);
-                }
-                return item;
-              })
+            .flat()
+            .filter((item) => !item.includes("page-number"))
+            .map((item) => {
+              // exp-title ichidagi raqamni dinamik o'zgartirish
+              if (item.includes("exp-title")) {
+                return item.replace(/2\.2\.\d+/g, `2.2.${expTitleIndex++}`);
+              }
+              return item;
+            })
           : [];
         setNewVuln(flatVulnData);
 
@@ -1062,6 +1432,16 @@ const SystemWord = () => {
     getExpertById();
     // console.log(highVuln);
   }, []);
+
+  useEffect(() => {
+    const pages = paginateTocItems(tocItemHtml);
+    setTocPages(pages);
+  }, [tocItemHtml]);
+
+  useEffect(() => {
+    const pages = paginateSectionTableRows(sectionTableRowHtml);
+    setSectionTablePages(pages);
+  }, [sectionTableRowHtml]);
 
   // Table ma'lumotlarini DOM'ga qayta yuklash (rasmlar bilan)
   useEffect(() => {
@@ -1217,41 +1597,32 @@ const SystemWord = () => {
     let newInnerHtml = "";
     if (newVuln.length == 0) {
       newInnerHtml = `
-    <div class="title">2.2. “${appName}” android mobil ilovasi ekspertizasi natijalari bo‘yicha batafsil izoh</div>
-    <div class="exp-title">2.2.${vulnCounter} ${title}</div>
-    <div class="exp-d"><b>Xavflilik darajasi:</b> ${levelText}</div>
-    <div class="text">${result}</div>
-    <div class="text"><b>Ekspluatatsiya oqibatlari:</b> ${desc}</div>
-    <div class="text"><b>Tavsiyalar:</b> ${recommendation}</div>
+    <div class="system-bar-title">2.2. Ekspertiza natijalari bo‘yicha batafsil izoh</div>
+    <div class="system-subhead system-highlight">2.2.1. “${appName}” axborot tizimi</div>
+    <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
+    <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
+    <p class="system-paragraph">${result}</p>
+    <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
+    <p class="system-paragraph">${desc}</p>
+    <div class="system-subtitle">Tavsiyalar</div>
+    <p class="system-paragraph">${recommendation}</p>
   `;
     } else {
       newInnerHtml = `
-    <div class="exp-title">2.2.${vulnCounter} ${title}</div>
-    <div class="exp-d"><b>Xavflilik darajasi:</b> ${levelText}</div>
-    <div class="text">${result}</div>
-    <div class="text"><b>Ekspluatatsiya oqibatlari:</b> ${desc}</div>
-    <div class="text"><b>Tavsiyalar:</b> ${recommendation}</div>
+    <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
+    <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
+    <p class="system-paragraph">${result}</p>
+    <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
+    <p class="system-paragraph">${desc}</p>
+    <div class="system-subtitle">Tavsiyalar</div>
+    <p class="system-paragraph">${recommendation}</p>
   `;
     }
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(newInnerHtml, "text/html");
 
-    let blocks = [];
-
-    // Har bir divni tekshiramiz
-    doc.body.querySelectorAll("div").forEach((div) => {
-      if (div.classList.contains("text")) {
-        // text divni satrlarga bo‘lish
-        const lines = div.innerHTML
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line);
-        lines.forEach((line) => blocks.push(`<pre class="text">${line}</pre>`));
-      } else {
-        blocks.push(div.outerHTML);
-      }
-    });
+    const blocks = Array.from(doc.body.children).map((el) => el.outerHTML);
 
     setNewVuln((prev) => [...prev, ...blocks]);
     vulnCounter += 1;
@@ -1307,15 +1678,8 @@ const SystemWord = () => {
       };
 
       // console.log(docVuln);
-      setPlatform(docVuln.platform);
-
-      if (docVuln.platform === "android") {
-        setVulnAndroid((prev) => [...prev, payload]);
-      } else if (docVuln.platform === "ios") {
-        setVulnIOS((prev) => [...prev, payload]);
-      } else if (docVuln.platform === "umumiy") {
-        setVulnUm((prev) => [...prev, payload]);
-      }
+      setPlatform("umumiy");
+      setVulnUm((prev) => [...prev, payload]);
 
       return;
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
@@ -1346,7 +1710,7 @@ const SystemWord = () => {
     let currentPage = [];
 
     const tempDiv = document.createElement("div");
-    tempDiv.style.width = "794px";
+    tempDiv.style.width = "385px";
     tempDiv.style.position = "absolute";
     tempDiv.style.visibility = "hidden";
     document.body.appendChild(tempDiv);
@@ -1358,7 +1722,7 @@ const SystemWord = () => {
       wrapper.innerHTML = item;
       tempDiv.appendChild(wrapper);
 
-      if (tempDiv.scrollHeight > 580) {
+      if (tempDiv.scrollHeight > 1780) {
         if (currentPage.length) pages.push(currentPage);
         currentPage = [item];
         tempDiv.innerHTML = item;
@@ -1375,16 +1739,7 @@ const SystemWord = () => {
   useEffect(() => {
     if (newVuln?.length) {
       const result = paginateContent(newVuln);
-      if (platform == "android") {
-        setPages1(result);
-      } else if (platform == "ios") {
-        setPages2(result);
-      } else if (platform == "umumiy") {
-        setPages3(result);
-      } else {
-        console.log(result);
-        setPages1(result);
-      }
+      setPages3(result);
     }
   }, [newVuln]);
 
@@ -1578,14 +1933,7 @@ const SystemWord = () => {
     ]);
   };
 
-  const currentPages =
-    platform === "android"
-      ? pages1
-      : platform === "ios"
-        ? pages2
-        : platform === "umumiy"
-          ? pages3
-          : pages1;
+  const currentPages = pages3;
   return (
     <>
       <ExpertizeModal
@@ -1661,93 +2009,20 @@ const SystemWord = () => {
             </h2>
           </div>
         </div>
-        <div className="a4 mundarija1 system-m1">
-          <div className="page-content top editable">
-            <div className="mundarija-content first">
-              <div className="content-title">
-                <span>3</span>
-              </div>
-              <div className="mundarija-section">birinchi bo‘lim.</div>
-              <div className="mundarija-head">UMUMIY MA’LUMOTLAR</div>
-              <div className="mundarija-body">
-                <div className="mundarija-row">
-                  <div className="row-title">Atamalar va ta’riflar</div>
-                  <div className="row-num">3</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title">
-                    Ekspertiza o‘tkazish uchun asos
-                  </div>
-                  <div className="row-num">7</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title">Ekspertiza obyekti</div>
-                  <div className="row-num">7</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title">Ekspertiza o‘tkazish tartibi</div>
-                  <div className="row-num">9</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title">
-                    Ekspertiza yuzasidan qo‘shimcha ma’lumotlar
-                  </div>
-                  <div className="row-num">12</div>
-                </div>
-              </div>
-            </div>
-            <div className="mundarija-content">
-              <div className="content-title">
-                <span>14</span>
-              </div>
-              <div className="mundarija-section">IKKINCHI BO‘LIM.</div>
-              <div className="mundarija-head">EKSPERTIZA NATIJALARI</div>
-              <div className="mundarija-body">
-                <div className="mundarija-row">
-                  <div className="row-title large">
-                    Ekspertiza natijalari to‘g‘risida umumlashtirilgan <br />
-                    ma’lumot
-                  </div>
-                  <div className="row-num">14</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title large">
-                    Android mobil ilovasi ekspertizasi natijalari bo‘yicha
-                    batafsil izoh
-                  </div>
-                  <div className="row-num">16</div>
-                </div>
-                <div className="mundarija-row">
-                  <div className="row-title large">{allVuln?.[0]?.a3}</div>
-                  <div className="row-num">16</div>
-                </div>
-              </div>
+        {tocPages.map((pageItems, pageIndex) => (
+          <div
+            key={`toc-${pageIndex}`}
+            className={`a4 ${pageIndex % 2 === 0 ? "mundarija1 system-m1" : "mundarija2 system-m2"}`}
+          >
+            <div className="page-content top editable">
+              <div
+                className={`mundarija-content mundarija-content-system ${pageIndex === 0 ? "first" : ""}`}
+                dangerouslySetInnerHTML={{ __html: pageItems.join("") }}
+              />
             </div>
           </div>
-        </div>
-        <div className="a4 mundarija2 system-m2">
-          <div className="page-content editable">
-            <div className="mundarija-content">
-              <div className="mundarija-body">
-                {allVuln.slice(1).map((item, index) => (
-                  <div className="mundarija-row" key={index}>
-                    <div className="row-title large">{item.a3}</div>
-                    <div className="row-num">18</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="content-title">
-                <span>33</span>
-              </div>
-              <div className="mundarija-section">UCHINCHI BO‘LIM.</div>
-              <div className="mundarija-head" style={{ marginBottom: "40px" }}>
-                UMUMIY XULOSA
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="a4 system-c">
+        ))}
+        <div className="a4 system-c system-text-page">
           {0 % 2 === 0 ? (
             <>
               <img
@@ -1775,35 +2050,41 @@ const SystemWord = () => {
               />
             </>
           )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 0 % 2 === 0 ? `end` : `start`,
-              marginRight: 0 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
           <div className="page-content editable">
-            <h1 className="depart-title mundarija-section">Birinchi bo'lim</h1>
-            <h2 className="depart-subtitle">UMUMIY MA’LUMOTLAR</h2>
-            <table className="depart-table">
-              <tbody>
-                {firstSection.map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first">{item.title}</td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
+            <div className="system-section-header">
+              <div className="system-section-title">BIRINCHI BO‘LIM.</div>
+              <div className="system-section-subtitle">UMUMIY MA’LUMOTLAR</div>
+            </div>
+            <div className="system-bar-title">1.1. Atamalar va ta’riflar</div>
+            <div className="system-two-col">
+              <div className="system-col">
+                {section1Left.map((item) => (
+                  <p className="system-paragraph" key={item.term}>
+                    <span className="system-term">{item.term}</span> —{" "}
+                    {item.text}
+                  </p>
                 ))}
-              </tbody>
-            </table>
+              </div>
+              <div className="system-col">
+                {section1Right.map((item) => (
+                  <p className="system-paragraph" key={item.term}>
+                    <span className="system-term">{item.term}</span> —{" "}
+                    {item.text}
+                  </p>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>3</span>
+          <div
+            className="page-number flex justify-center mt-auto text-white items-center"
+            style={{ bottom: "40px" }}
+          >
+            <span className="text-white max-w-[60%] mt-[20px]">
+              {appName} | 5
+            </span>
           </div>
         </div>
-        <div className="a4 system-c">
+        <div className="a4 system-c system-text-page">
           {1 % 2 === 0 ? (
             <>
               <img
@@ -1831,33 +2112,55 @@ const SystemWord = () => {
               />
             </>
           )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 1 % 2 === 0 ? `end` : `start`,
-              marginRight: 1 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content top editable">
-            <table className="depart-table">
-              <tbody>
-                {secondSection.map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first">{item.title}</td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
+          <div className="page-content editable">
+            <div className="system-two-col">
+              <div className="system-col">
+                <p className="system-paragraph">{htmlInjectionContinuation}</p>
+                {section2LeftTerms.map((item) => (
+                  <p className="system-paragraph" key={item.term}>
+                    <span className="system-term">{item.term}</span> —{" "}
+                    {item.text}
+                  </p>
                 ))}
-              </tbody>
-            </table>
+                <div className="system-bar-title">
+                  1.2. Ekspertiza o‘tkazish uchun asos
+                </div>
+                <p className="system-paragraph">{section2BasisText}</p>
+              </div>
+              <div className="system-col">
+                <div className="system-bar-title">1.3. Ekspertiza obyekti</div>
+                <p className="system-paragraph">
+                  “ERP sport” yagona elektron boshqaruv tizimining quyidagi
+                  resurslari:
+                </p>
+                <ul className="system-list">
+                  {section2ObjectLinks.map((link) => (
+                    <li key={link}>“{link}”;</li>
+                  ))}
+                </ul>
+                <div className="system-bar-title">
+                  1.4. Ekspertiza o‘tkazish tartibi
+                </div>
+                <p className="system-paragraph">{section2ProcessIntro}</p>
+                {section2ProcessItems.map((item) => (
+                  <p className="system-paragraph" key={item.term}>
+                    <span className="system-term">{item.term}</span> –{" "}
+                    {item.text}
+                  </p>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>4</span>
+          <div
+            className="page-number flex justify-center mt-auto text-white items-center"
+            style={{ bottom: "40px" }}
+          >
+            <span className="text-white max-w-[60%] mt-[20px]">
+              {appName} | 6
+            </span>
           </div>
         </div>
-        <div className="a4 system-c">
+        <div className="a4 system-c system-text-page">
           {2 % 2 === 0 ? (
             <>
               <img
@@ -1885,208 +2188,102 @@ const SystemWord = () => {
               />
             </>
           )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 2 % 2 === 0 ? `end` : `start`,
-              marginRight: 2 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content top editable">
-            <table className="depart-table">
-              <tbody>
-                {thirdSection.map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first">{item.title}</td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>5</span>
-          </div>
-        </div>
-        <div className="a4 system-c">
-          {3 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 3 % 2 === 0 ? `end` : `start`,
-              marginRight: 3 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content top editable">
-            <table className="depart-table">
-              <tbody>
-                {fourthSection.map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first">{item.title}</td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>6</span>
-          </div>
-        </div>
-        <div className="a4 system-c">
-          {4 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 4 % 2 === 0 ? `end` : `start`,
-              marginRight: 4 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
           <div className="page-content editable">
-            <div className="title">1.2. Ekspertiza o‘tkazish uchun asos</div>
-            <div className="text">
-              "Kiberxavfsizlik markazi" davlat unitar korxonasi va "{orgName}"{" "}
-              {orgTypeName} oʻrtasida tuzilgan {contractDate}{" "}
-              <b className="text-b">"{appName}"</b> mobil ilovasini
-              kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan
-              oʻtkazish to'g'risidagi <b className="text-b">"{contractName}"</b>{" "}
-              shartnoma.
+            <div className="system-two-col">
+              <div className="system-col">
+                <p className="system-paragraph">{whiteBoxContinuation}</p>
+                <p className="system-paragraph">{section3Intro}</p>
+                <ul className="system-list">
+                  {section3BulletsLeft.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="system-col">
+                <ul className="system-list">
+                  {section3BulletsRight.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
-
-            <div className="title">1.3. Ekspertiza obyekti</div>
-            <div className="text">
-              <b>“{appName}” android/iOS </b> mobil ilovasining{" "}
-              <b>“{apkFileName}”</b> va <b>“{ipaFileName}”</b> fayllari.
-            </div>
-            <div className="text-i">
-              1-jadval. Mobil ilovaning <br />
-              “Android” OT uchun versiyasi
-            </div>
-
-            <table className="expert-table editable-table">
+            <p className="system-paragraph">{section3TableIntro}</p>
+            <div className="system-table-label">1-jadval</div>
+            <table className="system-table">
               <thead>
                 <tr>
-                  <th style={{ width: "60px", minWidth: "60px" }}>T/r.</th>
-                  <th style={{ width: "200px", minWidth: "200px" }}>
-                    Texnik ma’lumot nomlanishi
-                  </th>
-                  <th style={{ width: "240px", minWidth: "240px" }}>Izoh</th>
+                  <th style={{ width: "50px" }}>T/r</th>
+                  <th>Tadbir nomi</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td>1.</td>
-                  <td>Dasturchi</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>2.</td>
-                  <td>Rasmiy veb sayt</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>3.</td>
-                  <td>Fayl nomi</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>4.</td>
-                  <td>Paket nomi</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>5.</td>
-                  <td>Asosiy oyna</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>6.</td>
-                  <td>Talqin</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>7.</td>
-                  <td>Minimal API talqini</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>8.</td>
-                  <td>Joriy API talqini</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>9.</td>
-                  <td>Ilova kategoriyasi</td>
-                  <td>-</td>
-                </tr>
-              </tbody>
+              <tbody
+                dangerouslySetInnerHTML={{
+                  __html: (sectionTablePages[0] || []).join(""),
+                }}
+              />
             </table>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>7</span>
+          <div
+            className="page-number flex justify-center mt-auto text-white items-center"
+            style={{ bottom: "40px" }}
+          >
+            <span className="text-white max-w-[60%] mt-[20px]">
+              {appName} | 7
+            </span>
           </div>
         </div>
+
+        {sectionTablePages.slice(1).map((rows, pageIndex) => (
+          <div key={`section-table-${pageIndex}`} className="a4 system-c system-text-page">
+            {(pageIndex + 1) % 2 === 0 ? (
+              <>
+                <img
+                  className="system-top-img w-full min-w-full"
+                  src="/assets/system/ax-tops.png"
+                  alt=""
+                />
+                <img
+                  className="system-bottom-img w-full min-w-full"
+                  src="/assets/system/ax-bottoms.jpg"
+                  alt=""
+                />
+              </>
+            ) : (
+              <>
+                <img
+                  className="system-top-img w-full min-w-full"
+                  src="/assets/system/ax-top.png"
+                  alt=""
+                />
+                <img
+                  className="system-bottom-img w-full min-w-full"
+                  src="/assets/system/ax-bottom.jpg"
+                  alt=""
+                />
+              </>
+            )}
+            <div className="page-content editable">
+              <div className="system-table-label">1-jadval</div>
+              <table className="system-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "50px" }}>T/r</th>
+                    <th>Tadbir nomi</th>
+                  </tr>
+                </thead>
+                <tbody dangerouslySetInnerHTML={{ __html: rows.join("") }} />
+              </table>
+            </div>
+            <div
+              className="page-number flex justify-center mt-auto text-white items-center"
+              style={{ bottom: "40px" }}
+            >
+              <span className="text-white max-w-[60%] mt-[20px]">
+                {appName}  | {7 + pageIndex + 1}
+              </span>
+            </div>
+          </div>
+        ))}
 
         <div className="a4 system-c">
           {5 % 2 === 0 ? (
@@ -2127,101 +2324,94 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
-            <table className="expert-table editable-table mt-6">
-              <tbody>
-                <tr>
-                  <td>10.</td>
-                  <td>Ilova logotipi</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>11.</td>
-                  <td>-</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>12.</td>
-                  <td>-</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>13.</td>
-                  <td>O‘rnatilishlar soni </td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>14.</td>
-                  <td>MD5</td>
-                  <td>- </td>
-                </tr>
-                <tr>
-                  <td>15.</td>
-                  <td>SHA1</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>16.</td>
-                  <td>SHA256</td>
-                  <td>-</td>
-                </tr>
-              </tbody>
-            </table>
-            <div className="text-i my-3">
-              1-jadval. Mobil ilovaning <br />
-              “iOS” OT uchun versiyasi
-            </div>
+            <div className="system-extra-info">
 
-            <table className="expert-table editable-table">
+              <div className="system-two-col">
+                <div className="system-col">
+                  <div className="system-bar-title">
+                    1.5. Ekspertiza yuzasidan qo‘shimcha ma’lumotlar
+                  </div>
+                  <p className="system-paragraph">
+                    “ERP sport” yagona elektron boshqaruv tizimida ekspertiza
+                    buyurtmachi tomonidan taqdim
+                  </p>
+                </div>
+                <div className="system-col">
+                  <p className="system-paragraph">
+                    qilingan qayd yozuvi va ma’lumotlar asosida olib borildi
+                    (2-jadval).
+                  </p>
+                </div>
+              </div>
+              <div className="system-table-label system-table-label-right">
+                2-jadval
+              </div>
+            </div>
+            <table className="system-table system-table-compact">
               <thead>
                 <tr>
-                  <th style={{ width: "60px", minWidth: "60px" }}>T/r.</th>
-                  <th style={{ width: "200px", minWidth: "200px" }}>
-                    Texnik ma’lumot nomlanishi
-                  </th>
-                  <th style={{ width: "240px", minWidth: "240px" }}>Izoh</th>
+                  <th style={{ width: "50px" }}>T/r</th>
+                  <th style={{ width: "140px" }}>Rol</th>
+                  <th>URL manzil</th>
+                  <th style={{ width: "140px" }}>Login</th>
+                  <th style={{ width: "140px" }}>Parol</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>1.</td>
-                  <td>Dasturchi</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Markaz</td>
+                  <td rowSpan={8}>
+                    <u>https://erp2.sport.uz</u>
+                  </td>
+                  <td>Markaz1</td>
+                  <td>Markaz1@#</td>
                 </tr>
                 <tr>
                   <td>2.</td>
-                  <td>Rasmiy veb sayt</td>
-                  <td>-</td>
+                  <td>Markaz2</td>
+                  <td>Markaz2@#</td>
                 </tr>
                 <tr>
                   <td>3.</td>
-                  <td>Fayl nomi</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Raqamlashtirish</td>
+                  <td>Raqamlashtirish1</td>
+                  <td>Raqamlashtirish1@#</td>
                 </tr>
                 <tr>
                   <td>4.</td>
-                  <td>Paket nomi</td>
-                  <td>-</td>
+                  <td>Raqamlashtirish2</td>
+                  <td>Raqamlashtirish2@#</td>
                 </tr>
                 <tr>
                   <td>5.</td>
-                  <td>Asosiy oyna</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Boshqarma</td>
+                  <td>Boshqarma1</td>
+                  <td>Boshqarma1@#</td>
                 </tr>
                 <tr>
                   <td>6.</td>
-                  <td>Talqin</td>
-                  <td>-</td>
+                  <td>Boshqarma2</td>
+                  <td>Boshqarma2@#</td>
                 </tr>
                 <tr>
                   <td>7.</td>
-                  <td>Minimal API talqini</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Federatsiya</td>
+                  <td>Federatsiya1</td>
+                  <td>Federatsiya1@#</td>
+                </tr>
+                <tr>
+                  <td>8.</td>
+                  <td>Federatsiya2</td>
+                  <td>Federatsiya2@#</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>8</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">
+              {appName} | {7 + sectionTablePages.length}
+            </span>
           </div>
         </div>
         <div className="a4 system-c">
@@ -2263,74 +2453,130 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
-            <table className="expert-table editable-table mt-6">
+            <table className="system-table system-table-compact">
+              <thead>
+                <tr>
+                  <th style={{ width: "50px" }}>T/r</th>
+                  <th style={{ width: "140px" }}>Rol</th>
+                  <th>URL manzil</th>
+                  <th style={{ width: "140px" }}>Login</th>
+                  <th style={{ width: "140px" }}>Parol</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr>
-                  <td>8.</td>
-                  <td>Joriy API talqini</td>
-                  <td>-</td>
-                </tr>
-                <tr>
                   <td>9.</td>
-                  <td>Ilova kategoriyasi</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Boshqarma</td>
+                  <td rowSpan={8}>
+                    <u>https://adm2.sport.uz</u>
+                  </td>
+                  <td>Boshqarma1</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>10.</td>
-                  <td>Ilova logotipi </td>
-                  <td>-</td>
+                  <td>Boshqarma2</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>11.</td>
-                  <td>Play Market havolasi</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Sport maktabi</td>
+                  <td>sport_maktab1</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>12.</td>
-                  <td>Play Market reytingi</td>
-                  <td>-</td>
+                  <td>sport_maktab2</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>13.</td>
-                  <td>O‘rnatilishlar soni </td>
-                  <td>-</td>
+                  <td rowSpan={2}>Universitet</td>
+                  <td>Universitet1</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>14.</td>
-                  <td>MD5</td>
-                  <td>- </td>
+                  <td>Universitet2</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>15.</td>
-                  <td>SHA1</td>
-                  <td>-</td>
+                  <td rowSpan={2}>Raqamlashtirish</td>
+                  <td>Raqamlashtirish1</td>
+                  <td>24091987</td>
                 </tr>
                 <tr>
                   <td>16.</td>
-                  <td>SHA256</td>
-                  <td>-</td>
+                  <td>Raqamlashtirish2</td>
+                  <td>24091987</td>
+                </tr>
+                <tr>
+                  <td>17.</td>
+                  <td rowSpan={2}>Markaz</td>
+                  <td rowSpan={2}>
+                    <u>https://dash2.sport.uz</u>
+                  </td>
+                  <td>Markaz1</td>
+                  <td>Markaz1@#</td>
+                </tr>
+                <tr>
+                  <td>18.</td>
+                  <td>Markaz2</td>
+                  <td>Markaz2@#</td>
+                </tr>
+                <tr>
+                  <td>19.</td>
+                  <td>Foydalanuvchi</td>
+                  <td>
+                    <u>https://5tashabbus.sport.uz</u>
+                  </td>
+                  <td>+998901108070</td>
+                  <td>2023</td>
+                </tr>
+                <tr>
+                  <td>20.</td>
+                  <td>Foydalanuvchi 1</td>
+                  <td rowSpan={2}>
+                    <u>https://my2.sport.uz</u>
+                  </td>
+                  <td>+998997365660</td>
+                  <td>24091987</td>
+                </tr>
+                <tr>
+                  <td>21.</td>
+                  <td>Foydalanuvchi 2</td>
+                  <td>+998912470255</td>
+                  <td>0255</td>
+                </tr>
+                <tr>
+                  <td>22.</td>
+                  <td>Foydalanuvchi</td>
+                  <td>
+                    <u>https://mass2.sport.uz</u>
+                  </td>
+                  <td>Telefon raqami asosida ariza qoldiriladi</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td>23.</td>
+                  <td rowSpan={2}>Admin</td>
+                  <td rowSpan={2}>
+                    <u>https://pr2.sport.uz</u>
+                  </td>
+                  <td>admin1</td>
+                  <td>24091987</td>
+                </tr>
+                <tr>
+                  <td>24.</td>
+                  <td>admin2</td>
+                  <td>24091987</td>
                 </tr>
               </tbody>
             </table>
-
-            <div className="title mt-4">1.4. Ekspertiza o‘tkazish tartibi</div>
-            <table className="depart-table">
-              <tbody>
-                {expertEtaps.slice(0, 1).map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first etp">
-                      <img src={`${item.img}`} alt={`${item.title}`} />
-                      <div>{item.title}</div>
-                      <img src={`${item.dv}`} alt={`${item.dv}`} />
-                    </td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>9</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 9</span>
           </div>
         </div>
         <div className="a4 system-c">
@@ -2372,23 +2618,86 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
-            <table className="depart-table">
-              <tbody>
-                {expertEtaps.slice(1, 4).map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first etp">
-                      <img src={`${item.img}`} alt={`${item.title}`} />
-                      <div>{item.title}</div>
-                      <img src={`${item.dv}`} alt={`${item.dv}`} />
-                    </td>
-                    <td className="depart-table-last">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="system-section-header">
+              <div className="system-section-title">IKKINCHI BO‘LIM.</div>
+              <div className="system-section-subtitle">EKSPERTIZA NATIJALARI</div>
+            </div>
+            <div className="system-bar-title">
+              2.1. Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot
+            </div>
+            <div className="system-two-col">
+              <div className="system-col">
+                <p className="system-paragraph">
+                  Ekspertiza natijalari asosida 3 xil xavflilik darajasiga ega,
+                  ya’ni <b>yuqori, o‘rta</b> va <b>past</b> xavflilik
+                  darajasidagi kiberxavfsizlik zaifliklari aniqlanishi mumkin.
+                </p>
+                <p className="system-paragraph">
+                  Kiberxavfsizlik zaifliklari xavflilik darajasidan kelib chiqqan
+                  holda axborot tizimiga quyidagi risklar xavf soladi.
+                </p>
+                <div className="system-highlight">
+                  <p className="system-paragraph">
+                    <span className="system-term">Yuqori</span> - ushbu turdagi
+                    kiberxavfsizlik zaifliklari tizimga eng yuqori xavf
+                    ko‘rsatadi. Ulardan foydalanish natijasida tizimga
+                    ruxsatsiz kirish, uning ma’lumotlaridan foydalanish,
+                    ularni oshkor bo‘lish yoki o‘zgarish holatlariga olib
+                    keladi, jumladan konfidensial turdagi ma’lumotlar ham.
+                  </p>
+                </div>
+                <div className="system-highlight">
+                  <p className="system-paragraph">
+                    <span className="system-term">O‘rta</span> - ushbu turdagi
+                    kiberxavfsizlik zaifliklari ko‘p holatlarda boshqa turdagi
+                    xavflilik darajasi yuqori bo‘lgan harakatlarni amalga
+                    oshirishga, axborot tizimi bilan bog‘liq ma’lumotlarni
+                    to‘plashga xizmat qiladi.
+                  </p>
+                </div>
+              </div>
+              <div className="system-col">
+                <p className="system-paragraph system-highlight">
+                  <span className="system-term">Past</span> - ushbu turdagi
+                  kiberxavfsizlik zaifliklari axborot tizimida umumiy
+                  ma’lumotlarga ega bo‘lish imkoniyatini taqdim etadi.
+                </p>
+                <p className="system-paragraph">
+                  Olib borilgan ekspertiza natijalari asosida aniqlangan
+                  kiberxavfsizlik zaifliklari to‘g‘risida umumlashtirilgan
+                  ma’lumot 3-jadvalda taqdim qilingan.
+                </p>
+                <div className="system-table-label">3-jadval</div>
+                <table className="system-risk-table">
+                  <thead>
+                    <tr>
+                      <th>Xavflilik darajasi</th>
+                      <th>Aniqlangan zaifliklar soni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="risk-resource">
+                      <td colSpan={2}>“adm2.sport.uz” resursi</td>
+                    </tr>
+                    <tr className="risk-high">
+                      <td>Sessiyaning saqlanib qolishi</td>
+                      <td>1</td>
+                    </tr>
+                    <tr className="risk-high">
+                      <td>Saytlararo so‘rovlarni soxtalashtirish (CSRF)</td>
+                      <td>1</td>
+                    </tr>
+                    <tr className="risk-high">
+                      <td>SQL inyeksiya</td>
+                      <td>76</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>10</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 10</span>
           </div>
         </div>
         <div className="a4 system-c">
@@ -2430,29 +2739,94 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
-            <table className="depart-table">
-              <tbody>
-                {expertEtaps.slice(4, 7).map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first etp">
-                      <img src={`${item.img}`} alt={`${item.title}`} />
-                      <div>{item.title}</div>
-                      {item.dv !== null && (
-                        <img src={`${item.dv}`} alt={`${item.dv}`} />
-                      )}
-                    </td>
-                    <td className="depart-table-last">{item.desc}</td>
+            <div className="system-risk-columns">
+              <table className="system-risk-table">
+                <tbody>
+                  <tr className="risk-medium">
+                    <td className="risk-level" rowSpan={4}>O‘rta</td>
+                    <td className="risk-name">Ixtiyoriy kengaytmadagi faylni yuklash</td>
+                    <td className="risk-count">1</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="text">
-              Ekspertiza o‘tkazish tartibi asosida amalga oshiriladigan ishlar
-              jarayoni quyidagi tadbirlarni ham o‘z ichiga oladi:
+                  <tr className="risk-medium">
+                    <td className="risk-name">Ma’lumotlarni oshkor qiluvchi xatolik xabari</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-medium">
+                    <td className="risk-name">Sessiyaning aktivlik vaqtini uzoqligi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-medium">
+                    <td className="risk-name">Ma’lumotlarni ochiqlanishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-resource">
+                    <td colSpan={3}>“erp.sport.uz” resursi</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-level" rowSpan={3}>Yuqori</td>
+                    <td className="risk-name">Avtorizatsiyaning yo‘qligi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-name">SQL inyeksiya</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table className="system-risk-table">
+                <tbody>
+                  <tr className="risk-medium">
+                    <td className="risk-level" rowSpan={4}>O‘rta</td>
+                    <td className="risk-name">Ma’lumotlarni ochiqlanishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-medium">
+                    <td className="risk-name">Ixtiyoriy kengaytmadagi faylni yuklash</td>
+                    <td className="risk-count">2</td>
+                  </tr>
+                  <tr className="risk-medium">
+                    <td className="risk-name">Ma’lumotlarni oshkor qiluvchi xatolik xabari</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-medium">
+                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-resource">
+                    <td colSpan={3}>“dash2.sport.uz” resursi</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-level">Yuqori</td>
+                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-resource">
+                    <td colSpan={3}>“my2.sport.uz” resursi</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-level" rowSpan={3}>Yuqori</td>
+                    <td className="risk-name">Avtorizatsiyaning yo‘qligi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                  <tr className="risk-high">
+                    <td className="risk-name">Saytlararo so‘rovlarni soxtalashtirish (CSRF)</td>
+                    <td className="risk-count">1</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>11</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 11</span>
           </div>
         </div>
         <div className="a4 system-c">
@@ -2493,24 +2867,70 @@ const SystemWord = () => {
             <div>“{appName}”</div>
             <div>mobil ilovasi</div>
           </div>
-          <div className="page-content editable">
-            <table className="depart-table">
-              <tbody>
-                {inExperts.slice(0, 5).map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first exp">
-                      <div>
-                        {item.id}. {item.title}
-                      </div>
-                    </td>
-                    <td className="depart-table-last exp">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="page-content editable new-content">
+
+
+            <div className="system-two-col">
+              <div className="system-col">
+                <div className="system-bar-title">
+                  2.2. Ekspertiza natijalari bo‘yicha batafsil izoh
+                </div>
+                <div className="system-subhead system-highlight">2.2.1. “adm2.sport.uz” veb-resursi</div>
+                <div className="system-subtitle">
+                  2.2.1.1. Sessiyaning saqlanib qolishi
+                </div>
+                <p className="system-paragraph">
+                  <b>Xavflilik darajasi:</b> Yuqori.
+                </p>
+                <p className="system-paragraph">
+                  Ekspertiza davrida axborot tizimi foydalanuvchisining
+                  avtorizatsiya qiymatini saqlanib qolishi holatlari aniqlanadi.
+                  Ya’ni foydalanuvchi uchun axborot tizimida shakllantirilgan
+                  avtorizatsiyaning qiymati foydalanuvchi tizimda “chiqish”ni
+                  amalga oshirgandan keyin ham foydalanuvchining avtorizatsiya
+                  tokeni uzoq muddatli aktiv holatda qolishi aniqlanadi.
+                </p>
+                <p className="system-paragraph">
+                  Mazkur turdagi zaiflik CWE (Common Weakness Enumeration)
+                  dasturiy va apparat ta’minotlarning zaifliklarini
+                  kategoriyalash tizimida “CWE-613” (inglizcha. Insufficient
+                  Session Expiration – Seans davomiyligi yetarli emas)
+                  identifikator raqamiga ega. Bundan tashqari, “Open Web
+                  Application Security Project” (Veb-ilovalarning xavfsizligini
+                  ta’minlashning ochiq loyihasi)ning OWASP Top 2021 reytingida:
+                  7-o‘rindagi (inglizcha. Identification and Authentication
+                  Failures – Identifikatsiya va autentifikatsiyada xatoliklar)
+                  zaiflik turiga kiritilgan.
+                </p>
+              </div>
+              <div className="system-col">
+                <img
+                  className="system-inline-img"
+                  src="/assets/tizim.jpg"
+                  alt="Ekspertiza skrinshoti"
+                />
+                <div className="system-figure">
+                  1-rasm. Token qiymatini saqlanib qolishi.
+                </div>
+                <div className="system-subtitle">Ekspluatatsiya oqibatlari</div>
+                <p className="system-paragraph">
+                  Axborot tizimining ixtiyoriy foydalanuvchisiga tegishli
+                  avtorizatsiya qiymatini qo‘lga kiritish, shuningdek ushbu
+                  axborot tizimidan foydalanuvchi uchun ajratilgan huquq
+                  darajalari doirasida noqonuniy foydalanish holatiga olib
+                  kelishi mumkin.
+                </p>
+                <div className="system-subtitle">Tavsiyalar</div>
+                <p className="system-paragraph">
+                  Axborot tizimi doirasida foydalanuvchilar sessiyasi bilan
+                  bog‘liq dasturiy kod qismlarini qayta ko‘rib chiqish va
+                  takomillashtirish.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>12</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 12</span>
           </div>
         </div>
         <div className="a4 system-c">
@@ -2552,396 +2972,77 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
-            <table className="depart-table">
-              <tbody>
-                {inExperts.slice(6, 9).map((item, index) => (
-                  <tr key={index}>
-                    <td className="depart-table-first exp">
-                      <div>
-                        {item.id}. {item.title}
-                      </div>
-                    </td>
-                    <td className="depart-table-last exp">{item.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="title">
-              1.5. Ekspertiza yuzasidan qo‘shimcha ma’lumotlar
+            <div className="system-section-header">
+              <div className="system-section-title">UCHINCHI BO‘LIM.</div>
+              <div className="system-section-subtitle">UMUMIY XULOSA</div>
             </div>
-            <div className="text">
-              “{appName}” android/iOS mobil ilovalari ekspertizasi buyurtmachi
-              tomonidan taqdim qilingan ma’lumotlar, jumladan: <br />
-              <b>- “{apkFileName}”;</b> <br />
-              <b>- “{ipaFileName}”</b> fayllari, shuningdek 4-jadvaldagi
-              foydalanuvchi qayd yozuvlari asosida olib borildi.
-            </div>
-            <div className="relative">
-              <table className="expert-table editable-table mt-6">
-                <thead>
-                  <tr>
-                    <th>T/r</th>
-                    <th>Rol</th>
-                    <th>Kirish</th>
-                    <th>Parol</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>1.</td>
-                    <td>Foydalanuvchi</td>
-                    <td>+998938623880</td>
-                    <td>sms</td>
-                  </tr>
-                  {rows.map((row, index) => (
-                    <tr key={row.id}>
-                      <td>{index + 2}</td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button
-                onClick={() => addNewTr()}
-                className="opacity-0 hover:opacity-100 text-bold w-[15px] h-[20px] rounded-full text-center text-green-500 bg-gray-700 flex justify-center items-center absolute right-[0px] bottom-[-5px]"
-              >
-                <span>+</span>
-              </button>
-            </div>
-          </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>13</span>
-          </div>
-        </div>
-        <div className="a4 system-c">
-          {11 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 11 % 2 === 0 ? `end` : `start`,
-              marginRight: 11 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content editable">
-            <h1 class="depart-title mundarija-section">IKKINCHI BO‘LIM.</h1>
-            <h2 class="depart-subtitle">UMUMIY MA’LUMOTLAR</h2>
-            <div className="title">
-              2.1. Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot
-            </div>
-            <div className="text">
-              Ekspertiza natijalari asosida 3 xil xavflilik darajasiga ega,
-              ya’ni <b>yuqori, o‘rta</b> va <b>past</b> xavflilik darajasidagi
-              axborot xavfsizligi zaifliklari va tizimda ma’lumot uchun holatlar
-              aniqlanishi mumkin.
-            </div>
-            <div className="text">
-              Axborot xavfsizligi zaifliklari xavflilik darjasidan kelib chiqqan
-              holda mobil ilovaga quyidagi risklar xavf soladi.
-            </div>
-            <div className="text">
-              <b>Yuqori</b> - ushbu turdagi axborot xavfsizligi zaifliklari
-              ilovaga eng yuqori xavf ko‘rsatadi. Ulardan foydalanish ilovaga
-              ruxsatsiz kirish, uning ma’lumotlaridan foydalanish bilan bir
-              qatorda muhim, konfidensial ma’lumotlarni sizib chiqish
-              holatlarini yuzaga kelishiga sabab bo‘lishi mumkin.
-            </div>
-            <div className="text">
-              <b>O‘rta</b> - ushbu turdagi axborot xavfsizligi zaifliklari ko‘p
-              holatlarda boshqa turdagi xavflilik darajasi yuqori bo‘lgan
-              harakatlarni amalga oshirishga, ilova bilan bog‘liq ma’lumotlarni
-              to‘plashga xizmat qiladi.
-            </div>
-            <div className="text">
-              <b>Past</b> - ushbu turdagi axborot xavfsizligi zaifliklari
-              ilovada umumiy ma’lumotlarga ega bo‘lish imkoniyatini taqdim
-              etadi.
-            </div>
-            <div className="text">
-              <b>Ma’lumot uchun </b> – ilovaga xavf solmaydigan, ekspertiza
-              davrida aniqlangan axborot xavfsizligiga zid holatlar.
+            <div className="system-two-col">
+              <div className="system-col">
+                <p className="system-paragraph">
+                  “ERP sport” yagona elektron boshqaruv tizimi kiberxavfsizlik
+                  talablariga muvofiqligi yuzasidan o‘tkazilgan ekspertiza
+                  natijasida kiberxavfsizlikning yuqori va o‘rta darajadagi
+                  zaifliklari aniqlandi.
+                </p>
+                <p className="system-paragraph">
+                  Ekspertiza davrida aniqlangan zaifliklar tizim va uning
+                  resurslaridan (funksional imkoniyatlaridan) ruxsatsiz
+                  foydalanish, zararli fayllarni yuklash va tarqatish,
+                  ma’lumotlarni oshkor bo‘lish va sizib chiqish holatlariga olib
+                  kelishi mumkin.
+                </p>
+                <p className="system-paragraph">
+                  Shu o‘rinda ushbu salbiy holatlarni oldini olish, shuningdek
+                  kiberxavfsizlikni ta’minlanganlik darajasini yaxshilash
+                  maqsadida aniqlangan kiberxavfsizlik zaifliklarini bartaraf
+                  etish yuzasidan tavsiyalarni inobatga olish hamda quyidagi
+                  chora-tadbirlar amalga oshirish tavsiya etiladi:
+                </p>
+                <ul className="system-paragraph">
+                  <li>
+                    doimiy ravishda operatsion tizimlar, dasturiy ta’minotlar va
+                    himoya vositalarining versiyalarini hamda signaturalar
+                    bazasini yangilanishini qo‘llab-quvvatlash;
+                  </li>
+                  <li>
+                    axborotni himoya qilish vositalari, xususan “WAF” va
+                    “IDS/IPS”lardan samarali foydalanish;
+                  </li>
+                </ul>
+              </div>
+              <div className="system-col">
+                <ul className="system-paragraph">
+                  <li>
+                    davriy muddatlarda ishlab chiqilgan yoki joriy etilgan
+                    axborot tizimlarini kiberxavfsizlik talablari bo‘yicha
+                    tekshiruvdan o‘tkazish;
+                  </li>
+                  <li>
+                    tizimning autentifikatsiya jarayonlarida “Elektron raqamli
+                    imzo”lardan, “OTP”lardan foydalanishni doimiy qo‘llab-quvvatlash;
+                  </li>
+                  <li>
+                    inyeksiya va mazkur turga oid zaifliklarni bartaraf etish
+                    yuzasidan choralar ko‘rish davrida barcha ma’lumotlarni
+                    kiritish qismlarini ham inobatga olish tavsiya etiladi.
+                  </li>
+                </ul>
+                <div className="system-note-title">Ma’lumot o‘rnida:</div>
+                <p className="system-note">
+                  Ekspertiza hisobotі 2025-yil 18-dekabr kunida olingan yakuniy
+                  tahliliy natijalar asosida shakllantirilgan. Shu munosabat
+                  bilan, “Kiberxavfsizlik markazi” DUK mazkur muddatdan tashqari
+                  vaqtlarda aniqlangan kiberxavfsizlik zaifliklari yuzasidan
+                  javobgarlikni o‘z zimmasiga olmaydi.
+                </p>
+              </div>
             </div>
           </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>14</span>
+          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 13</span>
           </div>
         </div>
-        <div className="a4 system-c">
-          {12 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 12 % 2 === 0 ? `end` : `start`,
-              marginRight: 12 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content editable">
-            <div className="text">
-              Olib borilgan ekspertiza natijalari asosida aniqlangan axborot
-              xavfsizligi zaifliklari to‘g‘risida umumlashtirilgan ma’lumotlar
-              5-jadvalda taqdim qilingan.
-            </div>
-            <div className="text-i my-3 underline">
-              5-jadval. “{appName}” android mobil ilovasida <br />
-              aniqlangan zaifliklar.
-            </div>
-            <table class="expert-table editable-table">
-              <thead>
-                <tr>
-                  <th style={{ width: "100px", minWidth: "100px" }}>
-                    Xavflilik darajasi{" "}
-                  </th>
-                  <th style={{ width: "300px", minWidth: "300px" }} colSpan={2}>
-                    Aniqlangan zaifliklar nomi va soni
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {androidVulns.high?.map((item, index) => (
-                  <tr key={`android-high-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={androidVulns.high.length}>
-                        <b>Yuqori</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td style={{ fontWeight: "normal" }}>{item.a2}</td>
-                  </tr>
-                ))}
-                {androidVulns.medium?.map((item, index) => (
-                  <tr key={`android-medium-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={androidVulns.medium.length}>
-                        <b>O'rta</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-                {androidVulns.low?.map((item, index) => (
-                  <tr key={`android-low-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={androidVulns.low.length}>
-                        <b>Past</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>15</span>
-          </div>
-        </div>
-        <div className="a4 system-c">
-          {12 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 12 % 2 === 0 ? `end` : `start`,
-              marginRight: 12 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content editable">
-            <div className="text-i my-3 underline">
-              6-jadval. “{appName}” iOS mobil ilovasida <br />
-              aniqlangan zaifliklar.
-            </div>
-            <table class="expert-table editable-table">
-              <thead>
-                <tr>
-                  <th style={{ width: "100px", minWidth: "100px" }}>
-                    Xavflilik darajasi{" "}
-                  </th>
-                  <th style={{ width: "300px", minWidth: "300px" }} colSpan={2}>
-                    Aniqlangan zaifliklar nomi va soni
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {iosVulns.high?.map((item, index) => (
-                  <tr key={`ios-high-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={iosVulns.high.length}>
-                        <b>Yuqori</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td style={{ fontWeight: "normal" }}>{item.a2}</td>
-                  </tr>
-                ))}
-                {iosVulns.medium?.map((item, index) => (
-                  <tr key={`ios-medium-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={iosVulns.medium.length}>
-                        <b>O'rta</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-                {iosVulns.low?.map((item, index) => (
-                  <tr key={`ios-low-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={iosVulns.low.length}>
-                        <b>Past</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="text-i my-3 underline">
-              7-jadval. “{appName}” mobil ilova va server o‘rtasidagi
-              so‘rovlarni o‘rganish jarayonida aniqlangan zaifliklar
-            </div>
-            <table class="expert-table editable-table">
-              <thead>
-                <tr>
-                  <th style={{ width: "100px", minWidth: "100px" }}>
-                    Xavflilik darajasi{" "}
-                  </th>
-                  <th style={{ width: "300px", minWidth: "300px" }} colSpan={2}>
-                    Aniqlangan zaifliklar nomi va soni
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {umVulns.high?.map((item, index) => (
-                  <tr key={`um-high-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={umVulns.high.length}>
-                        <b>Yuqori</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td style={{ fontWeight: "normal" }}>{item.a2}</td>
-                  </tr>
-                ))}
-                {umVulns.medium?.map((item, index) => (
-                  <tr key={`um-medium-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={umVulns.medium.length}>
-                        <b>O'rta</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-                {umVulns.low?.map((item, index) => (
-                  <tr key={`um-low-${index}`}>
-                    {index === 0 && (
-                      <td rowSpan={umVulns.low.length}>
-                        <b>Past</b>
-                      </td>
-                    )}
-                    <td style={{ fontWeight: "normal" }}>{item.a3}</td>
-                    <td>{item.a2}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="page-number flex justify-center mt-auto">
-            <span>16</span>
-          </div>
-        </div>
+       
 
         {currentPages &&
           currentPages.map((pageItems, pageIndex) => (
@@ -2986,13 +3087,15 @@ const SystemWord = () => {
               </div>
 
               <div className="page-content editable new-content">
-                {pageItems.map((item, i) => (
-                  <div key={i} dangerouslySetInnerHTML={{ __html: item }} />
-                ))}
+                <div className="system-two-col-flow">
+                  {pageItems.map((item, i) => (
+                    <div key={i} dangerouslySetInnerHTML={{ __html: item }} />
+                  ))}
+                </div>
               </div>
 
-              <div className="page-number flex justify-center mt-auto exp-page-num">
-                <span>{pageIndex + 17}</span>
+              <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+                <span className="text-white max-w-[60%] mt-[20px]">{appName} | {pageIndex + 17}</span>
               </div>
             </div>
           ))}

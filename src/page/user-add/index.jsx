@@ -375,7 +375,7 @@ const UserAdd = () => {
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-[400px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
+        className={`expertise-drawer fixed top-0 right-0 h-full w-[400px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
         ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-6 border-b flex justify-between items-center">
@@ -405,8 +405,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -428,8 +428,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -451,8 +451,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -487,8 +487,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -518,8 +518,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -552,8 +552,8 @@ const UserAdd = () => {
                 className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
               >
                 <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
+                  icon="material-symbols:save-outline"
+                  className="text-green-500"
                 />
               </button>
             )}
@@ -575,8 +575,8 @@ const UserAdd = () => {
                   className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
+                    className="text-green-500"
                   />
                 </button>
               )}

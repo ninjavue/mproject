@@ -11,7 +11,14 @@ const vulnLevelOptions = [
   { value: "3", label: "Past" },
 ];
 
-const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc }) => {
+const ExpertizeModal = ({
+  link = "word",
+  open,
+  onClose,
+  item,
+  itemId,
+  onSaveDoc,
+}) => {
   const [selectedVuln, setSelectedVuln] = useState("");
   const [zaiflikText, setZaiflikText] = useState("");
   const [oqibatlarText, setOqibatlarText] = useState("");
@@ -76,8 +83,6 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
         formData.contract = uploadRes.fileId;
       }
 
-     
-
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
         19: itemId,
         1.16: formData.userValues,
@@ -134,7 +139,7 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
       vuln: newDocVuln,
       platform: platform,
       vulnLevel: vulnLevel,
-      vulnCount: formData.count || 1
+      vulnCount: formData.count || 1,
     });
   };
 
@@ -148,84 +153,99 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
   return (
     <div>
       {open && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <button
-            className="mt-4 px-[10px] pt-[10px] bg-gray-50 text-gray-700 rounded absolute top-[30px] right-[13px] shadow-md"
-            onClick={onClose}
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-[10000000]"
+          onClick={onClose}
+        >
+          <div
+            className="expertise-drawer absolute right-0 top-0 h-full bg-white dark:bg-[#2b2c40] shadow-lg p-6 w-[500px] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
           >
-            <iconify-icon
-              icon="mdi:close"
-              width="28"
-              height="28"
-            ></iconify-icon>
-          </button>
-          <div className="bg-white dark:bg-[#2b2c40] rounded-lg shadow-lg p-6 w-[55%] relative overflow-y-scroll max-h-[100vh]">
+            <button
+              className="px-[10px] pt-[10px]  text-gray-700 rounded absolute top-[12px] right-[12px]"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <iconify-icon
+                icon="mdi:close"
+                width="22"
+                height="22"
+              ></iconify-icon>
+            </button>
             <h2 className="text-lg font-semibold mb-4 text-gray-500 dark:text-gray-200">
               {item?.[3]}
             </h2>
+
+            <div className="mb-3 fv-plugins-icon-container">
+              <label className="form-label">Platforma</label>
+              <select
+                className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent text-slate-500"
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+              >
+                <option value="">Platformani tanlang</option>
+                <option value="android">Android</option>
+                <option value="ios">iOS</option>
+                <option value="umumiy">Umumiy</option>
+              </select>
+            </div>
+
+            <div className="mb-3 fv-plugins-icon-container">
+              <label className="form-label">Zaiflik darajasi</label>
+              <Select
+                options={vulnLevelOptions}
+                placeholder="Tanlang..."
+                isSearchable
+                className="basic-multi-select"
+                classNamePrefix="select"
+                value={
+                  vulnLevelOptions.find((o) => o.value === vulnLevel) || null
+                }
+                onChange={handleSelectVuln}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: "transparent",
+                    borderColor: "#e2e8f0",
+                    borderRadius: "0.375rem",
+                    minHeight: "40px",
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    zIndex: 9999,
+                  }),
+                }}
+              />
+            </div>
+
+            <div className="mb-3 fv-plugins-icon-container">
+              <label className="form-label">Zaiflik turi</label>
+              <Select
+                options={vulnOptions}
+                placeholder="Zaiflik turini tanlang..."
+                isSearchable
+                isClearable
+                className="basic-multi-select"
+                classNamePrefix="select"
+                value={vulnOptions.find((o) => o.value === selectedVuln)}
+                onChange={handleVulnChange}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: "transparent",
+                    borderColor: "#e2e8f0",
+                    borderRadius: "0.375rem",
+                    minHeight: "40px",
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    zIndex: 9999,
+                  }),
+                }}
+              />
+            </div>
+
             <div className="mt-4">
-              {/* 1-5 textarea'lar o'zgarmagan */}
-              <div className="mb-3 fv-plugins-icon-container">
-                <label className="form-label">
-                  Qayd yozuvi (role|login|parol)
-                </label>
-                <textarea
-                  rows="3"
-                  name="userValues"
-                  value={formData.userValues}
-                  onChange={handleChange}
-                  className="form-control"
-                  placeholder="Login , parollar"
-                ></textarea>
-              </div>
-              <div className="mb-3 fv-plugins-icon-container">
-                <label className="form-label">
-                  [Dasturchi]-[rasmiy_sayt]-[ilova_kategoriyasi]-[fayl_nomi]-[paket_nomi]-[talqin]-[min_iOS]-[joriy_iOS]-[app_store_havola]-[app_store_reyting]-[logo]-[md5]-[sha1]-[sha256]
-                </label>
-                <textarea
-                  rows="3"
-                  name="controlValues"
-                  value={formData.controlValues}
-                  onChange={handleChange}
-                  className="form-control"
-                  placeholder="Nazorat qiymatlari"
-                ></textarea>
-              </div>
-              <div className="mb-3 fv-plugins-icon-container">
-                <label className="form-label">
-                  [Dasturchi]-[rasmiy_sayt]-[ilova_kategoriyasi]-[fayl_nomi]-[paket_nomi]-[talqin]-[min_iOS]-[joriy_iOS]-[app_store_havola]-[app_store_reyting]-[logo]-[md5]-[sha1]-[sha256]
-                </label>
-                <textarea
-                  rows="3"
-                  name="controlValues2"
-                  value={formData.controlValues2}
-                  onChange={handleChange}
-                  className="form-control"
-                  placeholder="Nazorat qiymatlari"
-                ></textarea>
-              </div>
-              <div className="mb-3 fv-plugins-icon-container">
-                <label className="form-label">MOBIL IPLAR</label>
-                <textarea
-                  rows="3"
-                  name="mobileIps"
-                  value={formData.mobileIps}
-                  onChange={handleChange}
-                  className="form-control"
-                  placeholder="Domain va iplar"
-                ></textarea>
-              </div>
-              <div className="mb-3 fv-plugins-icon-container">
-                <label className="form-label">MOBIL PORTLAR</label>
-                <textarea
-                  rows="3"
-                  name="mobilePorts"
-                  value={formData.mobilePorts}
-                  onChange={handleChange}
-                  className="form-control"
-                  placeholder="Ip va portlar"
-                ></textarea>
-              </div>
               {/* 9 Soni */}
               <div className="mb-3 fv-plugins-icon-container">
                 <label className="form-label">Soni</label>
@@ -234,63 +254,11 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
                   name="count"
                   value={formData.count}
                   onChange={handleChange}
-                  className="form-control"
+                  className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent"
                   placeholder="Soni"
                   defaultValue="1"
                 />
               </div>
-            </div>
-
-            <div className="flex gap-4 justify-between mt-6">
-              <div className="flex w-[400px] justify-between items-center">
-                <div className="w-[190px]">
-                  <select
-                    className="border rounded-md px-3 py-2 text-sm text-slate-500 w-full bg-transparent"
-                    value={platform}
-                    onChange={(e) => setPlatform(e.target.value)}
-                  >
-                    <option value="">Platformani tanlang</option>
-                    <option value="android">Android</option>
-                    <option value="ios">iOS</option>
-                    <option value="umumiy">Umumiy</option>
-                  </select>
-                </div>
-                <div className="w-[190px] ml-6">
-                  <Select
-                    options={vulnLevelOptions}
-                    placeholder="Tanlang..."
-                    isSearchable
-                    value={
-                      vulnLevelOptions.find((o) => o.value === vulnLevel) ||
-                      null
-                    }
-                    onChange={handleSelectVuln}
-                  />
-                </div>
-              </div>
-              <div className="w-[500px]">
-                <Select
-                  options={vulnOptions}
-                  placeholder="Zaiflik turini tanlang..."
-                  isSearchable
-                  isClearable
-                  value={vulnOptions.find((o) => o.value === selectedVuln)}
-                  onChange={handleVulnChange}
-                />
-              </div>
-            </div>
-
-            <div className="w-full mx-auto my-4">
-              <label
-                htmlFor="file-upload"
-                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-blue-300 rounded-xl bg-blue-50 cursor-pointer hover:bg-blue-100 transition-colors"
-              >
-                <i className="ri-upload-cloud-2-line text-4xl text-blue-600 mb-4"></i>
-                <span className="text-gray-600 text-base font-semibold dark:text-white">
-                  Maydonni bosing
-                </span>
-                <input id="file-upload" type="file" className="hidden" />
-              </label>
             </div>
 
             <div className="btn-group flex justify-end items-center gap-2">
@@ -302,14 +270,14 @@ const ExpertizeModal = ({ link="word", open, onClose, item, itemId, onSaveDoc })
               >
                 Qo'shish
               </button>
-              <button
+              {/* <button
                 className="btn btn-primary py-2"
                 data-bs-dismiss="modal"
                 onClick={saveAllPages}
                 aria-label="Close"
               >
                 Saqlash
-              </button>
+              </button> */}
             </div>
           </div>
         </div>

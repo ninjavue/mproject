@@ -201,8 +201,8 @@ const DashboardPage = () => {
 
   return (
     <div
-      className="dashboard-page dark:bg-[#1e1e2f] "
-      style={{ margin: "-20px" }}
+      className="dashboard-page "
+      style={{ margin: "-20px", maxHeight: "105vh" }}
     >
       <div className="mt-4 text-xl text-gray-400 font-medium mb-4 ">
         {" "}
@@ -283,7 +283,7 @@ const DashboardPage = () => {
       </div>
 
       <div className="mt-4">
-        <div className="lt-sum dark:bg-[#2b2c40] bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600">
+        <div className="lt-sum bg-white dark:bg-[#2b2c40] bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600">
           <div
             className="lt-sum__dot w-6 h-6"
             style={{ background: "var(--accent-purple)" }}

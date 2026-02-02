@@ -6,6 +6,8 @@ import { useEffect, useState, useRef } from "react";
 
 const Main = () => {
   const location = useLocation();
+  const baseScriptsPromiseRef = useRef(null);
+  const homeOneLoadingRef = useRef(false);
   const loadScript = (src) => {
     return new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -19,28 +21,72 @@ const Main = () => {
   };
 
   useEffect(() => {
-    async function loadAllScripts() {
-      await loadScript("/assets/js/lib/jquery-3.7.1.min.js");
-      await loadScript("/assets/js/lib/apexcharts.min.js");
-      await loadScript("/assets/js/lib/simple-datatables.min.js");
-      await loadScript("/assets/js/lib/iconify-icon.min.js");
-      await loadScript("/assets/js/lib/jquery-ui.min.js");
-      await loadScript("/assets/js/lib/jquery-jvectormap-2.0.5.min.js");
-      await loadScript("/assets/js/lib/jquery-jvectormap-world-mill-en.js");
-      await loadScript("/assets/js/lib/magnifc-popup.min.js");
-      await loadScript("/assets/js/lib/slick.min.js");
-      await loadScript("/assets/js/lib/prism.js");
-      await loadScript("/assets/js/lib/file-upload.js");
-      await loadScript("/assets/js/lib/audioplayer.js");
-      await loadScript("/assets/js/flowbite.min.js");
-      await loadScript("/assets/js/app.min.js");
-
-      if (location.pathname === "/") {
-        await loadScript("/assets/js/homeOneChart.js");
+    async function loadBaseScripts() {
+      if (!baseScriptsPromiseRef.current) {
+        baseScriptsPromiseRef.current = (async () => {
+          await loadScript("/assets/js/lib/jquery-3.7.1.min.js");
+          await loadScript("/assets/js/lib/apexcharts.min.js");
+          await loadScript("/assets/js/lib/simple-datatables.min.js");
+          await loadScript("/assets/js/lib/iconify-icon.min.js");
+          await loadScript("/assets/js/lib/jquery-ui.min.js");
+          await loadScript("/assets/js/lib/jquery-jvectormap-2.0.5.min.js");
+          await loadScript("/assets/js/lib/jquery-jvectormap-world-mill-en.js");
+          await loadScript("/assets/js/lib/magnifc-popup.min.js");
+          await loadScript("/assets/js/lib/slick.min.js");
+          await loadScript("/assets/js/lib/prism.js");
+          await loadScript("/assets/js/lib/file-upload.js");
+          await loadScript("/assets/js/lib/audioplayer.js");
+          await loadScript("/assets/js/flowbite.min.js");
+          await loadScript("/assets/js/app.min.js");
+        })();
       }
+      return baseScriptsPromiseRef.current;
     }
 
-    loadAllScripts();
+    const initHomeOneCharts = () => {
+      if (homeOneLoadingRef.current) return;
+      homeOneLoadingRef.current = true;
+
+      const chartIds = [
+        "chart",
+        "barChart",
+        "userOverviewDonutChart",
+        "paymentStatusChart",
+        "world-map",
+      ];
+      chartIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = "";
+      });
+      const chartScript = document.querySelector(
+        'script[src^="/assets/js/homeOneChart.js"]'
+      );
+      if (chartScript) chartScript.remove();
+
+      const script = document.createElement("script");
+      script.src = `/assets/js/homeOneChart.js?v=${Date.now()}`;
+      script.async = true;
+      script.onload = () => {
+        homeOneLoadingRef.current = false;
+      };
+      script.onerror = () => {
+        homeOneLoadingRef.current = false;
+      };
+      document.body.appendChild(script);
+    };
+
+    let cancelled = false;
+    (async () => {
+      await loadBaseScripts();
+      if (cancelled) return;
+      if (location.pathname === "/") {
+        initHomeOneCharts();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [location.pathname]);
 
   // --- Inactivity lock (30s) ---

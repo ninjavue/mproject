@@ -24,6 +24,7 @@ const Dashboard = () => {
     getUser();
   }, []);
 
+
   return (
     <>
      <div>
@@ -220,7 +221,7 @@ const Dashboard = () => {
             </ul>
           </div>
           <div id="default-tab-content">
-            <div className="hidden" id="registered" role="tabpanel" aria-labelledby="registered-tab">
+            <div id="registered" role="tabpanel" aria-labelledby="registered-tab">
               <div className="overflow-x-auto">
                 <table className="table bordered-table sm-table mb-0 table-auto">
                   <thead>

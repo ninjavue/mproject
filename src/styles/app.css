@@ -50,6 +50,10 @@
   display: none;
 }
 
+.sidebar.active:hover .logo-head{
+  display: flex;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -198,7 +202,7 @@
   border: 1px solid #ddd;
 }
 
-.word-container .a4 .page-content p {
+.word-container .a4.system-c .page-content p {
   display: block !important;
   text-align: justify;
   word-wrap: break-word;
@@ -207,6 +211,7 @@
   white-space: normal;
   margin: 0 !important;
   padding: 0 0 6px 0 !important;
+  font-size: 16.1px !important;
 }
 
 .word-container .a4 .page-content table tbody tr td p {
@@ -971,11 +976,272 @@ object #save {
 
 .system-m2 .mundarija-content {
   margin-left: 145px;
+  margin-top: 60px;
+}
+
+.system-mundarija-title {
+  font-family: "Montserrat", sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #000;
+  text-transform: uppercase;
+  text-decoration: underline;
+  margin-left: 35px;
+  margin-top: 10px;
+}
+
+.system-m2 .system-mundarija-title {
+  margin-left: 145px;
 }
 
 .a4.system-c {
   background-image: none !important;
   position: relative;
+}
+
+.system-text-page .page-content {
+  padding-top: 56px;
+  max-height: 890px !important;
+  height: 890px;
+}
+
+.system-section-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.system-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f3864;
+  text-transform: uppercase;
+}
+
+.system-section-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f3864;
+  text-transform: uppercase;
+}
+
+.system-bar-title {
+  background: #1f3864;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 6px 10px;
+  margin: 10px 0 8px;
+}
+
+.system-extra-info {
+  margin-bottom: 6px;
+}
+
+.system-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.system-two-col-flow {
+  column-count: 2;
+  column-gap: 24px;
+  column-fill: auto;
+  height: 100%;
+}
+
+.system-two-col-flow .system-bar-title,
+.system-two-col-flow .system-subhead,
+.system-two-col-flow .system-subtitle,
+.system-two-col-flow .system-figure,
+.system-two-col-flow .system-inline-img {
+  break-inside: avoid;
+}
+
+.system-col {
+  min-width: 0;
+}
+
+.system-paragraph {
+  font-size: 14.5px;
+  line-height: 1.45;
+  text-align: justify;
+  margin: 0 0 8px;
+  color: #1f3864;
+  word-break: break-word;
+}
+
+.system-highlight {
+  background: #dbe4f5;
+  padding: 6px 8px;
+  margin: 8px 0;
+}
+
+.system-subhead {
+  font-weight: 700;
+  margin: 6px 0 4px;
+}
+
+.system-subtitle {
+  font-weight: 700;
+  margin: 6px 0 6px;
+}
+
+.system-inline-img {
+  width: 100%;
+  border: 1px solid #cfd6e6;
+  margin: 6px 0 4px;
+}
+
+.system-figure {
+  font-style: italic;
+  font-size: 12px;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.system-bullets {
+  list-style: none;
+  padding-left: 0;
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: #1f3864;
+}
+
+.system-bullets li::before {
+  content: "- ";
+}
+
+.system-note-title {
+  font-weight: 700;
+  font-style: italic;
+  margin-top: 10px;
+  font-size: 18px;
+}
+
+.system-note {
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+  color: #1f3864;
+}
+
+.system-term {
+  font-weight: 700;
+  color: #1f3864;
+}
+
+.system-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 6px 0 10px;
+  color: #1f3864;
+  font-size: 14.5px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.system-list li::before {
+  content: "- ";
+}
+
+.system-table-label {
+  text-align: right;
+  font-style: italic;
+  font-size: 13px;
+  margin: 6px 0 4px;
+  color: #1f3864;
+}
+
+.system-table-label-right {
+  margin-right: 10px;
+}
+
+.system-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: #1f3864;
+}
+
+.system-table-compact {
+  width: 92%;
+  margin: 8px auto 0;
+}
+
+.system-table th,
+.system-table td {
+  border: 1px solid #1f3864;
+  padding: 6px;
+  word-break: break-word;
+}
+
+.system-table th {
+  background: #1f3864;
+  color: #ffffff;
+  text-align: center;
+}
+
+.system-risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: #1f3864;
+}
+
+.system-risk-table th,
+.system-risk-table td {
+  border: 1px solid #1f3864;
+  padding: 6px;
+  text-align: center;
+  word-break: break-word;
+}
+
+.system-risk-table th {
+  background: #1f3864;
+  color: #ffffff;
+}
+
+.system-risk-table th:first-child,
+.system-risk-table td:first-child {
+  width: 70px;
+}
+
+.system-risk-table th:last-child,
+.system-risk-table td:last-child {
+  width: 40px;
+}
+
+.system-risk-table .risk-resource td {
+  background: #dbe4f5;
+  font-weight: 700;
+  text-align: center;
+}
+
+.system-risk-table .risk-high td {
+  background: #ff7b7b;
+}
+
+.system-risk-table .risk-medium td {
+  background: #ffd983;
+}
+
+.system-risk-table .risk-low td {
+  background: #cfe7ff;
+}
+
+.system-risk-table .risk-info td {
+  background: #d9d9d9;
+}
+
+.system-risk-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
 }
 
 
@@ -1030,4 +1296,65 @@ background-item.is-visible:not(.backwards) {
 .docx-wrapper{
   min-height: 97.5vh;
   background-color: #333 !important;
+}
+
+
+
+.dashboard-main-body{
+  position: relative;
+  min-height: 89vh;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
+    url("/public/assets/images/main-bg.jpg");
+  background-size: 100px 100px;
+  background-position: top left;
+  background-repeat: repeat;
+}
+
+.dark .dashboard-main-body{
+  background-image: none;
+}
+
+.menu-link .menu-icon{
+  color: #bb9769;
+}
+
+.menu-link-active .menu-icon{
+  color: #ffffff;
+}
+
+.sidebar.active .logo-text{
+  display: none;
+}
+
+.sidebar.active:hover .logo-text{
+  display: block;
+}
+
+.mundarija-row.system-mundarija-row {
+  width: 80% !important;
+}
+
+.mundarija-content-system {
+  /* margin-left: 0px !important; */
+  width: 56% !important;
+}
+
+
+.a4.system-c{
+  padding-left: 70px !important;
+  padding-right: 70px !important;
+}
+
+.word-container .a4.system-c .page-content {
+  height: 890px;
+  max-height: 890px;
+}
+
+
+
+.word-container .a4.system-c .page-content table{
+  width: 100% !important;
+  max-width: 100% !important;
+  font-size: 17px !important;
 }

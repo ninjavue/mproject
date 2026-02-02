@@ -7,8 +7,10 @@ const Aside = () => {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 p-2 rounded-md transition-colors ${
-          isActive ? 'bg-blue-200 text-blue-600 dark:bg-blue-500' : 'text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-slate-400'
+        `menu-link flex items-center p-2 rounded-md transition-colors ${
+          isActive
+            ? 'menu-link-active bg-[#bb9769] text-white dark:bg-[#bb9769] hover:text-white'
+            : 'menu-link-inactive text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-slate-400'
         }`
       }
     >

@@ -4,6 +4,7 @@ import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
 import { sendRpcRequest } from "../../rpc/rpcClient";
+import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
 
 const Header = () => {
   const location = useLocation();
@@ -11,6 +12,9 @@ const Header = () => {
   const [messageOpen, setMessageOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const defaultAvatar = "/assets/jamoa.png";
+  const [avatar, setAvatar] = useState(defaultAvatar);
+  const [activeYear, setActiveYear] = useState("2026");
   const [user, setUser] = useState({});
 
   const messageRef = useRef(null);
@@ -34,6 +38,14 @@ const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const downloadFileAll = async (id) => {
+    const blob = await downloadFileViaRpcNew(stRef, id, id, (p) => {
+    });
+    const url = URL.createObjectURL(blob);
+    return url;
+  };
+
+
   const handleLogout = async () => {
     try {
       const res = await sendRpcRequest(stRef, METHOD.LOGIN_LOG_OUT, {});
@@ -54,10 +66,16 @@ const Header = () => {
   useEffect(() => {
     const getUser = async () => {
      try {
-       const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
-      
+       const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});      
       if (resU.status === METHOD.OK) {
         setUser(resU[1]);
+        const avatarId = resU?.[1]?.[4]?.[5];
+        if (avatarId) {
+          const avatarUrl = await downloadFileAll(avatarId);
+          setAvatar(avatarUrl);
+        } else {
+          setAvatar(defaultAvatar);
+        }
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
       }
@@ -94,10 +112,41 @@ const Header = () => {
                 className="icon !text-[30px]"
               />
             </button>
-            <form className="navbar-search">
-              <input type="text" name="search" placeholder="Search" />
-              <iconify-icon icon="ion:search-outline" className="icon" />
-            </form>
+            <div className="flex items-center gap-1 rounded-sm p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setActiveYear("2024")}
+                className={`px-4 py-2 rounded-md text-sm text-bold dark:text-white ${
+                  activeYear === "2024"
+                    ? "bg-[#bb9769] text-white"
+                    : "text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-400"
+                }`}
+              >
+                2024
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveYear("2025")}
+                className={`px-4 py-2 rounded-md text-sm text-bold dark:text-white ${
+                  activeYear === "2025"
+                    ? "bg-[#bb9769] text-white"
+                    : "text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-400"  
+                }`}
+              >
+                2025
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveYear("2026")}
+                className={`px-4 py-2 rounded-md text-sm text-bold dark:text-white ${
+                  activeYear === "2026"
+                    ? "bg-[#bb9769] text-white"
+                    : "text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-400"
+                }`}
+              >
+                2026
+              </button>
+            </div>
           </div>
         </div>
 
@@ -301,9 +350,12 @@ const Header = () => {
                 }}
               >
                 <img
-                  src="/assets/images/user.png"
+                  src={avatar || defaultAvatar}
                   alt="image"
                   className="w-10 h-10 object-fit-cover rounded-full"
+                  onError={(e) => {
+                    e.currentTarget.src = defaultAvatar;
+                  }}
                 />
               </button>
 

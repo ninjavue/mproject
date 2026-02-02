@@ -3,15 +3,19 @@ import { Link } from "react-router-dom";
 import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import { sendRpcRequest } from "../../rpc/rpcClient";
+import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
 
 const ViewProfile = () => {
   const { stRef } = useZirhStref();
   const [user, setUser] = useState({});
-
+  const [activeTab, setActiveTab] = useState("edit-profile");
+  const [avatar, setAvatar] = useState("");
   useEffect(() => {
     const getUser = async () => {
       const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
       if (resU.status === METHOD.OK) {
+        const avatarUrl = await downloadFileAll(resU[1][4][5]);
+        setAvatar(avatarUrl);
         setUser(resU[1]);
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
@@ -20,6 +24,15 @@ const ViewProfile = () => {
 
     getUser();
   }, []);
+
+
+  const downloadFileAll = async (id) => {
+    const blob = await downloadFileViaRpcNew(stRef, id, id, (p) => {
+    
+    });
+    const url = URL.createObjectURL(blob);
+    return url;
+  };
 
   return (
     <>
@@ -31,7 +44,7 @@ const ViewProfile = () => {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-4">
-            <div className="user-grid-card relative border border-neutral-200 dark:border-neutral-600 rounded-2xl overflow-hidden bg-white dark:bg-neutral-700 h-full">
+            <div className="user-grid-card relative border border-neutral-200 dark:border-neutral-600 rounded-2xl overflow-hidden bg-white dark:bg-[#273142] h-full">
               <img
                 src="../assets/images/user-grid/user-grid-bg1.png"
                 alt
@@ -40,9 +53,9 @@ const ViewProfile = () => {
               <div className="pb-6 ms-6 mb-6 me-6 -mt-[100px]">
                 <div className="text-center border-b border-neutral-200 dark:border-neutral-600">
                   <img
-                    src="../assets/images/user-grid/user-grid-img14.png"
+                    src={avatar}
                     alt
-                    className="border br-white border-width-2-px w-200-px h-[200px] rounded-full object-fit-cover mx-auto"
+                    className="border br-white border-width-2-px max-w-[200px] min-w-[200px] min-h-[200px] object-cover rounded-full object-fit-cover mx-auto"
                   />
                   <h6 className="mb-0 mt-4">
                     {" "}
@@ -101,31 +114,38 @@ const ViewProfile = () => {
                 <ul
                   className="tab-style-gradient flex flex-wrap text-sm font-medium text-center mb-5"
                   id="default-tab"
-                  data-tabs-toggle="#default-tab-content"
                   role="tablist"
                 >
                   <li className role="presentation">
                     <button
-                      className="py-2.5 px-4 border-t-2 font-semibold text-base inline-flex items-center gap-3 text-neutral-600"
-                      id="edit-profile-tab"
-                      data-tabs-target="#edit-profile"
                       type="button"
+                      onClick={() => setActiveTab("edit-profile")}
+                      className={`py-2.5 px-4 border-t-2 font-semibold text-base inline-flex items-center gap-3 ${
+                        activeTab === "edit-profile"
+                          ? "text-[#bb9769] border-[#bb9769]"
+                          : "text-neutral-600 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300"
+                      }`}
+                      id="edit-profile-tab"
                       role="tab"
                       aria-controls="edit-profile"
-                      aria-selected="false"
+                      aria-selected={activeTab === "edit-profile"}
                     >
                       Tahrirlash
                     </button>
                   </li>
                   <li className role="presentation">
                     <button
-                      className="py-2.5 px-4 border-t-2 font-semibold text-base inline-flex items-center gap-3 text-neutral-600 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300"
-                      id="change-password-tab"
-                      data-tabs-target="#change-password"
                       type="button"
+                      onClick={() => setActiveTab("change-password")}
+                      className={`py-2.5 px-4 border-t-2 font-semibold text-base inline-flex items-center gap-3 ${
+                        activeTab === "change-password"
+                          ? "text-[#bb9769] border-[#bb9769]"
+                          : "text-neutral-600 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300"
+                      }`}
+                      id="change-password-tab"
                       role="tab"
                       aria-controls="change-password"
-                      aria-selected="false"
+                      aria-selected={activeTab === "change-password"}
                     >
                       Parolni o'zgartirish
                     </button>
@@ -133,7 +153,7 @@ const ViewProfile = () => {
                 </ul>
                 <div id="default-tab-content">
                   <div
-                    className="hidden"
+                    className={activeTab === "edit-profile" ? "" : "hidden"}
                     id="edit-profile"
                     role="tabpanel"
                     aria-labelledby="edit-profile-tab"
@@ -276,42 +296,25 @@ const ViewProfile = () => {
                             </select>
                           </div>
                         </div>
-                        <div className="col-span-12">
-                          <div className="mb-5">
-                            <label
-                              htmlFor="desc"
-                              className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
-                            >
-                              Description
-                            </label>
-                            <textarea
-                              name="#0"
-                              className="form-control rounded-lg"
-                              id="desc"
-                              placeholder="Write description..."
-                              defaultValue={""}
-                            />
-                          </div>
-                        </div>
                       </div>
                       <div className="flex items-center justify-center gap-3">
                         <button
                           type="button"
                           className="border border-danger-600 bg-hover-danger-200 text-danger-600 text-base px-14 py-[11px] rounded-lg"
                         >
-                          Cancel
+                          Bekor qilish
                         </button>
                         <button
                           type="button"
                           className="btn btn-primary border border-primary-600 text-base px-14 py-3 rounded-lg"
                         >
-                          Save
+                          Saqlash
                         </button>
                       </div>
                     </form>
                   </div>
                   <div
-                    className="hidden"
+                    className={activeTab === "change-password" ? "" : "hidden"}
                     id="change-password"
                     role="tabpanel"
                     aria-labelledby="change-password-tab"
@@ -359,7 +362,7 @@ const ViewProfile = () => {
                     </div>
                   </div>
                   <div
-                    className="hidden"
+                    className={activeTab === "notification-password" ? "" : "hidden"}
                     id="notification-password"
                     role="tabpanel"
                     aria-labelledby="notification-password-tab"

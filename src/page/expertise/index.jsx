@@ -107,6 +107,7 @@ const Expertise = () => {
   const [items, setItems] = useState([]);
   const [editId, setEditId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
   const [expertize, setExpertize] = useState([]);
   const [isPage, setIsPage] = useState(1);
   const [justPage, setJustPage] = useState(0);
@@ -231,6 +232,27 @@ const Expertise = () => {
   };
 
   const openDrawer = () => {
+    setIsUpdate(false);
+    setEditId(null);
+    setChangedFields([]);
+    setFileName(null);
+    setFormData({
+      orgName: "",
+      orgId: "",
+      orgTypeId: "",
+      controllers: "",
+      workers: "",
+      ordName: "",
+      ordPrice: "",
+      contract: null,
+      contractNumber: "",
+      contractDate: "",
+      contractPriceDate: "",
+      resPer: "",
+      orgType: "",
+      ordEndDate: "",
+      system: 1,
+    });
     setDrawerOpen(true);
   };
   const closeDrawer = () => setDrawerOpen(false);
@@ -465,17 +487,49 @@ const Expertise = () => {
     // console.log(expertize);
   }, []);
 
-  const totalItems = expertize?.length || 0;
+  const normalizedQuery = searchTerm.trim().toLowerCase();
+  const filteredExpertize = normalizedQuery
+    ? (expertize || []).filter((item) => {
+        const controllers = (item.controllers || [])
+          .map((c) => c.a2)
+          .join(" ");
+        const workers = (item.workers || [])
+          .map((w) => w.a2)
+          .join(" ");
+        const haystack = [
+          item.orgName,
+          item.shortName,
+          item.number,
+          item.orgUuid,
+          item.orgType,
+          item.director,
+          controllers,
+          workers,
+          item.hisobot,
+          item.ball,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
+    : expertize || [];
+
+  const totalItems = filteredExpertize.length;
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentItems = expertize?.slice(startIndex, endIndex) || [];
+  const currentItems = filteredExpertize.slice(startIndex, endIndex);
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
     }
   }, [expertize?.length, totalPages, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const downloadFileAll = async (id) => {
     await downloadFileViaRpc(stRef, id, id, (p) => {
@@ -566,6 +620,33 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       setChangedFields((prev) =>
         prev.includes(code) ? prev : [...prev, code],
       );
+    }
+  };
+
+  const markFieldChanged = (code, value, oldValue) => {
+    if (!isUpdate) return;
+    const isSame = value === oldValue;
+    setChangedFields((prev) => {
+      if (isSame) {
+        return prev.filter((c) => c !== code);
+      }
+      return prev.includes(code) ? prev : [...prev, code];
+    });
+  };
+
+  const focusField = (fieldId) => {
+    const el = document.getElementById(fieldId);
+    if (el) {
+      el.focus();
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    const fallback = document.querySelector(
+      `[data-field="${fieldId}"] input, [data-field="${fieldId}"] .MuiPickersSectionList-root`,
+    );
+    if (fallback && fallback.focus) {
+      fallback.focus();
+      fallback.scrollIntoView({ block: "center", behavior: "smooth" });
     }
   };
   const handleFileChange = (e) => {
@@ -798,10 +879,29 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
             item.id === formData.id ? { ...item, ...formData } : item,
           ),
         );
-
-        setChangedFields((prev) =>
-          prev.filter((code) => !updatedFieldCodes.includes(code)),
+        setExpertize((prev) =>
+          prev.map((item) =>
+            item.id === formData.id
+              ? {
+                  ...item,
+                  orgName: formData.orgName,
+                  orgUuid: formData.orgId,
+                  shortName: formData.ordName,
+                  inn: formData.ordPrice,
+                  number: formData.contractNumber,
+                  contractDate: formData.contractDate,
+                  startDate: formData.contractPriceDate,
+                  endDate: formData.ordEndDate,
+                  director: formData.resPer,
+                  controllers: formData.controllers,
+                  workers: formData.workers,
+                  orgType: formData.orgType,
+                }
+              : item,
+          ),
         );
+
+        setChangedFields([]);
 
         setEditItemOld({ ...formData });
 
@@ -881,6 +981,11 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       controllers: formattedControllers,
     }));
     console.log(formattedControllers);
+    markFieldChanged(
+      5.1,
+      JSON.stringify(formattedControllers),
+      JSON.stringify(editItemOld.controllers || []),
+    );
   };
 
   const handleWorkersChange = (selectedOptions) => {
@@ -895,6 +1000,11 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       ...prev,
       workers: formattedControllers,
     }));
+    markFieldChanged(
+      5.3,
+      JSON.stringify(formattedControllers),
+      JSON.stringify(editItemOld.workers || []),
+    );
   };
 
   return (
@@ -903,7 +1013,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         <div onClick={closeDrawer} className="fixed inset-0 bg-black/40 z-40" />
       )}
       <div
-        className={`fixed top-0 right-0 h-full w-[700px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
+        className={`expertise-drawer fixed top-0 right-0 h-full w-[700px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
         ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-6 border-b flex justify-between items-center">
@@ -918,11 +1028,21 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         <div className="p-6 space-y-4">
           <div className="flex justify-between gap-4 items-center">
             <div className="relative w-[48%]">
+              {isUpdate && !changedFields.includes(4.1) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("orgName")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Tashkilot nomi
               </label>
               <input
                 type="text"
+                id="orgName"
                 name="orgName"
                 value={formData.orgName}
                 onChange={handleChange}
@@ -933,21 +1053,30 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
             <div className="relative w-[48%] ml-[20px]">
+              {isUpdate && !changedFields.includes(4.2) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("orgId")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Tashkilot idis
               </label>
               <input
                 type="text"
+                id="orgId"
                 name="orgId"
                 value={formData.orgId}
                 onChange={handleChange}
@@ -958,11 +1087,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
@@ -970,11 +1098,21 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           </div>
           <div className="flex justify-between gap-4 items-center">
             <div className="relative w-[48%]">
+              {isUpdate && !changedFields.includes(4.3) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("orgTypeId")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 OrgTpeId
               </label>
               <input
                 type="text"
+                id="orgTypeId"
                 name="orgTypeId"
                 value={formData.orgTypeId}
                 onChange={handleChange}
@@ -985,21 +1123,30 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>{" "}
             <div className="relative w-[48%] ml-[20px]">
+              {isUpdate && !changedFields.includes(4.4) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("ordName")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Tizim nomi
               </label>
               <input
                 type="text"
+                id="ordName"
                 name="ordName"
                 value={formData.ordName}
                 onChange={handleChange}
@@ -1010,11 +1157,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
@@ -1022,11 +1168,21 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           </div>
           <div className="flex justify-between gap-4 items-center">
             <div className="relative w-[48%]">
+              {isUpdate && !changedFields.includes(4.5) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("ordPrice")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Buyurtma narxi
               </label>
               <input
                 type="text"
+                id="ordPrice"
                 name="ordPrice"
                 value={formData.ordPrice}
                 onChange={handleChange}
@@ -1037,21 +1193,30 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
             <div className="relative w-[48%] ml-[20px]">
+              {isUpdate && !changedFields.includes(4.6) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("contractNumber")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Shartnoma raqami
               </label>
               <input
                 type="text"
+                id="contractNumber"
                 name="contractNumber"
                 value={formData.contractNumber}
                 onChange={handleChange}
@@ -1062,11 +1227,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
@@ -1075,6 +1239,17 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
 
           <div className="flex justify-between gap-4 items-center">
             <div className="relative w-[48%] flex flex-col justify-end">
+              {isUpdate && !changedFields.includes(4.9) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => {
+                    document.getElementById("contract-file")?.click();
+                  }}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase mb-1">
                 Shartnoma
               </label>
@@ -1097,6 +1272,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <input
                   type="file"
                   hidden
+                  id="contract-file"
                   name="contract"
                   onChange={(e) => {
                     handleFileChange(e);
@@ -1107,16 +1283,24 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
-            <div className="relative w-[48%] ml-[20px]">
+            <div className="relative w-[48%] ml-[20px]" data-field="contractDate">
+              {isUpdate && !changedFields.includes(4.7) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("contractDate")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Shartnoma sanasi
               </label>
@@ -1126,13 +1310,16 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                     formData.contractDate ? dayjs(formData.contractDate) : null
                   }
                   onChange={(newValue) => {
+                    const nextValue =
+                      newValue && newValue.isValid()
+                        ? newValue.toISOString()
+                        : "";
                     setFormData((prev) => ({
                       ...prev,
                       contractDate:
-                        newValue && newValue.isValid()
-                          ? newValue.toISOString()
-                          : "",
+                        nextValue,
                     }));
+                    markFieldChanged(4.7, nextValue, editItemOld.contractDate);
                   }}
                   slotProps={{
                     textField: {
@@ -1143,22 +1330,28 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   }}
                 />
               </LocalizationProvider>
-              {/* {changedFields.includes(4.7) && ( */}
-              <button
-                onClick={handleUpdate}
-                type="button"
-                className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
-              >
-                <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
-                />
-              </button>
-              {/* )} */}
+              {changedFields.includes(4.7) && (
+                <button
+                  onClick={handleUpdate}
+                  type="button"
+                  className="field-action-btn save"
+                >
+                  <iconify-icon icon="material-symbols:save-outline" />
+                </button>
+              )}
             </div>
           </div>
           <div className="flex justify-between gap-4 items-center">
-            <div className="relative w-[48%]">
+            <div className="relative w-[48%]" data-field="contractPriceDate">
+              {isUpdate && !changedFields.includes(4.8) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("contractPriceDate")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 To'lov sanasi
               </label>
@@ -1170,13 +1363,20 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                       : null
                   }
                   onChange={(newValue) => {
+                    const nextValue =
+                      newValue && newValue.isValid()
+                        ? newValue.toISOString()
+                        : "";
                     setFormData((prev) => ({
                       ...prev,
                       contractPriceDate:
-                        newValue && newValue.isValid()
-                          ? newValue.toISOString()
-                          : "",
+                        nextValue,
                     }));
+                    markFieldChanged(
+                      4.8,
+                      nextValue,
+                      editItemOld.contractPriceDate,
+                    );
                   }}
                   slotProps={{
                     textField: {
@@ -1187,25 +1387,32 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   }}
                 />
               </LocalizationProvider>
-              {/* {changedFields.includes(4.8) && ( */}
-              <button
-                onClick={handleUpdate}
-                type="button"
-                className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
-              >
-                <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
-                />
-              </button>
-              {/* )} */}
+              {changedFields.includes(4.8) && (
+                <button
+                  onClick={handleUpdate}
+                  type="button"
+                  className="field-action-btn save"
+                >
+                  <iconify-icon icon="material-symbols:save-outline" />
+                </button>
+              )}
             </div>
             <div className="relative w-[48%] ml-[20px]">
+              {isUpdate && !changedFields.includes(5) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("resPer")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Biriktirilgan shaxs
               </label>
               <input
                 type="text"
+                id="resPer"
                 name="resPer"
                 value={formData.resPer}
                 onChange={handleChange}
@@ -1216,18 +1423,26 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
           </div>
           <div className="flex justify-between gap-4 items-center">
-            <div className="relative w-[48%]">
+            <div className="relative w-[48%]" data-field="controllers">
+              {isUpdate && !changedFields.includes(5.1) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("controllers")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Nazoratchini tanlang
               </label>
@@ -1257,17 +1472,25 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
 
-            <div className="relative w-[48%] ml-[20px]">
+            <div className="relative w-[48%] ml-[20px]" data-field="workers">
+              {isUpdate && !changedFields.includes(5.3) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("workers")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Bajaruvchini tanlang
               </label>
@@ -1296,22 +1519,31 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
           </div>
           <div className="flex justify-between gap-4 items-center">
-            <div className="relative w-[48%]">
+            <div className="relative w-[48%]" data-field="orgType">
+              {isUpdate && !changedFields.includes(5.2) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("orgType")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Tashkilot turi
               </label>
               <select
+                id="orgType"
                 name="orgType"
                 value={formData.orgType}
                 onChange={handleChange}
@@ -1330,17 +1562,25 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 <button
                   onClick={handleUpdate}
                   type="button"
-                  className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                 >
                   <iconify-icon
-                    icon="ri:information-2-line"
-                    className="text-blue-500"
+                    icon="material-symbols:save-outline"
                   />
                 </button>
               )}
             </div>
 
-            <div className="relative w-[48%] ml-[20px]">
+            <div className="relative w-[48%] ml-[20px]" data-field="ordEndDate">
+              {isUpdate && !changedFields.includes(5.4) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => focusField("ordEndDate")}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
               <label className="text-sm text-gray-500 uppercase">
                 Tugash sanasi
               </label>
@@ -1350,13 +1590,16 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                     formData.ordEndDate ? dayjs(formData.ordEndDate) : null
                   }
                   onChange={(newValue) => {
+                    const nextValue =
+                      newValue && newValue.isValid()
+                        ? newValue.toISOString()
+                        : "";
                     setFormData((prev) => ({
                       ...prev,
                       ordEndDate:
-                        newValue && newValue.isValid()
-                          ? newValue.toISOString()
-                          : "",
+                        nextValue,
                     }));
+                    markFieldChanged(5.4, nextValue, editItemOld.ordEndDate);
                   }}
                   slotProps={{
                     textField: {
@@ -1367,24 +1610,32 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   }}
                 />
               </LocalizationProvider>{" "}
-              {/* {changedFields.includes(5.4) && ( */}
-              <button
-                onClick={handleUpdate}
-                type="button"
-                className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
-              >
-                <iconify-icon
-                  icon="ri:information-2-line"
-                  className="text-blue-500"
-                />
-              </button>
-              {/* )} */}
+              {changedFields.includes(5.4) && (
+                <button
+                  onClick={handleUpdate}
+                  type="button"
+                  className="field-action-btn save"
+                >
+                  <iconify-icon icon="material-symbols:save-outline" />
+                </button>
+              )}
             </div>
           </div>
 
           {isUpdate && (
             <div className="flex justify-between gap-4 items-center">
-              <div className="relative w-[48%] flex flex-col justify-end">
+            <div className="relative w-[48%] flex flex-col justify-end">
+              {isUpdate && !changedFields.includes(5.5) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => {
+                    document.getElementById("perm-letter-file")?.click();
+                  }}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
                 <label className="text-sm text-gray-500 uppercase mb-1">
                   Ruhsat xati
                 </label>
@@ -1407,6 +1658,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <input
                     type="file"
                     hidden
+                  id="perm-letter-file"
                     name="permLetter"
                     onChange={(e) => {
                       handleFileChange1(e);
@@ -1417,16 +1669,26 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <button
                     onClick={handleUpdate}
                     type="button"
-                    className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                   >
                     <iconify-icon
-                      icon="ri:information-2-line"
-                      className="text-blue-500"
+                    icon="material-symbols:save-outline"
                     />
                   </button>
                 )}
               </div>
-              <div className="relative w-[48%] flex flex-col justify-end">
+            <div className="relative w-[48%] flex flex-col justify-end">
+              {isUpdate && !changedFields.includes(5.6) && (
+                <button
+                  type="button"
+                  className="field-action-btn edit"
+                  onClick={() => {
+                    document.getElementById("consent-letter-file")?.click();
+                  }}
+                >
+                  <iconify-icon icon="ri:edit-2-line" />
+                </button>
+              )}
                 <label className="text-sm text-gray-500 uppercase mb-1">
                   Rozilik xati
                 </label>
@@ -1449,6 +1711,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <input
                     type="file"
                     hidden
+                  id="consent-letter-file"
                     name="consentLetter"
                     onChange={(e) => {
                       handleFileChange2(e);
@@ -1459,11 +1722,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <button
                     onClick={handleUpdate}
                     type="button"
-                    className=" absolute top-[27px] right-[-13px] w-3 h-12 cursor-pointer text-2xl"
+                  className="field-action-btn save"
                   >
                     <iconify-icon
-                      icon="ri:information-2-line"
-                      className="text-blue-500"
+                    icon="material-symbols:save-outline"
                     />
                   </button>
                 )}
@@ -1490,7 +1752,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         </div>
       </div>
       <div
-        className="dashboard-page bg-[#f5f5f9] dark:bg-[#1e1e2f] "
+        className="dashboard-page"
         style={{ margin: "-20px" }}
       >
         <Section title="Tizim ekspertizalar" items={system} />
@@ -1509,6 +1771,8 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                     <input
                       className="border rounded-md px-3 py-2 text-sm text-slate-500 outline-none bg-transparent"
                       placeholder="Qidirish..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
                       <iconify-icon
@@ -1630,8 +1894,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                                 }}
                               >
                                 <span
-                                  className={`w-7 h-7 cursor-pointer rounded-full border border-white dark:border-[#2b2c40] ${
-                                    isActive ? "bg-blue-700" : "bg-gray-400"
+                                  className={`status-step w-7 h-7 cursor-pointer rounded-full border border-white dark:border-[#2b2c40] ${
+                                    isActive
+                                      ? "status-step-active bg-blue-700"
+                                      : "status-step-inactive bg-gray-400"
                                   } flex items-center justify-center`}
                                 >
                                   <span className="text-[10px] text-white font-bold">
