@@ -1039,7 +1039,7 @@ object #save {
   background: #1f3864;
   color: #ffffff;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   padding: 6px 10px;
   margin: 10px 0 8px;
 }
@@ -1091,6 +1091,7 @@ object #save {
 .system-subhead {
   font-weight: 700;
   margin: 6px 0 4px;
+  font-size: 16px;
 }
 
 .system-subtitle {
@@ -1163,7 +1164,7 @@ object #save {
 .system-table-label {
   text-align: right;
   font-style: italic;
-  font-size: 13px;
+  font-size: 14px;
   margin: 6px 0 4px;
   color: #1f3864;
 }

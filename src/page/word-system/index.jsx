@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -146,10 +146,8 @@ const section3TableRows = [
   "Axborot tizimi formalari, bo‘limlari va tashkil etuvchilarida zaifliklar mavjudligiga tekshirish",
   "Axborot tizimi dasturiy ta’minotlari va xizmatlarida zaifliklar mavjudligiga tekshirish",
   "Axborot tizimi va uning ish jarayoni hamda funksional imkoniyatlari, shuningdek axborot tizimi ma’muri tomonidan yo‘l qo‘yilgan xatoliklar mavjudligiga tekshirish",
-  "Axborot tizimida aniqlangan zaifliklar va yo‘l qo‘yilgan xatoliklar haqiqiyligini tekshirish maqsadida test sinovlari orqali ekspluatatsiya qilib ko‘rish",
-  "O‘rganish bo‘yicha yakuniy ishlarni amalga oshirish",
-  "Ekspertiza natijalariga ko‘ra hisobot tayyorlash",
 ];
+
 
 const buildSectionTableRowHtml = (row, index) => `
   <tr>
@@ -403,7 +401,7 @@ const SystemWord = () => {
   const systemAccountsPages = useMemo(() => {
     // NOTE: row height wrap bo‘lishi mumkin, shuning uchun hozircha stabil bo‘lishi uchun
     // qator-soni bo‘yicha bo‘lamiz (Worddagi kabi keyingi sahifaga o‘tadi, yo‘qolib qolmaydi).
-    return chunkSystemAccountsRows(systemAccountsRows, 8, 14);
+    return chunkSystemAccountsRows(systemAccountsRows, 6, 14);
   }, [systemAccountsRows]);
 
   const systemAccountsPageStarts = useMemo(() => {
@@ -471,7 +469,7 @@ const SystemWord = () => {
               <th>URL manzil</th>
               <th style={{ width: "140px" }}>Login</th>
               <th style={{ width: "140px" }}>Parol</th>
-              <th style={{ width: "48px" }}></th>
+              {editing && <th style={{ width: "48px" }}></th>}
             </tr>
           </thead>
           <tbody>
@@ -591,8 +589,8 @@ const SystemWord = () => {
                     )}
                   </td>
 
-                  <td contentEditable={false}>
-                    {editing && (
+                  {editing && (
+                    <td contentEditable={false}>
                       <button
                         type="button"
                         onClick={() => deleteSystemAccountsRow(globalIdx)}
@@ -605,8 +603,8 @@ const SystemWord = () => {
                           height="18"
                         />
                       </button>
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -1669,6 +1667,9 @@ const SystemWord = () => {
               setTableData(dataFromField8.tables);
               setObjectLinks(dataFromField8.objectLinks);
               setObjectLinksText(dataFromField8.objectLinks.join("\n"));
+              if (Array.isArray(dataFromField8.systemAccountsRows)) {
+                setSystemAccountsRows(dataFromField8.systemAccountsRows);
+              }
             } else {
               // Eski format: faqat tables
               setTableData(dataFromField8);
@@ -2233,6 +2234,7 @@ const SystemWord = () => {
     const tablesAndLinksJson = JSON.stringify({
       tables: tables,
       objectLinks: currentLinks,
+      systemAccountsRows,
     });
 
     const apkName = tablesAndLinksJson;
@@ -2679,6 +2681,28 @@ const SystemWord = () => {
             <div>mobil ilovasi</div>
           </div>
           <div className="page-content editable">
+          <table className="system-table mb-5">      
+            <thead>
+              <tr>
+                <th className="max-w-[50px] w-[50px]">T/r</th>
+                <th>Tadbir nomi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="max-w-[50px]">5.</td>
+                <td className="max-w-[500px]">Axborot tizimida aniqlangan zaifliklar va yo‘l qo‘yilgan xatoliklar haqiqiyligini tekshirish maqsadida test sinovlari orqali ekspluatatsiya qilib ko‘rish</td>
+              </tr>
+              <tr>
+                <td className="max-w-[50px]">6.</td>
+                <td className="max-w-[500px]">O‘rganish bo‘yicha yakuniy ishlarni amalga oshirish</td>
+              </tr>
+              <tr>
+                <td className="max-w-[50px]">7.</td>
+                <td className="max-w-[500px]">Test sinovlari orqali ekspluatatsiya qilib ko‘rish</td>
+              </tr>
+            </tbody>
+          </table>
             <div className="system-extra-info">
 
               <div className="system-two-col">
@@ -2759,171 +2783,6 @@ const SystemWord = () => {
           </div>
         );
       })}
-        <div className="a4 system-c">
-          {6 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 6 % 2 === 0 ? `end` : `start`,
-              marginRight: 6 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content editable">
-            <table className="system-table system-table-compact">
-              <thead>
-                <tr>
-                  <th style={{ width: "50px" }}>T/r</th>
-                  <th style={{ width: "140px" }}>Rol</th>
-                  <th>URL manzil</th>
-                  <th style={{ width: "140px" }}>Login</th>
-                  <th style={{ width: "140px" }}>Parol</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>9.</td>
-                  <td rowSpan={2}>Boshqarma</td>
-                  <td rowSpan={8}>
-                    <u>https://adm2.sport.uz</u>
-                  </td>
-                  <td>Boshqarma1</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>10.</td>
-                  <td>Boshqarma2</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>11.</td>
-                  <td rowSpan={2}>Sport maktabi</td>
-                  <td>sport_maktab1</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>12.</td>
-                  <td>sport_maktab2</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>13.</td>
-                  <td rowSpan={2}>Universitet</td>
-                  <td>Universitet1</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>14.</td>
-                  <td>Universitet2</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>15.</td>
-                  <td rowSpan={2}>Raqamlashtirish</td>
-                  <td>Raqamlashtirish1</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>16.</td>
-                  <td>Raqamlashtirish2</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>17.</td>
-                  <td rowSpan={2}>Markaz</td>
-                  <td rowSpan={2}>
-                    <u>https://dash2.sport.uz</u>
-                  </td>
-                  <td>Markaz1</td>
-                  <td>Markaz1@#</td>
-                </tr>
-                <tr>
-                  <td>18.</td>
-                  <td>Markaz2</td>
-                  <td>Markaz2@#</td>
-                </tr>
-                <tr>
-                  <td>19.</td>
-                  <td>Foydalanuvchi</td>
-                  <td>
-                    <u>https://5tashabbus.sport.uz</u>
-                  </td>
-                  <td>+998901108070</td>
-                  <td>2023</td>
-                </tr>
-                <tr>
-                  <td>20.</td>
-                  <td>Foydalanuvchi 1</td>
-                  <td rowSpan={2}>
-                    <u>https://my2.sport.uz</u>
-                  </td>
-                  <td>+998997365660</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>21.</td>
-                  <td>Foydalanuvchi 2</td>
-                  <td>+998912470255</td>
-                  <td>0255</td>
-                </tr>
-                <tr>
-                  <td>22.</td>
-                  <td>Foydalanuvchi</td>
-                  <td>
-                    <u>https://mass2.sport.uz</u>
-                  </td>
-                  <td>Telefon raqami asosida ariza qoldiriladi</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td>23.</td>
-                  <td rowSpan={2}>Admin</td>
-                  <td rowSpan={2}>
-                    <u>https://pr2.sport.uz</u>
-                  </td>
-                  <td>admin1</td>
-                  <td>24091987</td>
-                </tr>
-                <tr>
-                  <td>24.</td>
-                  <td>admin2</td>
-                  <td>24091987</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
-            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 9</span>
-          </div>
-        </div>
         <div className="a4 system-c">
           {7 % 2 === 0 ? (
             <>
