@@ -412,16 +412,119 @@ const takeRiskRows = (rows, startIndex, cap) => {
   return { page, nextIndex: i };
 };
 
+const RISK_COL_WIDTH_PX = 315;
+const RISK_COL_MAX_HEIGHT_PX = 560;
+
+const buildRiskMeasureRow = (row) => {
+  const tr = document.createElement("tr");
+  if (row?.type === "resource") {
+    tr.className = "risk-resource";
+    tr.innerHTML = `<td colSpan="3">“${row.label}” resursi</td>`;
+    return tr;
+  }
+
+  tr.className = riskRowClass(row?.level);
+  tr.innerHTML = `
+    <td class="risk-level">${riskLevelText(row?.level)}</td>
+    <td class="risk-name">${row?.name ?? ""}</td>
+    <td class="risk-count">${row?.count ?? ""}</td>
+  `;
+  return tr;
+};
+
+const takeRiskRowsByHeight = (rows, startIndex, maxHeightPx = RISK_COL_MAX_HEIGHT_PX) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let i = Math.max(0, startIndex || 0);
+  const out = [];
+
+  // hidden measure container
+  const measure = document.createElement("div");
+  measure.style.width = `${RISK_COL_WIDTH_PX}px`;
+  measure.style.position = "absolute";
+  measure.style.visibility = "hidden";
+  measure.style.top = "-9999px";
+  measure.style.left = "-9999px";
+  measure.style.pointerEvents = "none";
+
+  const table = document.createElement("table");
+  table.className = "system-risk-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Xavflilik darajasi</th>
+        <th>Aniqlangan zaiflik</th>
+        <th>Soni</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  measure.appendChild(table);
+  document.body.appendChild(measure);
+
+  const tbody = table.querySelector("tbody");
+  const tryAppend = (row) => {
+    const tr = buildRiskMeasureRow(row);
+    tbody.appendChild(tr);
+    const ok = table.scrollHeight <= maxHeightPx;
+    if (!ok) tbody.removeChild(tr);
+    return ok;
+  };
+
+  while (i < safeRows.length) {
+    let consumedIndex = false;
+    let row = safeRows[i];
+
+    // agar sahifa/ustun resource header bilan emas, vuln qatoridan boshlansa headerni takrorlaymiz
+    if (out.length === 0 && row?.type === "vuln" && row?.resourceLabel) {
+      const injected = { type: "resource", label: row.resourceLabel, repeated: true };
+      if (tryAppend(injected)) {
+        out.push(injected);
+      }
+      // injected row index iste'mol qilinmaydi
+      continue;
+    }
+
+    // normal row
+    consumedIndex = true;
+    const canFit = tryAppend(row);
+    if (!canFit) {
+      // hech bo'lmasa bitta row o'tishi kerak (aks holda infinite loop bo'lishi mumkin)
+      if (out.length === 0) {
+        // majburan qo'shamiz
+        const tr = buildRiskMeasureRow(row);
+        tbody.appendChild(tr);
+        out.push(row);
+        i += 1;
+      }
+      break;
+    }
+
+    out.push(row);
+    if (consumedIndex) i += 1;
+  }
+
+  // resource header oxirida qolib ketmasin
+  if (out.length && out[out.length - 1]?.type === "resource") {
+    const last = out[out.length - 1];
+    out.pop();
+    if (!last.repeated) i = Math.max(0, i - 1);
+  }
+
+  document.body.removeChild(measure);
+  return { page: out, nextIndex: i };
+};
+
 const chunkRiskColumnPages = (rows, startIndex, leftCap = 14, rightCap = 14) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   let i = Math.max(0, startIndex || 0);
   const pages = [];
 
   while (i < safeRows.length) {
-    const left = takeRiskRows(safeRows, i, leftCap);
+    const left = takeRiskRowsByHeight(safeRows, i, RISK_COL_MAX_HEIGHT_PX);
     i = left.nextIndex;
 
-    const right = takeRiskRows(safeRows, i, rightCap);
+    const right = takeRiskRowsByHeight(safeRows, i, RISK_COL_MAX_HEIGHT_PX);
     i = right.nextIndex;
 
     if (!left.page.length && !right.page.length) break;
@@ -1781,6 +1884,7 @@ const SystemWord = () => {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
       console.log(res[1])
       if (res.status === METHOD.OK) {
+        let fallbackRiskTable = null;
         setContractDate(formatDate(res[1]?.[2][1]));
         setHtmlContent(res[1]?.[8]);
         setContractName(res[1]?.[10]);
@@ -1821,6 +1925,9 @@ const SystemWord = () => {
               if (Array.isArray(dataFromField8.systemAccountsRows)) {
                 setSystemAccountsRows(dataFromField8.systemAccountsRows);
               }
+              if (Array.isArray(dataFromField8.riskTable)) {
+                fallbackRiskTable = dataFromField8.riskTable;
+              }
             } else {
               // Eski format: faqat tables
               setTableData(dataFromField8);
@@ -1847,24 +1954,49 @@ const SystemWord = () => {
           : [];
         setNewVuln(flatVulnData);
 
-        const highVuln1 = Array.isArray(raw)
-          ? raw.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
-          : [{ a1: raw.a1, a2: raw.a2, a3: raw.a3, a4: raw.a4 }];
+        const normalizeVulnField = (rf) => {
+          if (!rf) return [];
+          if (Array.isArray(rf)) {
+            return rf
+              .flat()
+              .filter(Boolean)
+              .map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
+              .filter((x) => x.a1 != null && x.a3);
+          }
+          if (typeof rf === "object") {
+            const one = { a1: rf.a1, a2: rf.a2, a3: rf.a3, a4: rf.a4 };
+            return one.a1 != null && one.a3 ? [one] : [];
+          }
+          return [];
+        };
+
+        const fallbackList = Array.isArray(fallbackRiskTable)
+          ? fallbackRiskTable
+              .filter(Boolean)
+              .map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
+              .filter((x) => x.a1 != null && x.a3)
+          : [];
+
+        const highVuln1Raw = normalizeVulnField(raw);
+        const highVuln1 =
+          highVuln1Raw.length > 0
+            ? highVuln1Raw
+            : fallbackList.filter((x) => Number(x.a1) === 1);
 
         setHighVuln(highVuln1);
 
         const raw1 = res[1]?.[12];
 
-        const mV = Array.isArray(raw1)
-          ? raw1.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
-          : [{ a1: raw1.a1, a2: raw1.a2, a3: raw1.a3, a4: raw1.a4 }];
+        const mVRaw = normalizeVulnField(raw1);
+        const mV =
+          mVRaw.length > 0 ? mVRaw : fallbackList.filter((x) => Number(x.a1) === 2);
         setMediumVuln(mV);
 
         const raw2 = res[1]?.[11];
 
-        const lV = Array.isArray(raw2)
-          ? raw2.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
-          : [{ a1: raw2.a1, a2: raw2.a2, a3: raw2.a3, a4: raw2.a4 }];
+        const lVRaw = normalizeVulnField(raw2);
+        const lV =
+          lVRaw.length > 0 ? lVRaw : fallbackList.filter((x) => Number(x.a1) === 3);
         setLowVuln(lV);
 
         // console.log(res[1]?.[13]);
@@ -2488,10 +2620,20 @@ const SystemWord = () => {
       .filter((link) => link.length > 0);
     setObjectLinks(currentLinks);
 
+    const riskTableToSave = (riskRows || [])
+      .filter((r) => r?.type === "vuln")
+      .map((r) => ({
+        a1: r.level,
+        a2: r.count,
+        a3: r.name,
+        a4: r.resourceLabel,
+      }));
+
     const tablesAndLinksJson = JSON.stringify({
       tables: tables,
       objectLinks: currentLinks,
       systemAccountsRows,
+      riskTable: riskTableToSave,
     });
 
     const apkName = tablesAndLinksJson;
