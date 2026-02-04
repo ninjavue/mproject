@@ -55,6 +55,7 @@ export const downloadFileViaRpc = async (stRef, fileId, onProgress) => {
         state.clientId
       );
       const u8 = new Uint8Array(buf);
+      
 
       try {
         state.wc.send_rpc_frame_bytes(rpcId, METHOD.FILE_GET_CHUNK, u8);

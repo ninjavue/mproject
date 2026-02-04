@@ -1256,6 +1256,12 @@ object #save {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+  align-items: start;
+}
+
+.system-risk-columns > .system-risk-table {
+  align-self: start;
+  height: auto;
 }
 
 

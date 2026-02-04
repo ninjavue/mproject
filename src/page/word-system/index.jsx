@@ -386,6 +386,51 @@ const chunkRiskRows = (rows, firstPageSize = 8, nextPageSize = 28) => {
   return pages;
 };
 
+const takeRiskRows = (rows, startIndex, cap) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let i = Math.max(0, startIndex || 0);
+  const page = [];
+
+  while (i < safeRows.length && page.length < cap) {
+    const row = safeRows[i];
+
+    // agar sahifa/ustun resource header bilan emas, vuln qatoridan boshlansa headerni takrorlab qo'yamiz
+    if (page.length === 0 && row?.type === "vuln" && row?.resourceLabel) {
+      page.push({ type: "resource", label: row.resourceLabel, repeated: true });
+    }
+
+    page.push(row);
+    i++;
+  }
+
+  // resource header sahifa/ustun oxirida qolib ketmasin
+  if (page.length && page[page.length - 1]?.type === "resource") {
+    page.pop();
+    i = Math.max(0, i - 1);
+  }
+
+  return { page, nextIndex: i };
+};
+
+const chunkRiskColumnPages = (rows, startIndex, leftCap = 14, rightCap = 14) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let i = Math.max(0, startIndex || 0);
+  const pages = [];
+
+  while (i < safeRows.length) {
+    const left = takeRiskRows(safeRows, i, leftCap);
+    i = left.nextIndex;
+
+    const right = takeRiskRows(safeRows, i, rightCap);
+    i = right.nextIndex;
+
+    if (!left.page.length && !right.page.length) break;
+    pages.push({ left: left.page, right: right.page });
+  }
+
+  return pages;
+};
+
 const computeRiskLevelRowspanMeta = (rows) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   const meta = safeRows.map(() => ({ showLevel: false, rowSpan: 1 }));
@@ -470,7 +515,6 @@ const SystemWord = () => {
   const [objectLinks, setObjectLinks] = useState(section2ObjectLinks);
   const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
   const [systemAccountsRows, setSystemAccountsRows] = useState([]);
-  const [riskPages, setRiskPages] = useState([]);
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
 
@@ -2066,8 +2110,10 @@ const SystemWord = () => {
     return out;
   }, [highVuln, mediumVuln, lowVuln, objectLinks]);
 
-  useEffect(() => {
-    setRiskPages(chunkRiskRows(riskRows, 6, 28));
+  const { riskFirstPageRows, riskContinuationPages } = useMemo(() => {
+    const first = takeRiskRows(riskRows, 0, 6);
+    const cont = chunkRiskColumnPages(riskRows, first.nextIndex, 14, 14);
+    return { riskFirstPageRows: first.page, riskContinuationPages: cont };
   }, [riskRows]);
 
   const renderRiskTableBody = (pageRows, keyPrefix) => {
@@ -3093,7 +3139,7 @@ const SystemWord = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {renderRiskTableBody(riskPages?.[0] || [], "risk")}
+                    {renderRiskTableBody(riskFirstPageRows || [], "risk")}
                   </tbody>
                 </table>
               </div>
@@ -3103,76 +3149,14 @@ const SystemWord = () => {
             <span className="text-white max-w-[60%] mt-[20px]">{appName} | 10</span>
           </div>
         </div>
-        {riskPages.length > 1 && (
+        {riskContinuationPages.length > 0 && (
           <>
-            <div className="a4 system-c">
-              {8 % 2 === 0 ? (
-                <>
-                  <img
-                    className="system-top-img w-full min-w-full"
-                    src="/assets/system/ax-tops.png"
-                    alt=""
-                  />
-                  <img
-                    className="system-bottom-img w-full min-w-full"
-                    src="/assets/system/ax-bottoms.jpg"
-                    alt=""
-                  />
-                </>
-              ) : (
-                <>
-                  <img
-                    className="system-top-img w-full min-w-full"
-                    src="/assets/system/ax-top.png"
-                    alt=""
-                  />
-                  <img
-                    className="system-bottom-img w-full min-w-full"
-                    src="/assets/system/ax-bottom.jpg"
-                    alt=""
-                  />
-                </>
-              )}
-              <div
-                className="page-title"
-                style={{
-                  textAlign: 8 % 2 === 0 ? `end` : `start`,
-                  marginRight: 8 % 2 === 0 ? `50px` : `0px`,
-                }}
-              >
-                <div>“{appName}”</div>
-                <div>mobil ilovasi</div>
-              </div>
-              <div className="page-content editable">
-                <div className="system-table-label">3-jadval (davomi)</div>
-                <table className="system-risk-table">
-                  <thead>
-                    <tr>
-                      <th>Xavflilik darajasi</th>
-                      <th>Aniqlangan zaiflik</th>
-                      <th>Soni</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {renderRiskTableBody(riskPages?.[1] || [], "risk2")}
-                  </tbody>
-                </table>
-              </div>
-              <div
-                className="page-number flex justify-center mt-auto text-white items-center"
-                style={{ bottom: "40px" }}
-              >
-                <span className="text-white max-w-[60%] mt-[20px]">
-                  {appName} | 11
-                </span>
-              </div>
-            </div>
+            {riskContinuationPages.map((p, pageIdx) => {
+              const virtualIndex = 8 + pageIdx; // 8 sahifadagi fon tartibi (oldingi kabi)
+              const isEven = virtualIndex % 2 === 0;
 
-            {riskPages.slice(2).map((pageRows, extraIdx) => {
-              const pageIndex = 9 + extraIdx;
-              const isEven = pageIndex % 2 === 0;
               return (
-                <div key={`risk-extra-${extraIdx}`} className="a4 system-c">
+                <div key={`risk-cont-${pageIdx}`} className="a4 system-c">
                   {isEven ? (
                     <>
                       <img
@@ -3212,25 +3196,40 @@ const SystemWord = () => {
                   </div>
                   <div className="page-content editable">
                     <div className="system-table-label">3-jadval (davomi)</div>
-                    <table className="system-risk-table">
-                      <thead>
-                        <tr>
-                          <th>Xavflilik darajasi</th>
-                          <th>Aniqlangan zaiflik</th>
-                          <th>Soni</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {renderRiskTableBody(pageRows || [], `riskx-${extraIdx}`)}
-                      </tbody>
-                    </table>
+                    <div className="system-risk-columns">
+                      <table className="system-risk-table">
+                        <thead>
+                          <tr>
+                            <th>Xavflilik darajasi</th>
+                            <th>Aniqlangan zaiflik</th>
+                            <th>Soni</th>
+                          </tr>
+                        </thead>
+                        <tbody>{renderRiskTableBody(p.left || [], `riskl-${pageIdx}`)}</tbody>
+                      </table>
+
+                      {!!(p.right || []).length && (
+                        <table className="system-risk-table">
+                          <thead>
+                            <tr>
+                              <th>Xavflilik darajasi</th>
+                              <th>Aniqlangan zaiflik</th>
+                              <th>Soni</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {renderRiskTableBody(p.right || [], `riskr-${pageIdx}`)}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                   <div
                     className="page-number flex justify-center mt-auto text-white items-center"
                     style={{ bottom: "40px" }}
                   >
                     <span className="text-white max-w-[60%] mt-[20px]">
-                      {appName}
+                      {appName} | {11 + pageIdx}
                     </span>
                   </div>
                 </div>
