@@ -222,17 +222,37 @@ function getCanvasFingerprint() {
 }
 
 async function getSoftFingerprint() {
-  const raw = JSON.stringify({
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl');
+  const glData = {
+    renderer: gl.getParameter(gl.RENDERER),
+    vendor: gl.getParameter(gl.VENDOR),
+    maxAnisotropy: gl.getExtension('EXT_texture_filter_anisotropic') ?
+      gl.getParameter(gl.getExtension('EXT_texture_filter_anisotropic').MAX_MAX_ANISOTROPY_EXT) : 0,
+    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION)
+  };
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const analyser = audioContext.createAnalyser();
+
+  const rawId = JSON.stringify({
+    glData,
+    cpu: navigator.hardwareConcurrency,
+    mem: navigator.deviceMemory,
+    platform: navigator.platform,
+    plugins: navigator.plugins.length,
+    osc: oscillator,
+    ana: analyser,
     ua: navigator.userAgent,
     platform: navigator.platform,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    screen: `${screen.width}x${screen.height}@${devicePixelRatio}`,
     cpu: navigator.hardwareConcurrency,
     maxTouch: navigator.maxTouchPoints,
     vendor: navigator.vendor,
   });
 
-  const encoded = new TextEncoder().encode(raw);
+  const encoded = new TextEncoder().encode(rawId);
   const digest = await crypto.subtle.digest("SHA-256", encoded);
   return Array.from(new Uint8Array(digest))
     .map((x) => x.toString(16).padStart(2, "0"))
@@ -255,3 +275,5 @@ export async function getSuperFingerprint8() {
   }
   return id8;
 }
+
+

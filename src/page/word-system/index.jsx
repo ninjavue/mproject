@@ -1585,6 +1585,19 @@ const SystemWord = () => {
     return doc.body.textContent || "";
   };
 
+  // Textni gaplar bo'yicha inline span larga ajratadi (blok emas)
+  const splitToInlineSpans = (text) => {
+    if (!text) return text;
+    // Nuqta bilan tugagan gaplarni ajratish
+    const sentences = text.split(/(?<=\.)\s+/).filter((s) => s.trim());
+    if (sentences.length <= 1) {
+      return text;
+    }
+    return sentences
+      .map((sentence) => `<span>${sentence.trim()}</span>`)
+      .join(" ");
+  };
+
   const generateVulnHtml = (vulnData) => {
     const level = vulnData?.[1]?.[0];
     const title = stripHtml(vulnData?.[1]?.[1]);
@@ -1601,21 +1614,21 @@ const SystemWord = () => {
     <div class="system-subhead system-highlight">2.2.1. “${appName}” axborot tizimi</div>
     <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
     <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
-    <p class="system-paragraph">${result}</p>
+    <p class="system-paragraph">${splitToInlineSpans(result)}</p>
     <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
-    <p class="system-paragraph">${desc}</p>
+    <p class="system-paragraph">${splitToInlineSpans(desc)}</p>
     <div class="system-subtitle">Tavsiyalar</div>
-    <p class="system-paragraph">${recommendation}</p>
+    <p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
   `;
     } else {
       newInnerHtml = `
     <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
     <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
-    <p class="system-paragraph">${result}</p>
+    <p class="system-paragraph">${splitToInlineSpans(result)}</p>
     <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
-    <p class="system-paragraph">${desc}</p>
+    <p class="system-paragraph">${splitToInlineSpans(desc)}</p>
     <div class="system-subtitle">Tavsiyalar</div>
-    <p class="system-paragraph">${recommendation}</p>
+    <p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
   `;
     }
 
@@ -1722,7 +1735,7 @@ const SystemWord = () => {
       wrapper.innerHTML = item;
       tempDiv.appendChild(wrapper);
 
-      if (tempDiv.scrollHeight > 1400) {
+      if (tempDiv.scrollHeight > 1080) {
         if (currentPage.length) pages.push(currentPage);
         currentPage = [item];
         tempDiv.innerHTML = item;
@@ -2829,7 +2842,7 @@ const SystemWord = () => {
             <span className="text-white max-w-[60%] mt-[20px]">{appName} | 11</span>
           </div>
         </div>
-        <div className="a4 system-c">
+        {/* <div className="a4 system-c">
           {9 % 2 === 0 ? (
             <>
               <img
@@ -2932,7 +2945,7 @@ const SystemWord = () => {
           <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
             <span className="text-white max-w-[60%] mt-[20px]">{appName} | 12</span>
           </div>
-        </div>
+        </div> */}
 
          {currentPages &&
           currentPages.map((pageItems, pageIndex) => (

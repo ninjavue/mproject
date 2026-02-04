@@ -1379,3 +1379,10 @@ background-item.is-visible:not(.backwards) {
   background-position: top left;
   background-repeat: repeat;
 }
+
+
+.word-container .a4.system-c .page-content.new-content{
+  height: 812px;
+  min-height: 812px;
+  max-height: 812px;
+}

@@ -364,14 +364,15 @@ function getCanvasFingerprint() {
 async function getSoftFingerprint() {
   const { width, height } = window.screen;
 
-  const raw = JSON.stringify({
+ const raw = JSON.stringify({
     ua: navigator.userAgent,
     platform: navigator.platform,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    screen: `${width}x${height}@${window.devicePixelRatio}`,
     cpu: navigator.hardwareConcurrency,
+    screen: ` ${Math.round(screen.width * devicePixelRatio)}x${Math.round(screen.height * devicePixelRatio)}`,
     maxTouch: navigator.maxTouchPoints,
-    vendor: navigator.vendor
+    gpu: getGPUInfo(),
+    vendor: navigator.vendor,
   });
 
   const encoded = new TextEncoder().encode(raw);
