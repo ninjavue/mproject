@@ -386,6 +386,52 @@ const chunkRiskRows = (rows, firstPageSize = 8, nextPageSize = 28) => {
   return pages;
 };
 
+const computeRiskLevelRowspanMeta = (rows) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const meta = safeRows.map(() => ({ showLevel: false, rowSpan: 1 }));
+  if (safeRows.length === 0) return meta;
+
+  let idx = 0;
+  while (idx < safeRows.length) {
+    // segment boundaries: between resource header rows
+    if (safeRows[idx]?.type === "resource") {
+      idx += 1;
+      continue;
+    }
+
+    let end = idx;
+    while (end < safeRows.length && safeRows[end]?.type !== "resource") end += 1;
+
+    let i = idx;
+    while (i < end) {
+      const row = safeRows[i];
+      if (row?.type !== "vuln") {
+        i += 1;
+        continue;
+      }
+
+      const level = Number(row?.level);
+      let j = i + 1;
+      while (
+        j < end &&
+        safeRows[j]?.type === "vuln" &&
+        Number(safeRows[j]?.level) === level
+      ) {
+        j += 1;
+      }
+
+      meta[i] = { showLevel: true, rowSpan: j - i };
+      for (let k = i + 1; k < j; k++) meta[k] = { showLevel: false, rowSpan: 1 };
+
+      i = j;
+    }
+
+    idx = end;
+  }
+
+  return meta;
+};
+
 const SystemWord = () => {
   const [pages, setPages] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -2024,6 +2070,35 @@ const SystemWord = () => {
     setRiskPages(chunkRiskRows(riskRows, 6, 28));
   }, [riskRows]);
 
+  const renderRiskTableBody = (pageRows, keyPrefix) => {
+    const rows = Array.isArray(pageRows) ? pageRows : [];
+    const meta = computeRiskLevelRowspanMeta(rows);
+
+    return rows.map((row, idx) => {
+      if (row?.type === "resource") {
+        return (
+          <tr key={`${keyPrefix}-r-${idx}`} className="risk-resource">
+            <td colSpan={3}>“{row.label}” resursi</td>
+          </tr>
+        );
+      }
+
+      const m = meta[idx] || { showLevel: false, rowSpan: 1 };
+
+      return (
+        <tr key={`${keyPrefix}-v-${idx}`} className={riskRowClass(row?.level)}>
+          {m.showLevel && (
+            <td className="risk-level" rowSpan={m.rowSpan}>
+              {riskLevelText(row?.level)}
+            </td>
+          )}
+          <td className="risk-name">{row?.name}</td>
+          <td className="risk-count">{row?.count}</td>
+        </tr>
+      );
+    });
+  };
+
   // Textni gaplar bo'yicha inline span larga ajratadi (blok emas)
   const splitToInlineSpans = (text) => {
     if (!text) return text;
@@ -3018,26 +3093,7 @@ const SystemWord = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(riskPages?.[0] || []).map((row, idx) => {
-                      if (row?.type === "resource") {
-                        return (
-                          <tr key={`risk-r-${idx}`} className="risk-resource">
-                            <td colSpan={3}>“{row.label}” resursi</td>
-                          </tr>
-                        );
-                      }
-
-                      return (
-                        <tr
-                          key={`risk-v-${idx}`}
-                          className={riskRowClass(row?.level)}
-                        >
-                          <td className="risk-level">{riskLevelText(row?.level)}</td>
-                          <td className="risk-name">{row?.name}</td>
-                          <td className="risk-count">{row?.count}</td>
-                        </tr>
-                      );
-                    })}
+                    {renderRiskTableBody(riskPages?.[0] || [], "risk")}
                   </tbody>
                 </table>
               </div>
@@ -3098,25 +3154,7 @@ const SystemWord = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(riskPages?.[1] || []).map((row, idx) => {
-                      if (row?.type === "resource") {
-                        return (
-                          <tr key={`risk2-r-${idx}`} className="risk-resource">
-                            <td colSpan={3}>“{row.label}” resursi</td>
-                          </tr>
-                        );
-                      }
-                      return (
-                        <tr
-                          key={`risk2-v-${idx}`}
-                          className={riskRowClass(row?.level)}
-                        >
-                          <td className="risk-level">{riskLevelText(row?.level)}</td>
-                          <td className="risk-name">{row?.name}</td>
-                          <td className="risk-count">{row?.count}</td>
-                        </tr>
-                      );
-                    })}
+                    {renderRiskTableBody(riskPages?.[1] || [], "risk2")}
                   </tbody>
                 </table>
               </div>
@@ -3183,28 +3221,7 @@ const SystemWord = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {(pageRows || []).map((row, idx) => {
-                          if (row?.type === "resource") {
-                            return (
-                              <tr
-                                key={`riskx-r-${extraIdx}-${idx}`}
-                                className="risk-resource"
-                              >
-                                <td colSpan={3}>“{row.label}” resursi</td>
-                              </tr>
-                            );
-                          }
-                          return (
-                            <tr
-                              key={`riskx-v-${extraIdx}-${idx}`}
-                              className={riskRowClass(row?.level)}
-                            >
-                              <td className="risk-level">{riskLevelText(row?.level)}</td>
-                              <td className="risk-name">{row?.name}</td>
-                              <td className="risk-count">{row?.count}</td>
-                            </tr>
-                          );
-                        })}
+                        {renderRiskTableBody(pageRows || [], `riskx-${extraIdx}`)}
                       </tbody>
                     </table>
                   </div>
