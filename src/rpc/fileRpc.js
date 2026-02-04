@@ -85,13 +85,13 @@ const blobToBase64 = (blob) =>
   });
 
 
-export const downloadFileViaRpcNew = async (stRef, fileId, fileName, onProgress) => {
+export const downloadFileViaRpcNew = async (stRef, fileId, fileName, size, onProgress) => {
   const state = stRef.current;
 
-  const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
-  if (!info?.status) throw new Error("FILE_INFO failed");
+  // const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
+  // if (!info?.status) throw new Error("FILE_INFO failed");
 
-  const { size, name, mime, chunkSize = 128 * 1024 } = info;
+  const  chunkSize = 128 * 1024 
   let offset = 0;
   let allParts = [];
 

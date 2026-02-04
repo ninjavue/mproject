@@ -423,6 +423,10 @@ const SystemWord = () => {
     ]);
   };
 
+  const deleteSystemAccountsRow = (rowIdx) => {
+    setSystemAccountsRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  };
+
   const updateSystemAccountsCell = (rowIdx, field, value, range) => {
     setSystemAccountsRows((prev) => {
       if (!prev[rowIdx]) return prev;
@@ -467,6 +471,7 @@ const SystemWord = () => {
               <th>URL manzil</th>
               <th style={{ width: "140px" }}>Login</th>
               <th style={{ width: "140px" }}>Parol</th>
+              <th style={{ width: "48px" }}></th>
             </tr>
           </thead>
           <tbody>
@@ -583,6 +588,23 @@ const SystemWord = () => {
                       />
                     ) : (
                       row.password
+                    )}
+                  </td>
+
+                  <td contentEditable={false}>
+                    {editing && (
+                      <button
+                        type="button"
+                        onClick={() => deleteSystemAccountsRow(globalIdx)}
+                        className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center"
+                        title="Qatorni o‘chirish"
+                      >
+                        <iconify-icon
+                          icon="material-symbols:delete"
+                          width="18"
+                          height="18"
+                        />
+                      </button>
                     )}
                   </td>
                 </tr>

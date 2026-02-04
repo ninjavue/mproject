@@ -18,13 +18,13 @@ export const uploadFileViaRpc = async (stRef, file, convId, onProgress) => {
   } return await sendRpcRequest(stRef, METHOD.FILE_DONE, { uploadId, caption: "" });
 };
 
-export const downloadFileViaRpc = async (stRef, fileId, onProgress) => {
+export const downloadFileViaRpc = async (stRef, fileId,size, onProgress) => {
   const state = stRef.current;
 
-  const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
-  if (!info?.status) throw new Error("FILE_INFO failed");
+  // const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
+  // if (!info?.status) throw new Error("FILE_INFO failed");
 
-  const { size, name, mime, chunkSize = 128 * 1024 } = info;
+  const { size, name, chunkSize = 128 * 1024 } = info;
   let offset = 0;
   let allParts = [];
 
