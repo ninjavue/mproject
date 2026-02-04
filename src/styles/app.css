@@ -1096,6 +1096,7 @@ object #save {
 .system-subtitle {
   font-weight: 700;
   margin: 6px 0 6px;
+  font-size: 16px;
 }
 
 .system-inline-img {
@@ -1152,6 +1153,7 @@ object #save {
   font-size: 14.5px;
   line-height: 1.45;
   word-break: break-word;
+  font-weight: bold;
 }
 
 .system-list li::before {

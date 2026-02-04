@@ -469,6 +469,7 @@ const Expertise = () => {
                 partName: info[3] || "",
                 phone: info[4] || "",
                 image: imageFileId,
+                count: user["7"] || user[7]
               };
             }),
           );
@@ -962,8 +963,22 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     return item.map((user) => ({
       value: user.id,
       label: `${user.surname} ${user.name}`,
+      count: user.count,
     }));
   };
+
+  const formatUserOption = (option, { context }) => {
+    if (context === "value") {
+      return <span>{option.label}</span>;
+    }
+    return (
+      <div className="flex justify-between items-center w-full">
+        <span>{option.label}</span>
+        <span className="text-gray-500">{option.count}</span>
+      </div>
+    );
+  };
+
 
   const handleControllerChange = (selectedOptions) => {
     const formattedControllers = selectedOptions
@@ -1434,6 +1449,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 name="controllers"
                 options={getUser(items)}
                 className="basic-multi-select"
+                formatOptionLabel={formatUserOption}
                 classNamePrefix="select"
                 placeholder="Nazoratchini tanlang..."
                 onChange={handleControllerChange}
@@ -1480,6 +1496,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 options={getUser(items)}
                 className="basic-multi-select"
                 classNamePrefix="select"
+                formatOptionLabel={formatUserOption}
                 placeholder="Bajaruvchini tanlang..."
                 onChange={handleWorkersChange}
                 styles={{

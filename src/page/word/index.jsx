@@ -905,7 +905,7 @@ const Word = () => {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
       console.log(res)
       if (res.status === METHOD.OK) {
-        setContractDate(formatDate(res[1]?.[2][0]));
+        setContractDate(formatDate(res[1]?.[2][1]));
         setHtmlContent(res[1]?.[8]);
         setContractName(res[1]?.[10]);
         setOrgTypeName(res[1]?.[1][6]);
@@ -1077,7 +1077,7 @@ const Word = () => {
 
     const date = new Date(dateString);
 
-    const day = date.getUTCDate();
+    const day = date.getDate();
     const monthNumber = date.getMonth() + 1;
     const year = date.getFullYear();
 

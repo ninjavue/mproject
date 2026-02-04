@@ -81,8 +81,9 @@ const section2LeftTerms = [
   },
 ];
 
-const section2BasisText =
-  "“Kiberxavfsizlik markazi” davlat unitar korxonasi va O‘zbekiston Respublikasi Sport vazirligi huzuridagi “Raqamlashtirish va sertifikatlash markazi” MCHJ o‘rtasida tuzilgan 2025-yil 21-noyabrdagi “ERP sport” yagona elektron boshqaruv tizimini kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan o‘tkazish to‘g‘risidagi 1044-B-son shartnoma.";
+// section2BasisText o'chirildi - contractName komponenti ichida inline ishlatiladi
+const section2BasisTextRemoved = "unused"; /*
+  `“Kiberxavfsizlik markazi” davlat unitar korxonasi va O‘zbekiston Respublikasi Sport vazirligi huzuridagi “Raqamlashtirish va sertifikatlash markazi” MCHJ o‘rtasida tuzilgan 2025-yil 21-noyabrdagi “ERP sport” yagona elektron boshqaruv tizimini kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan o‘tkazish to‘g‘risidagi ${contractName}-son shartnoma.`; */
 
 const section2ObjectLinks = [
   "https://5tashabbus.uz",
@@ -310,6 +311,23 @@ const paginateSectionTableRows = (rowsHtml) => {
   return pages;
 };
 
+const chunkSystemAccountsRows = (rows, firstPageSize = 8, nextPageSize = 14) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (safeRows.length === 0) return [[]];
+
+  const pages = [];
+  let i = 0;
+  let size = firstPageSize;
+
+  while (i < safeRows.length) {
+    pages.push(safeRows.slice(i, i + size));
+    i += size;
+    size = nextPageSize;
+  }
+
+  return pages.length ? pages : [[]];
+};
+
 const SystemWord = () => {
   const [pages, setPages] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -345,6 +363,249 @@ const SystemWord = () => {
   const [pages3, setPages3] = useState([]);
   const [tocPages, setTocPages] = useState([]);
   const [sectionTablePages, setSectionTablePages] = useState([]);
+  const [objectLinks, setObjectLinks] = useState(section2ObjectLinks);
+  const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
+  const [systemAccountsRows, setSystemAccountsRows] = useState([]);
+
+  const normalizeCellValue = (v) => (v ?? "").toString().trim();
+
+  const computeRowSpanMeta = (rows, key) => {
+    const meta = rows.map((_, idx) => ({
+      rowSpan: 1,
+      hidden: false,
+      start: idx,
+      end: idx,
+    }));
+
+    for (let i = 0; i < rows.length; i++) {
+      if (meta[i].hidden) continue;
+      const value = normalizeCellValue(rows[i]?.[key]);
+      if (!value) continue;
+
+      let j = i + 1;
+      while (j < rows.length && normalizeCellValue(rows[j]?.[key]) === value) {
+        meta[j].hidden = true;
+        j++;
+      }
+
+      meta[i].rowSpan = j - i;
+      for (let k = i; k < j; k++) {
+        meta[k].start = i;
+        meta[k].end = j - 1;
+      }
+
+      i = j - 1;
+    }
+
+    return meta;
+  };
+
+  const systemAccountsPages = useMemo(() => {
+    // NOTE: row height wrap bo‘lishi mumkin, shuning uchun hozircha stabil bo‘lishi uchun
+    // qator-soni bo‘yicha bo‘lamiz (Worddagi kabi keyingi sahifaga o‘tadi, yo‘qolib qolmaydi).
+    return chunkSystemAccountsRows(systemAccountsRows, 8, 14);
+  }, [systemAccountsRows]);
+
+  const systemAccountsPageStarts = useMemo(() => {
+    const starts = [];
+    let acc = 0;
+    for (const pageRows of systemAccountsPages) {
+      starts.push(acc);
+      acc += pageRows.length;
+    }
+    return starts;
+  }, [systemAccountsPages]);
+
+  const addSystemAccountsRow = () => {
+    setSystemAccountsRows((prev) => [
+      ...prev,
+      { role: "", url: "", login: "", password: "" },
+    ]);
+  };
+
+  const updateSystemAccountsCell = (rowIdx, field, value, range) => {
+    setSystemAccountsRows((prev) => {
+      if (!prev[rowIdx]) return prev;
+      const next = prev.map((r) => ({ ...r }));
+
+      if (
+        range &&
+        Number.isInteger(range.start) &&
+        Number.isInteger(range.end) &&
+        range.start >= 0 &&
+        range.end < next.length
+      ) {
+        for (let i = range.start; i <= range.end; i++) {
+          next[i] = { ...next[i], [field]: value };
+        }
+        return next;
+      }
+
+      next[rowIdx] = { ...next[rowIdx], [field]: value };
+      return next;
+    });
+  };
+
+  const renderSystemAccountsTable = ({
+    pageRows,
+    globalStartIndex,
+    showAddButton = false,
+  }) => {
+    const roleMeta = computeRowSpanMeta(pageRows, "role");
+    const urlMeta = computeRowSpanMeta(pageRows, "url");
+
+    return (
+      <>
+        <table
+          className="system-table system-table-compact"
+          contentEditable={false}
+        >
+          <thead>
+            <tr>
+              <th style={{ width: "50px" }}>T/r</th>
+              <th style={{ width: "140px" }}>Rol</th>
+              <th>URL manzil</th>
+              <th style={{ width: "140px" }}>Login</th>
+              <th style={{ width: "140px" }}>Parol</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row, idx) => {
+              const globalIdx = globalStartIndex + idx;
+              const rMeta = roleMeta[idx];
+              const uMeta = urlMeta[idx];
+
+              return (
+                <tr key={globalIdx}>
+                  <td>{globalIdx + 1}.</td>
+
+                  {!rMeta?.hidden && (
+                    <td rowSpan={rMeta?.rowSpan || 1}>
+                      {editing ? (
+                        <textarea
+                          value={row.role}
+                          onChange={(e) =>
+                            updateSystemAccountsCell(
+                              globalIdx,
+                              "role",
+                              e.target.value,
+                              rMeta?.rowSpan > 1
+                                ? {
+                                    start: globalStartIndex + rMeta.start,
+                                    end: globalStartIndex + rMeta.end,
+                                  }
+                                : undefined,
+                            )
+                          }
+                          onInput={(e) => {
+                            e.target.style.height = "auto";
+                            e.target.style.height = `${e.target.scrollHeight}px`;
+                          }}
+                          rows={1}
+                          className="w-full bg-transparent outline-none resize-none overflow-hidden"
+                          placeholder="Rol"
+                        />
+                      ) : (
+                        row.role
+                      )}
+                    </td>
+                  )}
+
+                  {!uMeta?.hidden && (
+                    <td rowSpan={uMeta?.rowSpan || 1}>
+                      {editing ? (
+                        <textarea
+                          value={row.url}
+                          onChange={(e) =>
+                            updateSystemAccountsCell(
+                              globalIdx,
+                              "url",
+                              e.target.value,
+                              uMeta?.rowSpan > 1
+                                ? {
+                                    start: globalStartIndex + uMeta.start,
+                                    end: globalStartIndex + uMeta.end,
+                                  }
+                                : undefined,
+                            )
+                          }
+                          onInput={(e) => {
+                            e.target.style.height = "auto";
+                            e.target.style.height = `${e.target.scrollHeight}px`;
+                          }}
+                          rows={1}
+                          className="w-full bg-transparent outline-none resize-none overflow-hidden"
+                          placeholder="https://..."
+                        />
+                      ) : (
+                        <u>{row.url}</u>
+                      )}
+                    </td>
+                  )}
+
+                  <td>
+                    {editing ? (
+                      <textarea
+                        value={row.login}
+                        onChange={(e) =>
+                          updateSystemAccountsCell(globalIdx, "login", e.target.value)
+                        }
+                        onInput={(e) => {
+                          e.target.style.height = "auto";
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                        }}
+                        rows={1}
+                        className="w-full bg-transparent outline-none resize-none overflow-hidden"
+                        placeholder="Login"
+                      />
+                    ) : (
+                      row.login
+                    )}
+                  </td>
+                  <td>
+                    {editing ? (
+                      <textarea
+                        value={row.password}
+                        onChange={(e) =>
+                          updateSystemAccountsCell(
+                            globalIdx,
+                            "password",
+                            e.target.value,
+                          )
+                        }
+                        onInput={(e) => {
+                          e.target.style.height = "auto";
+                          e.target.style.height = `${e.target.scrollHeight}px`;
+                        }}
+                        rows={1}
+                        className="w-full bg-transparent outline-none resize-none overflow-hidden"
+                        placeholder="Parol"
+                      />
+                    ) : (
+                      row.password
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {editing && showAddButton && (
+          <div className="mt-2 flex justify-end" contentEditable={false}>
+            <button
+              type="button"
+              onClick={addSystemAccountsRow}
+              className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow"
+              title="Qator qo‘shish"
+            >
+              <iconify-icon icon="material-symbols:add" width="20" height="20" />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  };
 
   const pdfRef = useRef();
   const { stRef } = useZirhStref();
@@ -1247,7 +1508,12 @@ const SystemWord = () => {
       }
 
       // Handle Enter key for page overflow
+      // Textarea va input elementlarida Enter ishlashiga ruxsat berish
       if (e.key === "Enter") {
+        const tagName = e.target.tagName.toLowerCase();
+        if (tagName === "textarea" || tagName === "input") {
+          return; // Textarea va input uchun default behavior
+        }
         e.preventDefault();
         // Insert line break manually
         const selection = window.getSelection();
@@ -1267,6 +1533,10 @@ const SystemWord = () => {
       }
 
       if (e.key === "Tab") {
+        const tagName = e.target.tagName.toLowerCase();
+        if (tagName === "textarea" || tagName === "input") {
+          return; // Textarea va input uchun default behavior
+        }
         e.preventDefault();
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
@@ -1338,8 +1608,9 @@ const SystemWord = () => {
     // console.log(id);
     try {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
+      console.log(res[1])
       if (res.status === METHOD.OK) {
-        setContractDate(formatDate(res[1]?.[2][0]));
+        setContractDate(formatDate(res[1]?.[2][1]));
         setHtmlContent(res[1]?.[8]);
         setContractName(res[1]?.[10]);
         setOrgTypeName(res[1]?.[1][6]);
@@ -1363,15 +1634,23 @@ const SystemWord = () => {
         const field8Data = res[1]?.[8] || [];
         let vulnData = field8Data;
 
-        // Agar field 8 array bo'lsa va 0-index string bo'lsa, bu table ma'lumotlari
+        // Agar field 8 array bo'lsa va 0-index string bo'lsa, bu table va links ma'lumotlari
         if (
           Array.isArray(field8Data) &&
           field8Data.length > 0 &&
           typeof field8Data[0] === "string"
         ) {
           try {
-            const tablesFromField8 = JSON.parse(field8Data[0]);
-            setTableData(tablesFromField8);
+            const dataFromField8 = JSON.parse(field8Data[0]);
+            // Yangi format: { tables: {...}, objectLinks: [...] }
+            if (dataFromField8.tables && dataFromField8.objectLinks) {
+              setTableData(dataFromField8.tables);
+              setObjectLinks(dataFromField8.objectLinks);
+              setObjectLinksText(dataFromField8.objectLinks.join("\n"));
+            } else {
+              // Eski format: faqat tables
+              setTableData(dataFromField8);
+            }
             vulnData = field8Data.slice(1); // Table ma'lumotlaridan keyingi qolganlarni ol
           } catch (err) {
             vulnData = field8Data; // Agar parse qilsa xatolik bo'lsa, dastlabkisini ishla
@@ -1432,6 +1711,17 @@ const SystemWord = () => {
     getExpertById();
     // console.log(highVuln);
   }, []);
+
+  // objectLinksText dan objectLinks ga sync qilish
+  useEffect(() => {
+    if (!editing && objectLinksText) {
+      const links = objectLinksText
+        .split("\n")
+        .map((link) => link.trim())
+        .filter((link) => link.length > 0);
+      setObjectLinks(links);
+    }
+  }, [editing, objectLinksText]);
 
   useEffect(() => {
     const pages = paginateTocItems(tocItemHtml);
@@ -1496,7 +1786,7 @@ const SystemWord = () => {
 
     const date = new Date(dateString);
 
-    const day = date.getUTCDate();
+    const day = date.getDate();
     const monthNumber = date.getMonth() + 1;
     const year = date.getFullYear();
 
@@ -1911,9 +2201,19 @@ const SystemWord = () => {
 
     const tables = extractTableData();
 
-    const tablesJson = JSON.stringify(tables);
+    // ObjectLinks ni parse qilish
+    const currentLinks = objectLinksText
+      .split("\n")
+      .map((link) => link.trim())
+      .filter((link) => link.length > 0);
+    setObjectLinks(currentLinks);
 
-    const apkName = tablesJson;
+    const tablesAndLinksJson = JSON.stringify({
+      tables: tables,
+      objectLinks: currentLinks,
+    });
+
+    const apkName = tablesAndLinksJson;
     const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i);
     const apkName1 = match ? match[0] : null;
     setApkFileName(apkName1);
@@ -1922,7 +2222,7 @@ const SystemWord = () => {
     const ipaFile = ipaMatch ? ipaMatch[0] : null;
     setIpaFileName(ipaFile);
 
-    const field8Data = [tablesJson, ...paged];
+    const field8Data = [tablesAndLinksJson, ...paged];
 
     console.log("Saving field8Data:", field8Data);
 
@@ -2138,19 +2438,39 @@ const SystemWord = () => {
                 <div className="system-bar-title">
                   1.2. Ekspertiza o‘tkazish uchun asos
                 </div>
-                <p className="system-paragraph">{section2BasisText}</p>
+                <p className="system-paragraph">"Kiberxavfsizlik markazi" davlat unitar korxonasi va "{orgName}" {orgTypeName} o'rtasida tuzilgan {contractDate} <b>"{appName}"</b> axborot tizimini kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan o'tkazish to'g'risidagi <b>"{contractName}"</b>-son shartnoma.</p>
               </div>
               <div className="system-col">
                 <div className="system-bar-title">1.3. Ekspertiza obyekti</div>
+                {editing ? (
+                  <div className="system-paragraph">
+                    <label className="block text-sm text-gray-500 mb-1">
+                      Linklar (har bir qatorda bitta):
+                    </label>
+                    <textarea
+                      className="w-full border border-gray-300 rounded p-2 min-h-[100px]"
+                      value={objectLinksText}
+                      onChange={(e) => setObjectLinksText(e.target.value)}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                ) : objectLinks.length === 1 ? (
+                  <p className="system-paragraph">
+                    <b>"{objectLinks[0]}"</b> URL manzilida joylashgan "{appName}" axborot tizimi.
+                  </p>
+                ) : (
+                  <>
                 <p className="system-paragraph">
-                  “ERP sport” yagona elektron boshqaruv tizimining quyidagi
+                  “{appName}” axborot tizimining quyidagi
                   resurslari:
                 </p>
                 <ul className="system-list">
-                  {section2ObjectLinks.map((link) => (
+                  {objectLinks.map((link) => (
                     <li key={link}>“{link}”;</li>
-                  ))}
-                </ul>
+                      ))}
+                    </ul>
+                  </>
+                )}
                 <div className="system-bar-title">
                   1.4. Ekspertiza o‘tkazish tartibi
                 </div>
@@ -2345,7 +2665,7 @@ const SystemWord = () => {
                     1.5. Ekspertiza yuzasidan qo‘shimcha ma’lumotlar
                   </div>
                   <p className="system-paragraph">
-                    “ERP sport” yagona elektron boshqaruv tizimida ekspertiza
+                    “{appName}” axborot tizimida ekspertiza
                     buyurtmachi tomonidan taqdim
                   </p>
                 </div>
@@ -2360,66 +2680,11 @@ const SystemWord = () => {
                 2-jadval
               </div>
             </div>
-            <table className="system-table system-table-compact">
-              <thead>
-                <tr>
-                  <th style={{ width: "50px" }}>T/r</th>
-                  <th style={{ width: "140px" }}>Rol</th>
-                  <th>URL manzil</th>
-                  <th style={{ width: "140px" }}>Login</th>
-                  <th style={{ width: "140px" }}>Parol</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>1.</td>
-                  <td rowSpan={2}>Markaz</td>
-                  <td rowSpan={8}>
-                    <u>https://erp2.sport.uz</u>
-                  </td>
-                  <td>Markaz1</td>
-                  <td>Markaz1@#</td>
-                </tr>
-                <tr>
-                  <td>2.</td>
-                  <td>Markaz2</td>
-                  <td>Markaz2@#</td>
-                </tr>
-                <tr>
-                  <td>3.</td>
-                  <td rowSpan={2}>Raqamlashtirish</td>
-                  <td>Raqamlashtirish1</td>
-                  <td>Raqamlashtirish1@#</td>
-                </tr>
-                <tr>
-                  <td>4.</td>
-                  <td>Raqamlashtirish2</td>
-                  <td>Raqamlashtirish2@#</td>
-                </tr>
-                <tr>
-                  <td>5.</td>
-                  <td rowSpan={2}>Boshqarma</td>
-                  <td>Boshqarma1</td>
-                  <td>Boshqarma1@#</td>
-                </tr>
-                <tr>
-                  <td>6.</td>
-                  <td>Boshqarma2</td>
-                  <td>Boshqarma2@#</td>
-                </tr>
-                <tr>
-                  <td>7.</td>
-                  <td rowSpan={2}>Federatsiya</td>
-                  <td>Federatsiya1</td>
-                  <td>Federatsiya1@#</td>
-                </tr>
-                <tr>
-                  <td>8.</td>
-                  <td>Federatsiya2</td>
-                  <td>Federatsiya2@#</td>
-                </tr>
-              </tbody>
-            </table>
+          {renderSystemAccountsTable({
+            pageRows: systemAccountsPages[0] || [],
+            globalStartIndex: systemAccountsPageStarts[0] || 0,
+            showAddButton: systemAccountsPages.length <= 1,
+          })}
           </div>
           <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
             <span className="text-white max-w-[60%] mt-[20px]">
@@ -2427,6 +2692,51 @@ const SystemWord = () => {
             </span>
           </div>
         </div>
+      {systemAccountsPages.slice(1).map((pageRows, extraIdx) => {
+        const pageIndex = extraIdx + 1;
+        const globalStartIndex = systemAccountsPageStarts[pageIndex] || 0;
+        const isLast = pageIndex === systemAccountsPages.length - 1;
+
+        return (
+          <div key={`system-accounts-page-${pageIndex}`} className="a4 system-c">
+            <img
+              className="system-top-img w-full min-w-full"
+              src="/assets/system/ax-tops.png"
+              alt=""
+            />
+            <img
+              className="system-bottom-img w-full min-w-full"
+              src="/assets/system/ax-bottoms.jpg"
+              alt=""
+            />
+            <div
+              className="page-title"
+              style={{
+                textAlign: 5 % 2 === 0 ? `end` : `start`,
+                marginRight: 5 % 2 === 0 ? `50px` : `0px`,
+              }}
+            >
+              <div>“{appName}”</div>
+              <div>mobil ilovasi</div>
+            </div>
+            <div className="page-content editable">
+              {renderSystemAccountsTable({
+                pageRows,
+                globalStartIndex,
+                showAddButton: isLast,
+              })}
+            </div>
+            <div
+              className="page-number flex justify-center mt-auto text-white items-center"
+              style={{ bottom: "40px" }}
+            >
+              <span className="text-white max-w-[60%] mt-[20px]">
+                {appName} | {7 + sectionTablePages.length + pageIndex}
+              </span>
+            </div>
+          </div>
+        );
+      })}
         <div className="a4 system-c">
           {6 % 2 === 0 ? (
             <>
@@ -2702,7 +3012,7 @@ const SystemWord = () => {
                     </tr>
                     <tr className="risk-high">
                       <td>SQL inyeksiya</td>
-                      <td>76</td>
+                      <td>1</td>
                     </tr>
                   </tbody>
                 </table>
@@ -3049,7 +3359,7 @@ const SystemWord = () => {
             <div className="system-two-col">
               <div className="system-col">
                 <p className="system-paragraph">
-                  “ERP sport” yagona elektron boshqaruv tizimi kiberxavfsizlik
+                  “{appName}” axborot tizimi kiberxavfsizlik
                   talablariga muvofiqligi yuzasidan o‘tkazilgan ekspertiza
                   natijasida kiberxavfsizlikning yuqori va o‘rta darajadagi
                   zaifliklari aniqlandi.

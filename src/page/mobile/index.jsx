@@ -396,8 +396,6 @@ const Mobile = () => {
         // if()
 
         const list = res[1]?.docs;
-        console.log(res[1])
-        console.log(list)
 
         // console.log(res[1]);
 
@@ -474,12 +472,11 @@ const Mobile = () => {
                 partName: info[3] || "",
                 phone: info[4] || "",
                 image: imageFileId,
+                count: user["7"] || user[7]
+
               };
             }),
-          );
-
-          console.log("hello")
-          
+          );        
           
           // console.log(expertize);
           setItems(mappedItems);
@@ -971,7 +968,20 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     return item.map((user) => ({
       value: user.id,
       label: `${user.surname} ${user.name}`,
+      count: user.count,
     }));
+  };
+
+  const formatUserOption = (option, { context }) => {
+    if (context === "value") {
+      return <span>{option.label}</span>;
+    }
+    return (
+      <div className="flex justify-between items-center w-full">
+        <span>{option.label}</span>
+        <span className="text-gray-500">{option.count}</span>
+      </div>
+    );
   };
 
   const handleControllerChange = (selectedOptions) => {
@@ -1344,6 +1354,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 classNamePrefix="select"
                 placeholder="Nazoratchini tanlang..."
                 onChange={handleControllerChange}
+                formatOptionLabel={formatUserOption}
                 styles={{
                   control: (base) => ({
                     ...base,
@@ -1380,6 +1391,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 classNamePrefix="select"
                 placeholder="Bajaruvchini tanlang..."
                 onChange={handleWorkersChange}
+                formatOptionLabel={formatUserOption}
                 styles={{
                   control: (base) => ({
                     ...base,
