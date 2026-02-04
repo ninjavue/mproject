@@ -71,7 +71,7 @@ const SignIn = () => {
 
       const key = deriveKeyPairFromPassword(password);
 
-      const k = ec.genKeyPair().getPrivate(); 
+      const k = ec.genKeyPair().getPrivate();
       const R = ec.g.mul(k).encode("hex", false);
 
       const res1 = await sendRpcRequest(stRef, METHOD.LOGIN_CHECK, {
@@ -112,7 +112,7 @@ const SignIn = () => {
       const s = k.add(c.mul(x)).umod(n);
 
       const newS = s.toString("hex");
-    
+
       const res2 = await sendRpcRequest(stRef, METHOD.LOGIN_GET_OTP, {
         1: uuidR,
         2: newS,
@@ -180,7 +180,8 @@ const SignIn = () => {
         // notify router in the same window and other tabs
         window.dispatchEvent(new Event("authChanged"));
         try {
-          window.localStorage && window.localStorage.setItem("_lastAuth", Date.now());
+          window.localStorage &&
+            window.localStorage.setItem("_lastAuth", Date.now());
         } catch (e) {}
         navigate("/");
       } else {
@@ -194,14 +195,13 @@ const SignIn = () => {
         }
       }
       setOpen2(false);
-    } catch (error) { }
+    } catch (error) {}
   };
 
   const handleClickOpen = (e) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     refreshCaptchaFromParent();
-
 
     if (!emailRegex.test(email)) {
       setOpen(false);
@@ -246,20 +246,20 @@ const SignIn = () => {
   }, []);
   return (
     <>
-      <div className="flex justify-center items-center">
-        <section className="bg-white dark:bg-white flex flex-wrap min-h-[100vh] max-w-7xl w-full">
-          <div className="lg:w-1/2 lg:block hidden">
+      <div className="bg-sign flex justify-center items-center">
+        <section className=" flex flex-wrap min-h-[100vh] min-w-[1300px]">
+          <div className="lg:w-[60%] lg:block hidden">
             <div className="flex items-center flex-col h-full justify-center">
-              <img src="../assets/images/auth-img.jpg" alt="img" />
+              <img src="../assets/uz.png" alt="img" className="w-full " />
             </div>
           </div>
           {step === 1 && (
-            <div className="lg:w-1/2 py-8 px-6 flex flex-col justify-center">
+            <div className="lg:w-[40%] py-8 px-6 flex flex-col justify-center">
               <div className="lg:max-w-[464px] mx-auto w-full">
                 <div className="mb-5">
                   <div className="w-full justify-center flex items-center gap-[5px] mb-8">
                     <img
-                      src="../assets/images/jamoa.jpg"
+                      src="../assets/jamoa.png"
                       className="w-[90px] h-[100px]"
                       alt="Jamoa"
                     />
@@ -319,7 +319,7 @@ const SignIn = () => {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-primary justify-center text-sm btn-sm px-3 py-4 w-full rounded-xl mt-8"
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen}
                   >
                     Kirish
@@ -330,7 +330,7 @@ const SignIn = () => {
           )}
 
           {step === 2 && (
-            <div className="lg:w-1/2 py-8 px-6 flex flex-col justify-center">
+            <div className="lg:w-[40%] py-8 px-6 flex flex-col justify-center">
               <div className="lg:max-w-[464px] mx-auto w-full">
                 <div className="mb-5">
                   <div className="w-full justify-center flex items-center gap-[5px] mb-8">
@@ -367,7 +367,7 @@ const SignIn = () => {
                   </div>
                   <button
                     type="button"
-                    className="btn btn-primary justify-center text-sm btn-sm px-3 py-4 w-full rounded-xl mt-8"
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen2}
                   >
                     Tasdiqlash

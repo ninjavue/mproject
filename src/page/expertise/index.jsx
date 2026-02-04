@@ -27,15 +27,15 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
   }
   return (
     <div
-      className="bg-white dark:bg-[#2b2c40] bg-gradient-to-r from-cyan-600/10 to-bg-white stat-card stat-card"
+      className="stat-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]"
       data-accent={accent}
     >
       <div className="stat-card__top">
-        <div className="stat-card__label text-[#718193] dark:text-gray-200 text-lg">
+        <div className="stat-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
           {label}
         </div>
         <div
-          className="stat-card__icon"
+          className="stat-card__icon rounded-xl p-3 shadow-inner"
           style={{
             color: accent == "muted" ? "#8592a3" : accent,
             background: hexToRgba(accent, 0.1),
@@ -43,12 +43,13 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
           aria-hidden
         >
           <i
-            className={`${icon} text-4xl`}
+            className={`${icon} text-3xl`}
             style={{ width: 36, height: 36 }}
           ></i>
+          {/* <iconify-icon icon={icon} width="36" height="36" /> */}
         </div>
       </div>
-      <div className="stat-card__value text-[#566a7f] dark:text-gray-300">
+      <div className="stat-card__value text-3xl font-semibold text-[#566a7f] dark:text-gray-300">
         {value}
       </div>
     </div>
@@ -472,11 +473,11 @@ const Expertise = () => {
             }),
           );
 
-          const expr = await getAllExpertize();
-          setExpertize(expr);
           // console.log(expertize);
           setItems(mappedItems);
         }
+        const expr = await getAllExpertize();
+        setExpertize(expr);
       } catch (error) {
         console.log(error);
       }
@@ -490,12 +491,8 @@ const Expertise = () => {
   const normalizedQuery = searchTerm.trim().toLowerCase();
   const filteredExpertize = normalizedQuery
     ? (expertize || []).filter((item) => {
-        const controllers = (item.controllers || [])
-          .map((c) => c.a2)
-          .join(" ");
-        const workers = (item.workers || [])
-          .map((w) => w.a2)
-          .join(" ");
+        const controllers = (item.controllers || []).map((c) => c.a2).join(" ");
+        const workers = (item.workers || []).map((w) => w.a2).join(" ");
         const haystack = [
           item.orgName,
           item.shortName,
@@ -1055,9 +1052,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1089,9 +1084,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1125,9 +1118,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>{" "}
@@ -1159,9 +1150,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1195,9 +1184,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1229,9 +1216,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1285,13 +1270,14 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
-            <div className="relative w-[48%] ml-[20px]" data-field="contractDate">
+            <div
+              className="relative w-[48%] ml-[20px]"
+              data-field="contractDate"
+            >
               {isUpdate && !changedFields.includes(4.7) && (
                 <button
                   type="button"
@@ -1316,8 +1302,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         : "";
                     setFormData((prev) => ({
                       ...prev,
-                      contractDate:
-                        nextValue,
+                      contractDate: nextValue,
                     }));
                     markFieldChanged(4.7, nextValue, editItemOld.contractDate);
                   }}
@@ -1369,8 +1354,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         : "";
                     setFormData((prev) => ({
                       ...prev,
-                      contractPriceDate:
-                        nextValue,
+                      contractPriceDate: nextValue,
                     }));
                     markFieldChanged(
                       4.8,
@@ -1425,9 +1409,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1474,9 +1456,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1521,9 +1501,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1564,9 +1542,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   type="button"
                   className="field-action-btn save"
                 >
-                  <iconify-icon
-                    icon="material-symbols:save-outline"
-                  />
+                  <iconify-icon icon="material-symbols:save-outline" />
                 </button>
               )}
             </div>
@@ -1596,8 +1572,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         : "";
                     setFormData((prev) => ({
                       ...prev,
-                      ordEndDate:
-                        nextValue,
+                      ordEndDate: nextValue,
                     }));
                     markFieldChanged(5.4, nextValue, editItemOld.ordEndDate);
                   }}
@@ -1624,18 +1599,18 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
 
           {isUpdate && (
             <div className="flex justify-between gap-4 items-center">
-            <div className="relative w-[48%] flex flex-col justify-end">
-              {isUpdate && !changedFields.includes(5.5) && (
-                <button
-                  type="button"
-                  className="field-action-btn edit"
-                  onClick={() => {
-                    document.getElementById("perm-letter-file")?.click();
-                  }}
-                >
-                  <iconify-icon icon="ri:edit-2-line" />
-                </button>
-              )}
+              <div className="relative w-[48%] flex flex-col justify-end">
+                {isUpdate && !changedFields.includes(5.5) && (
+                  <button
+                    type="button"
+                    className="field-action-btn edit"
+                    onClick={() => {
+                      document.getElementById("perm-letter-file")?.click();
+                    }}
+                  >
+                    <iconify-icon icon="ri:edit-2-line" />
+                  </button>
+                )}
                 <label className="text-sm text-gray-500 uppercase mb-1">
                   Ruhsat xati
                 </label>
@@ -1658,7 +1633,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <input
                     type="file"
                     hidden
-                  id="perm-letter-file"
+                    id="perm-letter-file"
                     name="permLetter"
                     onChange={(e) => {
                       handleFileChange1(e);
@@ -1669,26 +1644,24 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <button
                     onClick={handleUpdate}
                     type="button"
-                  className="field-action-btn save"
+                    className="field-action-btn save"
                   >
-                    <iconify-icon
-                    icon="material-symbols:save-outline"
-                    />
+                    <iconify-icon icon="material-symbols:save-outline" />
                   </button>
                 )}
               </div>
-            <div className="relative w-[48%] flex flex-col justify-end">
-              {isUpdate && !changedFields.includes(5.6) && (
-                <button
-                  type="button"
-                  className="field-action-btn edit"
-                  onClick={() => {
-                    document.getElementById("consent-letter-file")?.click();
-                  }}
-                >
-                  <iconify-icon icon="ri:edit-2-line" />
-                </button>
-              )}
+              <div className="relative w-[48%] flex flex-col justify-end">
+                {isUpdate && !changedFields.includes(5.6) && (
+                  <button
+                    type="button"
+                    className="field-action-btn edit"
+                    onClick={() => {
+                      document.getElementById("consent-letter-file")?.click();
+                    }}
+                  >
+                    <iconify-icon icon="ri:edit-2-line" />
+                  </button>
+                )}
                 <label className="text-sm text-gray-500 uppercase mb-1">
                   Rozilik xati
                 </label>
@@ -1711,7 +1684,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <input
                     type="file"
                     hidden
-                  id="consent-letter-file"
+                    id="consent-letter-file"
                     name="consentLetter"
                     onChange={(e) => {
                       handleFileChange2(e);
@@ -1722,11 +1695,9 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                   <button
                     onClick={handleUpdate}
                     type="button"
-                  className="field-action-btn save"
+                    className="field-action-btn save"
                   >
-                    <iconify-icon
-                    icon="material-symbols:save-outline"
-                    />
+                    <iconify-icon icon="material-symbols:save-outline" />
                   </button>
                 )}
               </div>
@@ -1751,10 +1722,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           )}
         </div>
       </div>
-      <div
-        className="dashboard-page"
-        style={{ margin: "-20px" }}
-      >
+      <div className="dashboard-page" style={{ margin: "-20px" }}>
         <Section title="Tizim ekspertizalar" items={system} />
         <div className="mt-10">
           <div className="bg-white rounded-md shadow-sm pb-20 dark:bg-[#2b2c40]">
@@ -1763,18 +1731,18 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 Qidiruv filter
               </h4>
               <div className="mt-3 flex items-center gap-4">
-                <select className="border rounded-md px-3 py-2 text-sm text-slate-500 w-64 bg-transparent">
+                <select className="h-10 w-64 rounded-lg border border-slate-200 bg-white px-4 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200">
                   <option>Foydalanuvchini tanlang ...</option>
                 </select>
                 <div className="ml-auto flex items-center">
                   <div className="relative">
                     <input
-                      className="border rounded-md px-3 py-2 text-sm text-slate-500 outline-none bg-transparent"
-                      placeholder="Qidirish..."
+                      className="h-10 w-64 rounded-lg border border-slate-200 bg-white px-4 pr-10 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                      placeholder="Qidiruv..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
+                    <span className="absolute right-2 top-[24px] -translate-y-1/2 text-slate-400">
                       <iconify-icon
                         icon="mdi:magnify"
                         width="18"
@@ -1783,103 +1751,93 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                     </span>
                   </div>
                   <button
-                    className="bg-[#696cff] text-white font-bold py-2 px-4 rounded-md ml-4 hover:bg-[#565edc] transition-colors"
+                    className="ml-4 inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={openDrawer}
                   >
-                    + Tizim qo'shish
+                    Tizim qo'shish
                   </button>
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-left">
+            <div className="overflow-x-auto rounded-lg">
+              <table className="min-w-full text-sm text-left border-collapse">
                 <thead>
-                  <tr className="text-slate-400 text-xs border-t border-b">
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      N
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      TASHKILOT NOMI
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r text-wrap">
+                  <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase border-b border-slate-200">
+                    <th className="px-4 py-3 font-medium">N</th>
+                    <th className="px-4 py-3 font-medium">TASHKILOT NOMI</th>
+                    <th className="px-4 py-3 font-medium text-wrap max-w-[250px]">
                       AXBOROT TIZIMINING NOMI
                     </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      SHARTNOMA RAQAMI
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      NAZORATCHI
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      BAJARUVCHI
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r text-wrap">
+                    <th className="px-4 py-3 font-medium">SHARTNOMA RAQAMI</th>
+                    <th className="px-4 py-3 font-medium">NAZORATCHI</th>
+                    <th className="px-4 py-3 font-medium">BAJARUVCHI</th>
+                    <th className="px-4 py-3 font-medium text-wrap w-[200px]">
                       EKSPERTIZANING BOSHLANISH SANASI
                     </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r text-wrap">
+                    <th className="px-4 py-3 font-medium text-wrap w-[200px]">
                       EKSPERTIZANING YAKUNLANISH SANASI
                     </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r text-wrap">
+                    <th className="px-4 py-3 font-medium text-wrap">
                       HISOB MA'LUMOTI
                     </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r text-wrap">
-                      BALL
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal border-r">
-                      QAYSI BOSQICHDA
-                    </th>
-                    <th className="px-4 py-3 text-[14px] font-normal">
-                      HOLATLAR
-                    </th>
+                    <th className="px-4 py-3 font-medium text-wrap">BALL</th>
+                    <th className="px-4 py-3 font-medium">QAYSI BOSQICHDA</th>
+                    <th className="px-4 py-3 font-medium">HOLATLAR</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentItems?.map((r, i) => (
                     <tr
                       key={r.id}
-                      className="border-b align-middle py-6 hover:bg-gray-50 dark:hover:bg-[#2b2c40]"
+                      className="border-b border-slate-100 align-middle hover:bg-slate-50 dark:hover:bg-[#2b2c40]"
                     >
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600">
                         {i + 1}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center">
                         {r.orgName}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center max-w-[250px] whitespace-normal break-words">
                         {r.shortName}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center">
                         {r.number}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600">
                         {r?.controllers?.map((b, idx) => (
                           <span className="block mb-1" key={idx}>
                             {b.a2}
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-4 align-middle whitespace-pre-line text-[15px] text-[#8895a4] border-r">
+                      <td className="px-4 py-3 align-middle whitespace-pre-line text-[15px] text-slate-600">
                         {r?.workers?.map((b, idx) => (
                           <span className="block mb-1" key={idx}>
                             {b.a2}
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 w-[200px]">
                         {r.start}
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-[#8895a4] border-r text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center w-[200px]">
                         {formatDate(r.endDate)}
                       </td>
-                      <td className="px-4 py-4 align-middle border-r text-center">
-                        <span className="inline-block px-2 py-1 text-xs rounded-md bg-red-100 dark:bg-red-400 text-red-600 dark:text-red-50 text-[13px] uppercase">
+                      <td className="px-4 py-3 align-middle text-center">
+                        <span
+                          className={`inline-block px-3 py-1 text-[12px] rounded-full ${
+                            r.hisobot
+                              ? "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-100"
+                              : "bg-red-100 dark:bg-red-500 text-red-600 dark:text-red-50"
+                          }`}
+                        >
                           {r.hisobot || "Chiqarilmagan"}
                         </span>
                       </td>
-                      <td className="px-4 py-4 align-middle text-[15px] text-center text-[#8895a4] border-r">
+                      <td className="px-4 py-3 align-middle text-[15px] text-center text-slate-600">
                         {r.ball || "0/15"}
                       </td>
-                      <td className="px-4 py-4 align-middle border-r">
+                      <td className="px-4 py-3 align-middle">
                         <div className="h-full flex relative">
                           {STATUS_STEPS.map((step, index) => {
                             const isActive = r.status >= step.id;
@@ -1914,10 +1872,10 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                           })}
                         </div>
                       </td>
-                      <td className="px-4 py-4 align-middle">
+                      <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-2">
                           <button
-                            className="p-2 rounded-md bg-sky-50 text-sky-400 font-bold"
+                            className="p-2 rounded-md hover:bg-blue-500 hover:text-white bg-blue-400 text-white"
                             onClick={() => handleEdit(r)}
                           >
                             <iconify-icon
@@ -1927,7 +1885,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                             ></iconify-icon>
                           </button>
                           <button
-                            className="p-2 rounded-md bg-violet-50 text-violet-600"
+                            className="p-2 rounded-md bg-slate-200 text-slate-500 hover:bg-slate-400 hover:text-white"
                             onClick={() => handleModal(r.id)}
                           >
                             <iconify-icon

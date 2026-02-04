@@ -1,6 +1,5 @@
-import React from 'react'
-import { Link, NavLink } from 'react-router-dom'
-
+import React from "react";
+import { Link, NavLink } from "react-router-dom";
 
 const Aside = () => {
   const MenuLink = ({ to, children }) => (
@@ -9,35 +8,52 @@ const Aside = () => {
       className={({ isActive }) =>
         `menu-link flex items-center p-2 rounded-md transition-colors ${
           isActive
-            ? 'menu-link-active bg-[#bb9769] text-white dark:bg-[#bb9769] hover:text-white'
-            : 'menu-link-inactive text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-slate-400'
+            ? "menu-link-active bg-[#bb9769] text-white dark:bg-[#bb9769] hover:text-white"
+            : "menu-link-inactive text-gray-700 hover:bg-gray-50 dark:hover:text-white dark:hover:bg-slate-400"
         }`
       }
     >
       {children}
     </NavLink>
-  )
+  );
   return (
     <aside className="sidebar">
       <button type="button" className="sidebar-close-btn !mt-4">
         <iconify-icon icon="radix-icons:cross-2" />
       </button>
       <div>
-        <Link to="/" className="sidebar-logo">
-          <div className="flex items-center logo-head gap-2">
-            <img src="/assets/jamoa.png" alt="site logo" style={{ width: 50, height: 60 }} />
-            <p className="logo-text dark:text-white font-bold text-lg text-[#1f3864]">
+        <Link to="/" className="sidebar-logo border-r">
+          <div className="flex items-center logo-head gap-2 m-auto pt-5">
+           
+            <p className="overflow-hidden transition-all duration-300 font-semibold text-[20px] leading-[26px] h-[54px]  text-[#57534e] uppercase">
               Kiberxavfsizlik markazi
             </p>
           </div>
-          <img src="/assets/jamoa.png" alt="site logo" className="logo-icon" style={{ width: 50, height: 60 }} />
+          {/* <img
+            src="/assets/jamoa.png"
+            alt="site logo"
+            className="logo-icon"
+            style={{ width: 50, height: 60 }}
+          /> */}
         </Link>
+      </div>
+      <div data-v-edbccf60="" class="flex items-center bg-transparent border-r pb-6">
+        <span className="w-full opacity-100 h-[1.5px] flex bg-[#bb9769] transition-all duration-300"></span>
+       <img
+              src="/assets/jamoa.png"
+              alt="site logo"
+              style={{ width: 50, height: 60 }}
+            />
+        <span className="w-full opacity-100 h-[1.5px] flex bg-[#bb9769] transition-all duration-300"></span>
       </div>
       <div className="sidebar-menu-area">
         <ul className="sidebar-menu" id="sidebar-menu">
           <li>
             <MenuLink to="/">
-              <iconify-icon icon="solar:home-smile-angle-outline" className="menu-icon" />
+              <iconify-icon
+                icon="solar:home-smile-angle-outline"
+                className="menu-icon"
+              />
               <span>Dashboard</span>
             </MenuLink>
           </li>
@@ -55,25 +71,37 @@ const Aside = () => {
           </li>
           <li>
             <MenuLink to="/page/mobile">
-              <iconify-icon icon="material-symbols:mobile-3-outline" className="menu-icon" />
+              <iconify-icon
+                icon="material-symbols:mobile-3-outline"
+                className="menu-icon"
+              />
               <span>Mobil ekspertizalar</span>
             </MenuLink>
           </li>
           <li>
             <MenuLink to="/page/daily">
-              <iconify-icon icon="material-symbols:calendar-check-rounded" className="menu-icon" />
+              <iconify-icon
+                icon="material-symbols:calendar-check-rounded"
+                className="menu-icon"
+              />
               <span>Kunlik topshiriqlar</span>
             </MenuLink>
           </li>
           <li>
             <MenuLink to="/page/report">
-              <iconify-icon icon="material-symbols:lab-profile-outline" className="menu-icon" />
+              <iconify-icon
+                icon="material-symbols:lab-profile-outline"
+                className="menu-icon"
+              />
               <span>Hisobot</span>
             </MenuLink>
           </li>
           <li>
             <MenuLink to="/page/user-add">
-              <iconify-icon icon="material-symbols:person-add-outline" className="menu-icon" />
+              <iconify-icon
+                icon="material-symbols:person-add-outline"
+                className="menu-icon"
+              />
               <span>Foydalanuvchi qo'shish</span>
             </MenuLink>
           </li>
@@ -91,7 +119,10 @@ const Aside = () => {
           </li>
           <li>
             <MenuLink to="/page/chat">
-              <iconify-icon icon="material-symbols:chat" className="menu-icon" />
+              <iconify-icon
+                icon="material-symbols:chat"
+                className="menu-icon"
+              />
               <span>Chat</span>
             </MenuLink>
           </li>
@@ -398,13 +429,12 @@ const Aside = () => {
               <li>
                 <Link to="/payment-gateway"><i className="ri-circle-fill circle-icon text-danger-600 w-auto" /> Payment Gateway</Link>
               </li> */}
-            {/* </ul> */}
+          {/* </ul> */}
           {/* </li> */}
         </ul>
       </div>
     </aside>
+  );
+};
 
-  )
-}
-
-export default Aside
+export default Aside;

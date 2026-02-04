@@ -151,18 +151,18 @@ const ForgotPassword = () => {
   };
   return (
     <>
-      <div className="flex justify-center items-center bg-white dark:bg-neutral-800 min-h-screen">
-        <section className="flex flex-wrap min-h-[100vh]">
-          <div className="lg:w-1/2 lg:block hidden">
+      <div className="flex bg-sign justify-center items-cente min-h-screen">
+        <section className="flex flex-wrap min-h-[100vh] min-w-[1300px]">
+          <div className="lg:w-[60%] lg:block hidden">
             <div className="flex items-center flex-col h-full justify-center">
-              <img src="/assets/images/forgot-password.jpg" alt />
+              <img src="/assets/uz.png" className="w-full" alt />
             </div>
           </div>
           {step === 1 && (
-            <div className="lg:w-1/2 py-8 px-6 flex flex-col justify-center">
+            <div className="lg:w-[40%] py-8 px-6 flex flex-col justify-center">
               <div className="lg:max-w-[464px] mx-auto w-full">
                 <div>
-                  <h4 className="mb-3">Parolni tiklash</h4>
+                  <h4 className="mb-3 text-xl text-bold">Parolni tiklash</h4>
                   <p className="mb-8 text-secondary-light text-lg">
                     Hisobingizga bog‘langan elektron pochta manzilini kiriting.
                     Parolni tiklash uchun sizga maxsus 6 xonali son yuboriladi.
@@ -185,7 +185,7 @@ const ForgotPassword = () => {
                     type="button"
                     data-modal-target="popup-modal"
                     data-modal-toggle="popup-modal"
-                    className="btn btn-primary justify-center text-sm btn-sm px-3 py-4 w-full rounded-xl"
+                    className=" w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen}
                   >
                     Davom etish
@@ -204,7 +204,7 @@ const ForgotPassword = () => {
           )}
 
           {step === 2 && (
-            <div className="lg:w-1/2 py-8 px-6 flex flex-col justify-center">
+            <div className="lg:w-[40%] py-8 px-6 flex flex-col justify-center">
               <div className="lg:max-w-[464px] mx-auto w-full">
                 <div>
                   <h4 className="mb-3">Pochta manzilni tasdiqlash</h4>
@@ -255,7 +255,7 @@ const ForgotPassword = () => {
                     type="button"
                     data-modal-target="popup-modal"
                     data-modal-toggle="popup-modal"
-                    className="btn btn-primary justify-center text-sm btn-sm px-3 py-4 w-full rounded-xl"
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen2}
                   >
                     Parolni tiklash

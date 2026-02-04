@@ -1722,7 +1722,7 @@ const SystemWord = () => {
       wrapper.innerHTML = item;
       tempDiv.appendChild(wrapper);
 
-      if (tempDiv.scrollHeight > 1780) {
+      if (tempDiv.scrollHeight > 1400) {
         if (currentPage.length) pages.push(currentPage);
         currentPage = [item];
         tempDiv.innerHTML = item;
@@ -2933,6 +2933,63 @@ const SystemWord = () => {
             <span className="text-white max-w-[60%] mt-[20px]">{appName} | 12</span>
           </div>
         </div>
+
+         {currentPages &&
+          currentPages.map((pageItems, pageIndex) => (
+            <div key={pageIndex} className="a4 system-c">
+              {pageIndex % 2 === 0 ? (
+                <>
+                  <img
+                    className="system-top-img w-full min-w-full"
+                    src="/assets/system/ax-tops.png"
+                    alt=""
+                  />
+                  <img
+                    className="system-bottom-img w-full min-w-full"
+                    src="/assets/system/ax-bottoms.jpg"
+                    alt=""
+                  />
+                </>
+              ) : (
+                <>
+                  <img
+                    className="system-top-img w-full min-w-full"
+                    src="/assets/system/ax-top.png"
+                    alt=""
+                  />
+                  <img
+                    className="system-bottom-img w-full min-w-full"
+                    src="/assets/system/ax-bottom.jpg"
+                    alt=""
+                  />
+                </>
+              )}
+              <div
+                className="page-title"
+                style={{
+                  width: "85%",
+                  textAlign: pageIndex % 2 === 0 ? "end" : "start",
+                  marginRight: pageIndex % 2 === 0 ? "50px" : "0px",
+                }}
+              >
+                <div>“{appName}”</div>
+                <div>mobil ilovasi</div>
+              </div>
+
+              <div className="page-content editable new-content">
+                <div className="system-two-col-flow">
+                  {pageItems.map((item, i) => (
+                    <div key={i} dangerouslySetInnerHTML={{ __html: item }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
+                <span className="text-white max-w-[60%] mt-[20px]">{appName} | {pageIndex + 17}</span>
+              </div>
+            </div>
+          ))}
+
         <div className="a4 system-c">
           {10 % 2 === 0 ? (
             <>
@@ -3044,61 +3101,7 @@ const SystemWord = () => {
         </div>
        
 
-        {currentPages &&
-          currentPages.map((pageItems, pageIndex) => (
-            <div key={pageIndex} className="a4 system-c">
-              {pageIndex % 2 === 0 ? (
-                <>
-                  <img
-                    className="system-top-img w-full min-w-full"
-                    src="/assets/system/ax-tops.png"
-                    alt=""
-                  />
-                  <img
-                    className="system-bottom-img w-full min-w-full"
-                    src="/assets/system/ax-bottoms.jpg"
-                    alt=""
-                  />
-                </>
-              ) : (
-                <>
-                  <img
-                    className="system-top-img w-full min-w-full"
-                    src="/assets/system/ax-top.png"
-                    alt=""
-                  />
-                  <img
-                    className="system-bottom-img w-full min-w-full"
-                    src="/assets/system/ax-bottom.jpg"
-                    alt=""
-                  />
-                </>
-              )}
-              <div
-                className="page-title"
-                style={{
-                  width: "85%",
-                  textAlign: pageIndex % 2 === 0 ? "end" : "start",
-                  marginRight: pageIndex % 2 === 0 ? "50px" : "0px",
-                }}
-              >
-                <div>“{appName}”</div>
-                <div>mobil ilovasi</div>
-              </div>
-
-              <div className="page-content editable new-content">
-                <div className="system-two-col-flow">
-                  {pageItems.map((item, i) => (
-                    <div key={i} dangerouslySetInnerHTML={{ __html: item }} />
-                  ))}
-                </div>
-              </div>
-
-              <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
-                <span className="text-white max-w-[60%] mt-[20px]">{appName} | {pageIndex + 17}</span>
-              </div>
-            </div>
-          ))}
+       
 
         <div className="a4 system-b"></div>
       </div>

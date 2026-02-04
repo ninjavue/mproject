@@ -903,6 +903,7 @@ const Word = () => {
     // console.log(id);
     try {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
+      console.log(res)
       if (res.status === METHOD.OK) {
         setContractDate(formatDate(res[1]?.[2][0]));
         setHtmlContent(res[1]?.[8]);
@@ -923,11 +924,9 @@ const Word = () => {
 
         // console.log("Topilgan fayl:", apkName1);
 
-        // Field 8 ning 0-indexidan table ma'lumotlarini va qolganini paged sifatida olish
         const field8Data = res[1]?.[8] || [];
         let vulnData = field8Data;
 
-        // Agar field 8 array bo'lsa va 0-index string bo'lsa, bu table ma'lumotlari
         if (
           Array.isArray(field8Data) &&
           field8Data.length > 0 &&

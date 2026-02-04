@@ -14,15 +14,15 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
   }
   return (
     <div
-      className="bg-white dark:bg-[#2b2c40] bg-gradient-to-r from-cyan-600/10 to-bg-white stat-card"
+      className="stat-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]"
       data-accent={accent}
     >
       <div className="stat-card__top">
-        <div className="stat-card__label text-[#718193] dark:text-gray-200 text-lg">
+        <div className="stat-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
           {label}
         </div>
         <div
-          className="stat-card__icon"
+          className="stat-card__icon rounded-xl p-3 shadow-inner"
           style={{
             color: accent == "muted" ? "#8592a3" : accent,
             background: hexToRgba(accent, 0.1),
@@ -30,13 +30,13 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
           aria-hidden
         >
           <i
-            className={`${icon} text-4xl`}
+            className={`${icon} text-3xl`}
             style={{ width: 36, height: 36 }}
           ></i>
           {/* <iconify-icon icon={icon} width="36" height="36" /> */}
         </div>
       </div>
-      <div className="stat-card__value text-[#566a7f] dark:text-gray-300">
+      <div className="stat-card__value text-3xl font-semibold text-[#566a7f] dark:text-gray-300">
         {value}
       </div>
     </div>
@@ -225,54 +225,73 @@ const DashboardPage = () => {
 
       <div className="mt-4">
         <div className="lt-row">
-          <div className="lt-card bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600  bg-white dark:bg-[#2b2c40]">
+          <div className="lt-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
             <div
-              className="lt-card__dot w-6 h-6"
+              className="lt-card__dot w-8 h-8 rounded-xl shadow-inner"
               style={{ background: "var(--accent-purple)" }}
             ></div>
-            <div className="lt-card__label dark:text-gray-200">Jami</div>
-            <div className="lt-card__value dark:text-gray-300">0</div>
+            <div className="lt-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
+              Jami
+            </div>
+            <div className="lt-card__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+              0
+            </div>
           </div>
-          <div className="lt-card bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600 bg-white dark:bg-[#2b2c40] ">
+          <div className="lt-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
             <div
-              className="lt-card__dot w-6 h-6"
+              className="lt-card__dot w-8 h-8 rounded-xl shadow-inner"
               style={{ color: "var(--accent-green)" }}
             >
               <i class="bx bxs-time-five text-success display-6 text-2xl"></i>
             </div>
-            <div className="lt-card__label dark:text-gray-200">Tugatilgan</div>
-            <div className="lt-card__value dark:text-gray-300">0</div>
+            <div className="lt-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
+              Tugatilgan
+            </div>
+            <div className="lt-card__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+              0
+            </div>
           </div>
-          <div className="lt-card bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600 bg-white dark:bg-[#2b2c40] ">
+          <div className="lt-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
             <div
-              className="lt-card__dot w-6 h-6"
+              className="lt-card__dot w-8 h-8 rounded-xl shadow-inner"
               style={{ color: "var(--accent-teal)" }}
             >
               <i class="bx bxs-time text-info display-6 text-2xl"></i>
             </div>
-            <div className="lt-card__label dark:text-gray-200">Jarayonda</div>
-            <div className="lt-card__value dark:text-gray-300">0</div>
+            <div className="lt-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
+              Jarayonda
+            </div>
+            <div className="lt-card__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+              0
+            </div>
           </div>
-          <div className="lt-card bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600 bg-white dark:bg-[#2b2c40] ">
+          <div className="lt-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
             <div
-              className="lt-card__dot w-6 h-6"
+              className="lt-card__dot w-8 h-8 rounded-xl shadow-inner"
               style={{ color: "var(--accent-red)" }}
             >
               <i class="bx bxs-time text-danger display-6 text-2xl"></i>
             </div>
-            <div className="lt-card__label dark:text-gray-200">
+            <div className="lt-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
               Vaqti o'tib ketgan
             </div>
-            <div className="lt-card__value dark:text-gray-300">0</div>
+            <div className="lt-card__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+              0
+            </div>
           </div>
-          <div className="lt-card bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600 bg-white dark:bg-[#2b2c40]">
-            <div className="lt-card__dot w-6 h-6" style={{ color: "#8592a3" }}>
+          <div className="lt-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
+            <div
+              className="lt-card__dot w-8 h-8 rounded-xl shadow-inner"
+              style={{ color: "#8592a3" }}
+            >
               <i class="bx bxs-time text-secondary display-6 text-2xl"></i>
             </div>
-            <div className="lt-card__label dark:text-gray-200">
+            <div className="lt-card__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
               Bajarilmagan
             </div>
-            <div className="lt-card__value dark:text-gray-300">0</div>
+            <div className="lt-card__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+              0
+            </div>
           </div>
         </div>
       </div>
@@ -283,13 +302,17 @@ const DashboardPage = () => {
       </div>
 
       <div className="mt-4">
-        <div className="lt-sum bg-white dark:bg-[#2b2c40] bg-gradient-to-r from-cyan-600/10 to-bg-white border border-gray-200 dark:border-neutral-600">
+        <div className="lt-sum group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]">
           <div
-            className="lt-sum__dot w-6 h-6"
+            className="lt-sum__dot w-8 h-8 rounded-xl shadow-inner"
             style={{ background: "var(--accent-purple)" }}
           ></div>
-          <div className="lt-sum__label dark:text-gray-200">Jami summa</div>
-          <div className="lt-sum__value dark:text-gray-300">0</div>
+          <div className="lt-sum__label text-sm font-medium tracking-wide text-[#718193] dark:text-gray-200">
+            Jami summa
+          </div>
+          <div className="lt-sum__value text-2xl font-semibold text-[#566a7f] dark:text-gray-300">
+            0
+          </div>
         </div>
       </div>
     </div>

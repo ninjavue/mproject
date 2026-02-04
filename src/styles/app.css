@@ -1,3 +1,14 @@
+/* Highlight replied message on jump */
+.message-highlight {
+  background-color: rgba(59, 130, 246, 0.12);
+  border-radius: 16px;
+  transition: background-color 0.6s ease;
+}
+.message-highlight-bubble {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) inset;
+  transition: box-shadow 0.6s ease;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
@@ -1357,4 +1368,14 @@ background-item.is-visible:not(.backwards) {
   width: 100% !important;
   max-width: 100% !important;
   font-size: 17px !important;
+}
+
+.bg-sign{
+  position: relative;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
+    url("/public/assets/images/main-bg.jpg");
+  background-size: 100px 100px;
+  background-position: top left;
+  background-repeat: repeat;
 }

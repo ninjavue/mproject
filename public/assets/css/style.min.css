@@ -6071,10 +6071,10 @@ h6 {
     height: 72px;
     align-items: center;
     justify-content: flex-start;
-    border-inline-end-width: 1px;
-    border-bottom-width: 1px;
+    /* border-inline-end-width: 1px; */
+    /* border-bottom-width: 1px; */
     --tw-border-opacity: 1;
-    border-color: rgb(235 236 239 / var(--tw-border-opacity));
+    /* border-color: rgb(235 236 239 / var(--tw-border-opacity)); */
     padding: 14px 16px
 }
 
