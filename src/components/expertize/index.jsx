@@ -18,6 +18,7 @@ const ExpertizeModal = ({
   item,
   itemId,
   onSaveDoc,
+  resourceOptions = [],
 }) => {
   const [selectedVuln, setSelectedVuln] = useState("");
   const [zaiflikText, setZaiflikText] = useState("");
@@ -33,8 +34,17 @@ const ExpertizeModal = ({
   const [lowVuln, setLowVuln] = useState([]);
   const [vulnLevel, setVulnLevel] = useState("");
   const [platform, setPlatform] = useState("");
+  const [resource, setResource] = useState("");
   const [filteredVuln, setFilteredVuln] = useState([]);
   const [newDocVuln, setNewDocVuln] = useState({});
+
+  useEffect(() => {
+    if (!open) return;
+    if (resource) return;
+    if (Array.isArray(resourceOptions) && resourceOptions.length) {
+      setResource(resourceOptions[0]);
+    }
+  }, [open, resource, resourceOptions]);
 
   const handleVulnChange = (selected) => {
     if (!selected) {
@@ -137,6 +147,7 @@ const ExpertizeModal = ({
     if (!newDocVuln) return;
     onSaveDoc({
       vuln: newDocVuln,
+      resource,
       platform: platform,
       vulnLevel: vulnLevel,
       vulnCount: formData.count || 1,
@@ -175,6 +186,24 @@ const ExpertizeModal = ({
             <h2 className="text-lg font-semibold mb-4 text-gray-500 dark:text-gray-200">
               {item?.[3]}
             </h2>
+
+            {!!resourceOptions?.length && (
+              <div className="mb-3 fv-plugins-icon-container">
+                <label className="form-label">Resurs</label>
+                <select
+                  className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent text-slate-500"
+                  value={resource}
+                  onChange={(e) => setResource(e.target.value)}
+                >
+                  <option value="">Resursni tanlang</option>
+                  {resourceOptions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="mb-3 fv-plugins-icon-container">
               <label className="form-label">Platforma</label>

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -326,6 +326,66 @@ const chunkSystemAccountsRows = (rows, firstPageSize = 8, nextPageSize = 14) => 
   return pages.length ? pages : [[]];
 };
 
+const extractResourceHost = (value = "") => {
+  const raw = (value ?? "").toString().trim();
+  if (!raw) return "";
+  try {
+    const url =
+      raw.startsWith("http://") || raw.startsWith("https://")
+        ? new URL(raw)
+        : new URL(`https://${raw}`);
+    return (url.hostname || raw).replace(/^www\./i, "");
+  } catch {
+    return raw
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/\/+$/, "");
+  }
+};
+
+const riskLevelText = (level) =>
+  Number(level) === 1 ? "Yuqori" : Number(level) === 2 ? "O‘rta" : "Past";
+
+const riskRowClass = (level) =>
+  Number(level) === 1 ? "risk-high" : Number(level) === 2 ? "risk-medium" : "risk-low";
+
+const chunkRiskRows = (rows, firstPageSize = 8, nextPageSize = 28) => {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (safeRows.length === 0) return [];
+
+  const pages = [];
+  let i = 0;
+  let size = firstPageSize;
+
+  while (i < safeRows.length) {
+    const page = [];
+    const cap = size;
+
+    while (i < safeRows.length && page.length < cap) {
+      const row = safeRows[i];
+
+      // agar sahifa resource header bilan emas, vuln qatoridan boshlansa headerni takrorlab qo'yamiz
+      if (page.length === 0 && row?.type === "vuln" && row?.resourceLabel) {
+        page.push({ type: "resource", label: row.resourceLabel, repeated: true });
+      }
+
+      page.push(row);
+      i++;
+    }
+
+    // resource header sahifa oxirida qolib ketmasin
+    if (page.length && page[page.length - 1]?.type === "resource") {
+      page.pop();
+      i = Math.max(0, i - 1);
+    }
+
+    if (page.length) pages.push(page);
+    size = nextPageSize;
+  }
+
+  return pages;
+};
+
 const SystemWord = () => {
   const [pages, setPages] = useState([]);
   const [editing, setEditing] = useState(false);
@@ -364,6 +424,7 @@ const SystemWord = () => {
   const [objectLinks, setObjectLinks] = useState(section2ObjectLinks);
   const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
   const [systemAccountsRows, setSystemAccountsRows] = useState([]);
+  const [riskPages, setRiskPages] = useState([]);
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
 
@@ -1697,23 +1758,23 @@ const SystemWord = () => {
         setNewVuln(flatVulnData);
 
         const highVuln1 = Array.isArray(raw)
-          ? raw.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-          : [{ a1: raw.a1, a2: raw.a2, a3: raw.a3 }];
+          ? raw.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
+          : [{ a1: raw.a1, a2: raw.a2, a3: raw.a3, a4: raw.a4 }];
 
         setHighVuln(highVuln1);
 
         const raw1 = res[1]?.[12];
 
         const mV = Array.isArray(raw1)
-          ? raw1.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-          : [{ a1: raw1.a1, a2: raw1.a2, a3: raw1.a3 }];
+          ? raw1.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
+          : [{ a1: raw1.a1, a2: raw1.a2, a3: raw1.a3, a4: raw1.a4 }];
         setMediumVuln(mV);
 
         const raw2 = res[1]?.[11];
 
         const lV = Array.isArray(raw2)
-          ? raw2.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-          : [{ a1: raw2.a1, a2: raw2.a2, a3: raw2.a3 }];
+          ? raw2.flat().map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
+          : [{ a1: raw2.a1, a2: raw2.a2, a3: raw2.a3, a4: raw2.a4 }];
         setLowVuln(lV);
 
         // console.log(res[1]?.[13]);
@@ -1898,6 +1959,71 @@ const SystemWord = () => {
     return doc.body.textContent || "";
   };
 
+  const riskRows = useMemo(() => {
+    const items = [...(highVuln || []), ...(mediumVuln || []), ...(lowVuln || [])]
+      .filter(Boolean)
+      .map((v) => {
+        const level = Number(v?.a1) || v?.a1;
+        const countRaw = v?.a2 ?? 1;
+        const count = Number(countRaw);
+        const name = stripHtml(v?.a3 || "").trim();
+        const resourceLabel = extractResourceHost(v?.a4 || "") || "Umumiy";
+        return {
+          type: "vuln",
+          level,
+          count: Number.isFinite(count) && count > 0 ? count : 1,
+          name,
+          resourceLabel,
+        };
+      })
+      .filter((v) => v.name);
+
+    // (resource -> level -> name) bo'yicha agregatsiya
+    const byResource = new Map();
+    for (const v of items) {
+      if (!byResource.has(v.resourceLabel)) byResource.set(v.resourceLabel, new Map());
+      const key = `${Number(v.level) || v.level}|||${v.name}`;
+      const m = byResource.get(v.resourceLabel);
+      const prev = m.get(key);
+      m.set(key, prev ? { ...prev, count: prev.count + v.count } : v);
+    }
+
+    const resourceOrder = Array.isArray(objectLinks) ? objectLinks.map(extractResourceHost) : [];
+    const resources = Array.from(byResource.keys()).sort((a, b) => {
+      const ai = resourceOrder.indexOf(a);
+      const bi = resourceOrder.indexOf(b);
+      const aRank = ai === -1 ? Number.MAX_SAFE_INTEGER : ai;
+      const bRank = bi === -1 ? Number.MAX_SAFE_INTEGER : bi;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.localeCompare(b, "uz");
+    });
+
+    const levelPriority = (lev) => (Number(lev) === 1 ? 0 : Number(lev) === 2 ? 1 : 2);
+
+    const out = [];
+    for (const r of resources) {
+      const map = byResource.get(r);
+      if (!map || map.size === 0) continue;
+      out.push({ type: "resource", label: r });
+
+      const grouped = Array.from(map.values());
+      grouped.sort((x, y) => {
+        const px = levelPriority(x.level);
+        const py = levelPriority(y.level);
+        if (px !== py) return px - py; // Yuqori -> O‘rta -> Past
+        return (x.name || "").localeCompare(y.name || "", "uz");
+      });
+
+      for (const v of grouped) out.push(v);
+    }
+
+    return out;
+  }, [highVuln, mediumVuln, lowVuln, objectLinks]);
+
+  useEffect(() => {
+    setRiskPages(chunkRiskRows(riskRows, 6, 28));
+  }, [riskRows]);
+
   // Textni gaplar bo'yicha inline span larga ajratadi (blok emas)
   const splitToInlineSpans = (text) => {
     if (!text) return text;
@@ -1999,11 +2125,21 @@ const SystemWord = () => {
             a1: level,
             a2: docVuln?.vulnCount,
             a3: docVuln?.vuln?.[1]?.[1],
+            a4: docVuln?.resource || "",
           },
         ],
       };
 
       // console.log(docVuln);
+      const newItem = payload?.[field]?.[0];
+      if (newItem) {
+        if (Number(level) === 1) setHighVuln((prev) => [...(prev || []), newItem]);
+        else if (Number(level) === 2)
+          setMediumVuln((prev) => [...(prev || []), newItem]);
+        else if (Number(level) === 3) setLowVuln((prev) => [...(prev || []), newItem]);
+
+        setAllVuln((prev) => [...(prev || []), newItem]);
+      }
       setPlatform("umumiy");
       setVulnUm((prev) => [...prev, payload]);
 
@@ -2279,6 +2415,7 @@ const SystemWord = () => {
         item={expertize}
         itemId={id}
         onSaveDoc={handleSaveDocFromModal}
+        resourceOptions={objectLinks}
       />
 
       <button
@@ -2876,25 +3013,31 @@ const SystemWord = () => {
                   <thead>
                     <tr>
                       <th>Xavflilik darajasi</th>
-                      <th>Aniqlangan zaifliklar soni</th>
+                      <th>Aniqlangan zaiflik</th>
+                      <th>Soni</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="risk-resource">
-                      <td colSpan={2}>“adm2.sport.uz” resursi</td>
-                    </tr>
-                    <tr className="risk-high">
-                      <td>Sessiyaning saqlanib qolishi</td>
-                      <td>1</td>
-                    </tr>
-                    <tr className="risk-high">
-                      <td>Saytlararo so‘rovlarni soxtalashtirish (CSRF)</td>
-                      <td>1</td>
-                    </tr>
-                    <tr className="risk-high">
-                      <td>SQL inyeksiya</td>
-                      <td>1</td>
-                    </tr>
+                    {(riskPages?.[0] || []).map((row, idx) => {
+                      if (row?.type === "resource") {
+                        return (
+                          <tr key={`risk-r-${idx}`} className="risk-resource">
+                            <td colSpan={3}>“{row.label}” resursi</td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        <tr
+                          key={`risk-v-${idx}`}
+                          className={riskRowClass(row?.level)}
+                        >
+                          <td className="risk-level">{riskLevelText(row?.level)}</td>
+                          <td className="risk-name">{row?.name}</td>
+                          <td className="risk-count">{row?.count}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2904,135 +3047,180 @@ const SystemWord = () => {
             <span className="text-white max-w-[60%] mt-[20px]">{appName} | 10</span>
           </div>
         </div>
-        <div className="a4 system-c">
-          {8 % 2 === 0 ? (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-tops.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottoms.jpg"
-                alt=""
-              />
-            </>
-          ) : (
-            <>
-              <img
-                className="system-top-img w-full min-w-full"
-                src="/assets/system/ax-top.png"
-                alt=""
-              />
-              <img
-                className="system-bottom-img w-full min-w-full"
-                src="/assets/system/ax-bottom.jpg"
-                alt=""
-              />
-            </>
-          )}
-          <div
-            className="page-title"
-            style={{
-              textAlign: 8 % 2 === 0 ? `end` : `start`,
-              marginRight: 8 % 2 === 0 ? `50px` : `0px`,
-            }}
-          >
-            <div>“{appName}”</div>
-            <div>mobil ilovasi</div>
-          </div>
-          <div className="page-content editable">
-            <div className="system-risk-columns">
-              <table className="system-risk-table">
-                <tbody>
-                  <tr className="risk-medium">
-                    <td className="risk-level" rowSpan={4}>O‘rta</td>
-                    <td className="risk-name">Ixtiyoriy kengaytmadagi faylni yuklash</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Ma’lumotlarni oshkor qiluvchi xatolik xabari</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Sessiyaning aktivlik vaqtini uzoqligi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Ma’lumotlarni ochiqlanishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-resource">
-                    <td colSpan={3}>“erp.sport.uz” resursi</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-level" rowSpan={3}>Yuqori</td>
-                    <td className="risk-name">Avtorizatsiyaning yo‘qligi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-name">SQL inyeksiya</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <table className="system-risk-table">
-                <tbody>
-                  <tr className="risk-medium">
-                    <td className="risk-level" rowSpan={4}>O‘rta</td>
-                    <td className="risk-name">Ma’lumotlarni ochiqlanishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Ixtiyoriy kengaytmadagi faylni yuklash</td>
-                    <td className="risk-count">2</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Ma’lumotlarni oshkor qiluvchi xatolik xabari</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-medium">
-                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-resource">
-                    <td colSpan={3}>“dash2.sport.uz” resursi</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-level">Yuqori</td>
-                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-resource">
-                    <td colSpan={3}>“my2.sport.uz” resursi</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-level" rowSpan={3}>Yuqori</td>
-                    <td className="risk-name">Avtorizatsiyaning yo‘qligi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-name">Sessiyaning saqlanib qolishi</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                  <tr className="risk-high">
-                    <td className="risk-name">Saytlararo so‘rovlarni soxtalashtirish (CSRF)</td>
-                    <td className="risk-count">1</td>
-                  </tr>
-                </tbody>
-              </table>
+        {riskPages.length > 1 && (
+          <>
+            <div className="a4 system-c">
+              {8 % 2 === 0 ? (
+                <>
+                  <img
+                    className="system-top-img w-full min-w-full"
+                    src="/assets/system/ax-tops.png"
+                    alt=""
+                  />
+                  <img
+                    className="system-bottom-img w-full min-w-full"
+                    src="/assets/system/ax-bottoms.jpg"
+                    alt=""
+                  />
+                </>
+              ) : (
+                <>
+                  <img
+                    className="system-top-img w-full min-w-full"
+                    src="/assets/system/ax-top.png"
+                    alt=""
+                  />
+                  <img
+                    className="system-bottom-img w-full min-w-full"
+                    src="/assets/system/ax-bottom.jpg"
+                    alt=""
+                  />
+                </>
+              )}
+              <div
+                className="page-title"
+                style={{
+                  textAlign: 8 % 2 === 0 ? `end` : `start`,
+                  marginRight: 8 % 2 === 0 ? `50px` : `0px`,
+                }}
+              >
+                <div>“{appName}”</div>
+                <div>mobil ilovasi</div>
+              </div>
+              <div className="page-content editable">
+                <div className="system-table-label">3-jadval (davomi)</div>
+                <table className="system-risk-table">
+                  <thead>
+                    <tr>
+                      <th>Xavflilik darajasi</th>
+                      <th>Aniqlangan zaiflik</th>
+                      <th>Soni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(riskPages?.[1] || []).map((row, idx) => {
+                      if (row?.type === "resource") {
+                        return (
+                          <tr key={`risk2-r-${idx}`} className="risk-resource">
+                            <td colSpan={3}>“{row.label}” resursi</td>
+                          </tr>
+                        );
+                      }
+                      return (
+                        <tr
+                          key={`risk2-v-${idx}`}
+                          className={riskRowClass(row?.level)}
+                        >
+                          <td className="risk-level">{riskLevelText(row?.level)}</td>
+                          <td className="risk-name">{row?.name}</td>
+                          <td className="risk-count">{row?.count}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div
+                className="page-number flex justify-center mt-auto text-white items-center"
+                style={{ bottom: "40px" }}
+              >
+                <span className="text-white max-w-[60%] mt-[20px]">
+                  {appName} | 11
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="page-number flex justify-center mt-auto text-white items-center" style={{ bottom: "40px" }}>
-            <span className="text-white max-w-[60%] mt-[20px]">{appName} | 11</span>
-          </div>
-        </div>
+
+            {riskPages.slice(2).map((pageRows, extraIdx) => {
+              const pageIndex = 9 + extraIdx;
+              const isEven = pageIndex % 2 === 0;
+              return (
+                <div key={`risk-extra-${extraIdx}`} className="a4 system-c">
+                  {isEven ? (
+                    <>
+                      <img
+                        className="system-top-img w-full min-w-full"
+                        src="/assets/system/ax-tops.png"
+                        alt=""
+                      />
+                      <img
+                        className="system-bottom-img w-full min-w-full"
+                        src="/assets/system/ax-bottoms.jpg"
+                        alt=""
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <img
+                        className="system-top-img w-full min-w-full"
+                        src="/assets/system/ax-top.png"
+                        alt=""
+                      />
+                      <img
+                        className="system-bottom-img w-full min-w-full"
+                        src="/assets/system/ax-bottom.jpg"
+                        alt=""
+                      />
+                    </>
+                  )}
+                  <div
+                    className="page-title"
+                    style={{
+                      textAlign: isEven ? `end` : `start`,
+                      marginRight: isEven ? `50px` : `0px`,
+                    }}
+                  >
+                    <div>“{appName}”</div>
+                    <div>mobil ilovasi</div>
+                  </div>
+                  <div className="page-content editable">
+                    <div className="system-table-label">3-jadval (davomi)</div>
+                    <table className="system-risk-table">
+                      <thead>
+                        <tr>
+                          <th>Xavflilik darajasi</th>
+                          <th>Aniqlangan zaiflik</th>
+                          <th>Soni</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(pageRows || []).map((row, idx) => {
+                          if (row?.type === "resource") {
+                            return (
+                              <tr
+                                key={`riskx-r-${extraIdx}-${idx}`}
+                                className="risk-resource"
+                              >
+                                <td colSpan={3}>“{row.label}” resursi</td>
+                              </tr>
+                            );
+                          }
+                          return (
+                            <tr
+                              key={`riskx-v-${extraIdx}-${idx}`}
+                              className={riskRowClass(row?.level)}
+                            >
+                              <td className="risk-level">{riskLevelText(row?.level)}</td>
+                              <td className="risk-name">{row?.name}</td>
+                              <td className="risk-count">{row?.count}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div
+                    className="page-number flex justify-center mt-auto text-white items-center"
+                    style={{ bottom: "40px" }}
+                  >
+                    <span className="text-white max-w-[60%] mt-[20px]">
+                      {appName}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
         {/* <div className="a4 system-c">
           {9 % 2 === 0 ? (
             <>

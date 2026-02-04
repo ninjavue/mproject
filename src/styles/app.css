@@ -1222,12 +1222,12 @@ object #save {
 
 .system-risk-table th:first-child,
 .system-risk-table td:first-child {
-  width: 70px;
+  width: 83px;
 }
 
 .system-risk-table th:last-child,
 .system-risk-table td:last-child {
-  width: 40px;
+  width: 52px;
 }
 
 .system-risk-table .risk-resource td {
@@ -1245,7 +1245,7 @@ object #save {
 }
 
 .system-risk-table .risk-low td {
-  background: #cfe7ff;
+  background: #cfead0;
 }
 
 .system-risk-table .risk-info td {
