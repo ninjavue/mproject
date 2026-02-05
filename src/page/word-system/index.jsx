@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -621,12 +621,18 @@ const SystemWord = () => {
   const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
   const [systemAccountsRows, setSystemAccountsRows] = useState([]);
   const [uploadedFilesMeta, setUploadedFilesMeta] = useState({});
+  const [uploadedFilesList, setUploadedFilesList] = useState([]);
+  const uploadedFilesListRef = useRef([]);
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
 
   useEffect(() => {
     editingRef.current = editing;
   }, [editing]);
+
+  useEffect(() => {
+    uploadedFilesListRef.current = uploadedFilesList;
+  }, [uploadedFilesList]);
 
   const computeRowSpanMeta = (rows, key) => {
     const meta = rows.map((_, idx) => ({
@@ -1715,7 +1721,7 @@ const SystemWord = () => {
     // console.log(id);
     try {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
-      console.log(res[1])
+      // console.log(res[1])
       if (res.status === METHOD.OK) {
         let fallbackRiskTable = null;
         setContractDate(formatDate(res[1]?.[2][1]));
@@ -1751,6 +1757,8 @@ const SystemWord = () => {
         };
 
         setUploadedFilesMeta(normalizeFilesMeta(rawFiles));
+        const filesList = Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : [];
+        setUploadedFilesList(filesList);
 
         const apkName = res[1]?.[8][0];
         const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i);
@@ -2371,15 +2379,17 @@ const SystemWord = () => {
 
       const payload = {
         19: id,
-        [field]: [
+        11: [
           {
-            a1: level,
-            a2: docVuln?.vulnCount,
+            a1: docVuln?.vulnCount,
+            a2: level,
             a3: docVuln?.vuln?.[1]?.[1],
-            a4: docVuln?.resource || "",
+            // a4: docVuln?.resource || "",
           },
         ],
       };
+
+      console.log(payload)
 
       // console.log(docVuln);
       const newItem = payload?.[field]?.[0];
@@ -2394,13 +2404,14 @@ const SystemWord = () => {
       setPlatform("umumiy");
       setVulnUm((prev) => [...prev, payload]);
 
-      return;
+      // return;
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
+      console.log(res)
 
-      if (res.status == METHOD.OK) {
-        if (field === 11) {
-        }
-      }
+      // if (res.status == METHOD.OK) {
+      //   if (field === 11) {
+      //   }
+      // }
 
       // console.log("Yuborilgan payload:", payload);
       // console.log("Response:", res);
@@ -2699,12 +2710,18 @@ const SystemWord = () => {
         if (srcUrl) imgElement.src = srcUrl;
       }
 
-
-        const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+      // Server 15-maydonni bitta obyekt sifatida kutadi: { 1: fileId, 2: fileSize }
+      setUploadedFilesList((prev) => [...prev, { 1: fileId, 2: imageRes?.size }]);
+      setUploadedFilesMeta((prev) => ({
+        ...prev,
+        [String(fileId)]: imageRes?.size,
+        [`files/${String(fileId).replace(/^files\//i, "")}`]: imageRes?.size,
+      }));
+      const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
         19: id,
-        15: {1:fileId, 2:imageRes?.size},
+        15: { 1: fileId, 2: imageRes?.size },
       });
-      console.log(updateRes)
+      console.log(updateRes);
       return fileId || null;
     } catch (error) {
       console.log(error);
@@ -2729,7 +2746,7 @@ const SystemWord = () => {
       () => {},
     );
     const url = URL.createObjectURL(blob);
-    localStorage.setItem(cacheKey, url);
+    // localStorage.setItem(cacheKey, url);
     return url;
   };
 
@@ -2747,6 +2764,7 @@ const SystemWord = () => {
         document.querySelectorAll('.page-content img[data-file-id]'),
       );
       for (const img of imgs) {
+        console.log(img)
         if (cancelled) return;
         if (!img) continue;
         if (img.dataset.srcResolved === "true") continue;
@@ -2760,8 +2778,10 @@ const SystemWord = () => {
         const size = meta[dfid] ?? meta[fid] ?? meta[`files/${fid}`];
 
         try {
+          console.log(fid, size)
           const url = await downloadFileAll(fid, size);
           if (cancelled) return;
+          console.log(url)
           if (url) {
             img.src = url;
             img.dataset.srcResolved = "true";

@@ -9,6 +9,7 @@ const vulnLevelOptions = [
   { value: "1", label: "Yuqori" },
   { value: "2", label: "O'rta" },
   { value: "3", label: "Past" },
+  { value: "4", label: "Ma'lumot uchun" },
 ];
 
 const ExpertizeModal = ({
@@ -58,6 +59,7 @@ const ExpertizeModal = ({
     const selectedId = selected.value;
     setSelectedVuln(selectedId);
 
+    console.log("test uchun")
     const found = filteredVuln.find((v) => v._id === selected.value);
     setNewDocVuln(found);
     // console.log(found);
