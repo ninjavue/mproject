@@ -586,6 +586,7 @@ const SystemWord = () => {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const pageRefs = useRef([]);
+  const editingRef = useRef(false);
   // const [isModalOpen, setIsModalOpen] = useState(false);
   const [expertize, setExpertize] = useState([]);
   const [appName, setAppName] = useState("");
@@ -622,6 +623,10 @@ const SystemWord = () => {
   const [uploadedFilesMeta, setUploadedFilesMeta] = useState({});
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
+
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
 
   const computeRowSpanMeta = (rows, key) => {
     const meta = rows.map((_, idx) => ({
@@ -1109,17 +1114,15 @@ const SystemWord = () => {
     const editables = document.querySelectorAll(".editable");
 
     const attachImageResizeHandler = () => {
-      const images = document.querySelectorAll(
-        ".page-content img:not([data-resize-attached])",
-      );
+      // IMPORTANT: handler editing holatiga bog'liq bo'lmasin (closure muammosi).
+      // Shuning uchun har safar barcha rasmlarga handlerni yangilaymiz.
+      const images = document.querySelectorAll(".page-content img");
 
       images.forEach((img) => {
-        img.dataset.resizeAttached = "true";
-
         let startX, startY, startWidth, startHeight;
 
         const onPointerMove = (e) => {
-          if (!editing) return;
+          if (!editingRef.current) return;
           e.preventDefault();
           e.stopPropagation();
 
@@ -1140,7 +1143,7 @@ const SystemWord = () => {
         };
 
         const onPointerDown = (e) => {
-          if (!editing || e.button !== 0) return;
+          if (!editingRef.current || e.button !== 0) return;
           e.preventDefault();
           e.stopPropagation();
 
@@ -1165,27 +1168,15 @@ const SystemWord = () => {
         img.addEventListener("pointerdown", onPointerDown, { passive: false });
 
         // Vizual holatni yangilash
-        img.style.cursor = editing ? "ew-resize" : "default";
-        img.style.border = editing ? "1px dashed #aaa" : "none";
+        img.style.cursor = editingRef.current ? "ew-resize" : "default";
+        img.style.border = editingRef.current ? "1px dashed #aaa" : "none";
         img.style.userSelect = "none";
       });
     };
 
-    const updateAllImagesVisual = () => {
-      document
-        .querySelectorAll(".page-content img[data-resize-handler]")
-        .forEach((img) => {
-          img._updateVisual?.();
-        });
-    };
-
     attachImageResizeHandler();
-    updateAllImagesVisual();
     if (editing) {
       attachImageResizeHandler();
-      updateAllImagesVisual();
-    } else {
-      updateAllImagesVisual();
     }
     const handleInput = (e) => {
       // Just handle images on input, don't trigger page overflow
