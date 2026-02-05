@@ -621,18 +621,12 @@ const SystemWord = () => {
   const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
   const [systemAccountsRows, setSystemAccountsRows] = useState([]);
   const [uploadedFilesMeta, setUploadedFilesMeta] = useState({});
-  const [uploadedFilesList, setUploadedFilesList] = useState([]);
-  const uploadedFilesListRef = useRef([]);
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
 
   useEffect(() => {
     editingRef.current = editing;
   }, [editing]);
-
-  useEffect(() => {
-    uploadedFilesListRef.current = uploadedFilesList;
-  }, [uploadedFilesList]);
 
   const computeRowSpanMeta = (rows, key) => {
     const meta = rows.map((_, idx) => ({
@@ -1757,8 +1751,6 @@ const SystemWord = () => {
         };
 
         setUploadedFilesMeta(normalizeFilesMeta(rawFiles));
-        const filesList = Array.isArray(rawFiles) ? rawFiles : rawFiles ? [rawFiles] : [];
-        setUploadedFilesList(filesList);
 
         const apkName = res[1]?.[8][0];
         const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i);
@@ -2710,18 +2702,12 @@ const SystemWord = () => {
         if (srcUrl) imgElement.src = srcUrl;
       }
 
-      // Server 15-maydonni bitta obyekt sifatida kutadi: { 1: fileId, 2: fileSize }
-      setUploadedFilesList((prev) => [...prev, { 1: fileId, 2: imageRes?.size }]);
-      setUploadedFilesMeta((prev) => ({
-        ...prev,
-        [String(fileId)]: imageRes?.size,
-        [`files/${String(fileId).replace(/^files\//i, "")}`]: imageRes?.size,
-      }));
-      const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+
+        const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
         19: id,
-        15: { 1: fileId, 2: imageRes?.size },
+        15: {1:fileId, 2:imageRes?.size},
       });
-      console.log(updateRes);
+      console.log(updateRes)
       return fileId || null;
     } catch (error) {
       console.log(error);
@@ -2778,10 +2764,9 @@ const SystemWord = () => {
         const size = meta[dfid] ?? meta[fid] ?? meta[`files/${fid}`];
 
         try {
-          console.log(fid, size)
           const url = await downloadFileAll(fid, size);
           if (cancelled) return;
-          console.log(url)
+          cnso
           if (url) {
             img.src = url;
             img.dataset.srcResolved = "true";
