@@ -905,190 +905,6 @@ const SystemWord = () => {
     ),
   );
 
-  const tocItems = useMemo(
-    () => [
-      {
-        type: "section",
-        page: "5",
-        section: "BIRINCHI BO‘LIM.",
-        head: "UMUMIY MA’LUMOTLAR",
-      },
-      { type: "row", title: "Atamalar va ta’riflar", page: "5" },
-      { type: "row", title: "Ekspertiza o‘tkazish uchun asos", page: "6" },
-      { type: "row", title: "Ekspertiza obyekti", page: "6" },
-      { type: "row", title: "Ekspertiza o‘tkazish tartibi", page: "6" },
-      {
-        type: "row",
-        title: "Ekspertiza yuzasidan qo‘shimcha ma’lumotlar",
-        page: "8",
-        large: true,
-      },
-      {
-        type: "section",
-        page: "10",
-        section: "IKKINCHI BO‘LIM.",
-        head: "EKSPERTIZA NATIJALARI",
-      },
-      {
-        type: "row",
-        title: "Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot",
-        page: "10",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ekspertiza natijalari bo‘yicha batafsil izoh",
-        page: "14",
-        large: true,
-      },
-      { type: "subheader", title: "“adm2.sport.uz” veb-resursi" },
-      { type: "row", title: "Sessiyaning saqlanib qolinishi", page: "14" },
-      {
-        type: "row",
-        title: "Saytlararo so‘rovlarni soxtalashtirish (CSRF)",
-        page: "15",
-        large: true,
-      },
-      { type: "row", title: "SQL inyeksiya", page: "16" },
-      {
-        type: "row",
-        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
-        page: "20",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
-        page: "22",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Sessiyaning aktivlik vaqtini uzoqligi",
-        page: "23",
-        large: true,
-      },
-      { type: "row", title: "Ma’lumotlarni ochiqlanishi", page: "24" },
-      { type: "subheader", title: "“erp2.sport.uz” veb-resursi" },
-      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "26" },
-      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "27" },
-      { type: "row", title: "SQL inyeksiya", page: "28" },
-      { type: "row", title: "Ma’lumotlarni ochiqlanishi", page: "29" },
-      {
-        type: "row",
-        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
-        page: "30",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
-        page: "32",
-        large: true,
-      },
-      { type: "subheader", title: "“dash2.sport.uz” veb-resursi" },
-      { type: "row", title: "Sessiyaning saqlanib qolinishi", page: "33" },
-      { type: "subheader", title: "“my2.sport.uz” veb-resursi" },
-      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "34" },
-      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "35" },
-      {
-        type: "row",
-        title: "Saytlararo so‘rovlarni soxtalashtirish (CSRF)",
-        page: "36",
-        large: true,
-      },
-      { type: "row", title: "Saytlararo skript (XSS)", page: "38" },
-      {
-        type: "row",
-        title: "Kiruvchi parametrlarni tekshirmaslik",
-        page: "40",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
-        page: "41",
-        large: true,
-      },
-      { type: "row", title: "Ishchi holatda bo‘lmagan qismlar", page: "43" },
-      { type: "subheader", title: "“5tashabbus2.sport.uz” veb-resursi" },
-      { type: "row", title: "Avtorizatsiyaning yo‘qligi", page: "44" },
-      {
-        type: "row",
-        title: "Yagona parametr asosida shaxsga doir ma’lumotlarni qayta ishlash",
-        page: "45",
-        large: true,
-      },
-      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "47" },
-      { type: "row", title: "Saytlararo skript (XSS)", page: "48" },
-      { type: "row", title: "SQL inyeksiya", page: "49" },
-      {
-        type: "row",
-        title: "Sessiyaning aktivlik vaqtini uzoqligi",
-        page: "51",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ixtiyoriy kengaytmadagi faylni yuklash",
-        page: "52",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
-        page: "54",
-        large: true,
-      },
-      { type: "subheader", title: "“pr2.sport.uz” veb-resursi" },
-      {
-        type: "row",
-        title:
-          "“Cross origin resource sharing: arbitrary origin trusted (CORS)” zaifligi",
-        page: "56",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "Muhim turdagi ma’lumotlarni ochiqlanishi",
-        page: "57",
-        large: true,
-      },
-      { type: "row", title: "Sessiyaning saqlanib qolishi", page: "59" },
-      {
-        type: "row",
-        title: "Ma’lumotlarni oshkor qiluvchi xatolik xabari",
-        page: "60",
-        large: true,
-      },
-      {
-        type: "row",
-        title: "To‘liq ajratib bajariladigan hujum (brute-force attack)",
-        page: "61",
-        large: true,
-      },
-      { type: "subheader", title: "“mass2.sport.uz” veb-resursi" },
-      {
-        type: "row",
-        title: "“CAPTCHA” mexanizmini noto‘g‘ri ishlashi",
-        page: "63",
-        large: true,
-      },
-      {
-        type: "section",
-        page: "64",
-        section: "UCHINCHI BO‘LIM.",
-        head: "UMUMIY XULOSA",
-      },
-    ],
-    [],
-  );
-
-  const tocItemHtml = useMemo(
-    () => tocItems.map((item) => buildTocItemHtml(item)),
-    [tocItems],
-  );
-
   const sectionTableRowHtml = useMemo(
     () => section3TableRows.map((row, index) => buildSectionTableRowHtml(row, index)),
     [],
@@ -2030,11 +1846,6 @@ const SystemWord = () => {
   }, [editing, objectLinksText]);
 
   useEffect(() => {
-    const pages = paginateTocItems(tocItemHtml);
-    setTocPages(pages);
-  }, [tocItemHtml]);
-
-  useEffect(() => {
     const pages = paginateSectionTableRows(sectionTableRowHtml);
     setSectionTablePages(pages);
   }, [sectionTableRowHtml]);
@@ -2247,6 +2058,151 @@ const SystemWord = () => {
     const cont = chunkRiskColumnPages(riskRows, first.nextIndex, 14, 14);
     return { riskFirstPageRows: first.page, riskContinuationPages: cont };
   }, [riskRows]);
+
+  const tocVulnerabilityItems = useMemo(() => {
+    const DETAIL_START_PAGE = 17;
+
+    const titleToResource = new Map();
+    (riskRows || [])
+      .filter((r) => r?.type === "vuln")
+      .forEach((r) => {
+        if (!r?.name) return;
+        if (!titleToResource.has(r.name)) titleToResource.set(r.name, r.resourceLabel || "Umumiy");
+      });
+
+    const seen = new Set();
+    const entries = [];
+
+    (pages3 || []).forEach((pageItems, pageIdx) => {
+      (pageItems || []).forEach((html) => {
+        if (!html || typeof html !== "string") return;
+        if (!html.includes("system-subtitle")) return;
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const el = doc.querySelector(".system-subtitle");
+        const subtitleText = (el?.textContent || "").trim();
+        if (!subtitleText) return;
+
+        // faqat system-subtitle ichidagi matn: xohlasangiz prefiks raqamlarni olib tashlaymiz
+        const title = subtitleText.replace(/^2\.2\.1\.\d+\.\s*/g, "").trim();
+        if (!title || seen.has(title)) return;
+        seen.add(title);
+
+        const resourceLabel = titleToResource.get(title) || "Umumiy";
+        const pageNum = DETAIL_START_PAGE + pageIdx;
+
+        entries.push({
+          title,
+          resourceLabel,
+          pageNum,
+        });
+      });
+    });
+
+    const orderHosts = (objectLinks || []).map(extractResourceHost);
+    const resourceRank = (host) => {
+      const h = extractResourceHost(host || "");
+      const idx = orderHosts.indexOf(h);
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+    };
+
+    // group by resource (risk table tartibiga yaqin bo'lishi uchun)
+    const grouped = new Map();
+    for (const e of entries) {
+      const host = extractResourceHost(e.resourceLabel) || e.resourceLabel || "Umumiy";
+      if (!grouped.has(host)) grouped.set(host, []);
+      grouped.get(host).push(e);
+    }
+
+    const resources = Array.from(grouped.keys()).sort((a, b) => {
+      const ar = resourceRank(a);
+      const br = resourceRank(b);
+      if (ar !== br) return ar - br;
+      return a.localeCompare(b, "uz");
+    });
+
+    const out = [];
+    for (const res of resources) {
+      const items = grouped.get(res) || [];
+      if (!items.length) continue;
+      items.sort((a, b) => a.pageNum - b.pageNum || a.title.localeCompare(b.title, "uz"));
+      out.push({ type: "subheader", title: `“${res}” veb-resursi` });
+      for (const it of items) {
+        out.push({
+          type: "row",
+          title: it.title,
+          page: String(it.pageNum),
+          large: it.title.length > 44,
+        });
+      }
+    }
+
+    return {
+      items: out,
+      section3Page: String(DETAIL_START_PAGE + (pages3?.length || 0)),
+    };
+  }, [riskRows, pages3, objectLinks]);
+
+  const tocItems = useMemo(() => {
+    const base = [
+      {
+        type: "section",
+        page: "5",
+        section: "BIRINCHI BO‘LIM.",
+        head: "UMUMIY MA’LUMOTLAR",
+      },
+      { type: "row", title: "Atamalar va ta’riflar", page: "5" },
+      { type: "row", title: "Ekspertiza o‘tkazish uchun asos", page: "6" },
+      { type: "row", title: "Ekspertiza obyekti", page: "6" },
+      { type: "row", title: "Ekspertiza o‘tkazish tartibi", page: "6" },
+      {
+        type: "row",
+        title: "Ekspertiza yuzasidan qo‘shimcha ma’lumotlar",
+        page: "8",
+        large: true,
+      },
+      {
+        type: "section",
+        page: "10",
+        section: "IKKINCHI BO‘LIM.",
+        head: "EKSPERTIZA NATIJALARI",
+      },
+      {
+        type: "row",
+        title: "Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot",
+        page: "10",
+        large: true,
+      },
+      {
+        type: "row",
+        title: "Ekspertiza natijalari bo‘yicha batafsil izoh",
+        page: "14",
+        large: true,
+      },
+    ];
+
+    const tail = [
+      {
+        type: "section",
+        page: tocVulnerabilityItems.section3Page,
+        section: "UCHINCHI BO‘LIM.",
+        head: "UMUMIY XULOSA",
+      },
+    ];
+
+    return [...base, ...(tocVulnerabilityItems.items || []), ...tail];
+  }, [tocVulnerabilityItems]);
+
+  const tocItemHtml = useMemo(
+    () => tocItems.map((item) => buildTocItemHtml(item)),
+    [tocItems],
+  );
+
+  useEffect(() => {
+    const pages = paginateTocItems(tocItemHtml);
+    setTocPages(pages);
+  }, [tocItemHtml]);
 
   const renderRiskTableBody = (pageRows, keyPrefix) => {
     const rows = Array.isArray(pageRows) ? pageRows : [];
