@@ -3,7 +3,7 @@ import { METHOD, buildRequestFrame } from "../protocol/zirhRpc.js";
 import { sendAppMessage } from "../transport/wsClient.js";
 
 
-export const uploadFileViaRpc = async (stRef, file, convId, onProgress) => {
+export const uploadFileViaRpc = async (stRef, file, size, convId, onProgress) => {
   if (!file) return; const allowedExtensions = ["jpg", "jpeg", "png", "pdf", "docx", "zip"];
   const fileExtension = file.name.split(".").pop().toLowerCase();
   if (!allowedExtensions.includes(fileExtension)) { throw new Error("Xatolik: .${fileExtension} formatidagi fayllarni yuklash mumkin emas!"); }

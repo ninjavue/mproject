@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -9,6 +9,7 @@ import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
 import { sendRpcRequest } from "../../rpc/rpcClient";
+import { uploadFileViaRpc } from "../../rpc/fileRpc";
 const A4_HEIGHT = 1120;
 const A4_CONTENT_HEIGHT = 1120; // A4 content height px
 const A4_WIDTH = 794;
@@ -1226,7 +1227,7 @@ const SystemWord = () => {
           // Prevent default paste behavior only for images to insert custom HTML
           e.preventDefault();
 
-          const blob = item.getAsFile();
+          const clipboardFile = item.getAsFile();
           const reader = new FileReader();
 
           reader.onload = (event) => {
@@ -1269,6 +1270,19 @@ const SystemWord = () => {
                   range.collapse(true);
                   selection.removeAllRanges();
                   selection.addRange(range);
+                }
+
+                // Upload pasted image to server via RPC
+                if (clipboardFile) {
+                  imgElement.style.opacity = "0.7";
+                  imgElement.dataset.uploading = "true";
+                  Promise.resolve()
+                    .then(() => handlePasteImage(clipboardFile, imgElement))
+                    .catch((err) => console.log(err))
+                    .finally(() => {
+                      imgElement.style.opacity = "1";
+                      delete imgElement.dataset.uploading;
+                    });
                 }
 
                 // Trigger reflow and handle overflow
@@ -1381,7 +1395,9 @@ const SystemWord = () => {
             };
           };
 
-          reader.readAsDataURL(blob);
+          if (clipboardFile) {
+            reader.readAsDataURL(clipboardFile);
+          }
         }
       }
 
@@ -2617,6 +2633,45 @@ const SystemWord = () => {
 
     toast.success("Barcha o‘zgarishlar saqlandi");
   };
+
+
+  const handlePasteImage = async (file, imgElement) => {
+    try {
+      if (!file) return null;
+
+      
+      const safeType = file.type || "image/png";
+      const extFromType =
+        safeType.includes("png")
+          ? "png"
+          : safeType.includes("jpeg") || safeType.includes("jpg")
+            ? "jpg"
+            : safeType.includes("webp")
+              ? "webp"
+              : "png";
+
+      const hasExt = typeof file.name === "string" && file.name.includes(".");
+      const safeName = hasExt ? file.name : `paste-${Date.now()}.${extFromType}`;
+      const uploadFile =
+        file instanceof File ? new File([file], safeName, { type: safeType }) : file;
+
+      const imageRes = await uploadFileViaRpc(stRef, uploadFile, null, (p) => {
+        if (imgElement) imgElement.dataset.uploadProgress = String(p);
+      });
+
+      const fileId = imageRes?.fileId || imageRes?.result?.fileId;
+      if (fileId && imgElement) {
+        imgElement.dataset.fileId = fileId;
+        imgElement.dataset.uploaded = "true";
+      }
+
+      return fileId || null;
+    } catch (error) {
+      console.log(error);
+      return null;
+    }
+  };
+
 
   const addNewTr = () => {
     setRows((prev) => [
