@@ -3,28 +3,31 @@ import { METHOD, buildRequestFrame } from "../protocol/zirhRpc.js";
 import { sendAppMessage } from "../transport/wsClient.js";
 
 
-export const uploadFileViaRpc = async (stRef, file, size, convId, onProgress) => {
+export const uploadFileViaRpc = async (stRef, file, convId, onProgress) => {
   if (!file) return; const allowedExtensions = ["jpg", "jpeg", "png", "pdf", "docx", "zip"];
   const fileExtension = file.name.split(".").pop().toLowerCase();
   if (!allowedExtensions.includes(fileExtension)) { throw new Error("Xatolik: .${fileExtension} formatidagi fayllarni yuklash mumkin emas!"); }
+  // console.log({name: file.name, size: file.size, mime: file.type || "application/octet-stream", convId,})
   const initRes = await sendRpcRequest(stRef, METHOD.FILE_INIT, { name: file.name, size: file.size, mime: file.type || "application/octet-stream", convId, });
-  console.log(initRes)
+  // console.log(initRes)
   if (!initRes && initRes.status != 56) throw new Error("FILE_INIT failed");
   const { uploadId, chunkSize = 128 * 1024 } = initRes; let offset = 0; let index = 0;
   while (offset < file.size) {
+    // console.log("test upload")
     const end = Math.min(offset + chunkSize, file.size); const buf = new Uint8Array(await file.slice(offset, end).arrayBuffer());
     const chunkRes = await sendRpcRequest(stRef, METHOD.FILE_CHUNK, { uploadId, index, offset, data: buf, last: end >= file.size, });
     if (!initRes && initRes.status != 56) throw new Error("FILE_CHUNK failed"); offset = end; index++; if (onProgress) onProgress(Math.round((offset / file.size) * 100));
+    // console.log(stRef, METHOD.FILE_DONE, { uploadId, caption: "" })
   } return await sendRpcRequest(stRef, METHOD.FILE_DONE, { uploadId, caption: "" });
 };
 
-export const downloadFileViaRpc = async (stRef, fileId, onProgress) => {
+export const downloadFileViaRpc = async (stRef, fileId, fileName, size, onProgress) => {
   const state = stRef.current;
 
-  const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
-  if (!info?.status) throw new Error("FILE_INFO failed");
+  // const info = await sendRpcRequest(stRef, METHOD.FILE_INFO, { fileId });
+  // if (!info?.status) throw new Error("FILE_INFO failed");
 
-  const { size, name, mime, chunkSize = 128 * 1024 } = info;
+  const  chunkSize = 128 * 1024 
   let offset = 0;
   let allParts = [];
 
@@ -119,7 +122,7 @@ export const downloadFileViaRpcNew = async (stRef, fileId, fileName, size, onPro
       const buf = buildRequestFrame(
         rpcId,
         METHOD.FILE_GET_CHUNK,
-        { fileId, offset, length: len },
+        { fileId, offset, length: len, size },
         state.clientId
       );
       const u8 = new Uint8Array(buf);
@@ -137,7 +140,7 @@ export const downloadFileViaRpcNew = async (stRef, fileId, fileName, size, onPro
     offset += streamRes.totalRead;
   }
 
-  const mimeType = getMimeFromName(fileName);
+  const mimeType = null;
 
   const blob = new Blob(allParts, {
     type: mimeType || "application/octet-stream",

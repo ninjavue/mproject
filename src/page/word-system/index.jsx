@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import mammoth from "mammoth";
 import { FaPen, FaSave } from "react-icons/fa";
 import { useReactToPrint } from "react-to-print";
@@ -9,7 +9,7 @@ import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
 import { sendRpcRequest } from "../../rpc/rpcClient";
-import { uploadFileViaRpc } from "../../rpc/fileRpc";
+import { downloadFileViaRpcNew, uploadFileViaRpc } from "../../rpc/fileRpc";
 const A4_HEIGHT = 1120;
 const A4_CONTENT_HEIGHT = 1120; // A4 content height px
 const A4_WIDTH = 794;
@@ -619,6 +619,7 @@ const SystemWord = () => {
   const [objectLinks, setObjectLinks] = useState(section2ObjectLinks);
   const [objectLinksText, setObjectLinksText] = useState(section2ObjectLinks.join("\n"));
   const [systemAccountsRows, setSystemAccountsRows] = useState([]);
+  const [uploadedFilesMeta, setUploadedFilesMeta] = useState({});
 
   const normalizeCellValue = (v) => (v ?? "").toString().trim();
 
@@ -1234,7 +1235,12 @@ const SystemWord = () => {
             const imgElement = document.createElement("img");
             imgElement.src = event.target.result;
 
-            imgElement.onload = () => {
+            // MUHIM: src keyinroq o'zgarsa ham cheksiz sikl bo'lmasligi uchun
+            // bu blok faqat 1 marta ishlasin
+            if (imgElement.dataset.pasteInit === "true") return;
+            imgElement.dataset.pasteInit = "true";
+
+            imgElement.addEventListener("load", () => {
               // Image loaded, resize it
               const maxWidth = 500;
               if (imgElement.width > maxWidth) {
@@ -1274,6 +1280,10 @@ const SystemWord = () => {
 
                 // Upload pasted image to server via RPC
                 if (clipboardFile) {
+                  // 1 martadan ko'p upload bo'lmasin (src yangilansa ham)
+                  if (imgElement.dataset.uploadStarted === "true") return;
+                  imgElement.dataset.uploadStarted = "true";
+
                   imgElement.style.opacity = "0.7";
                   imgElement.dataset.uploading = "true";
                   Promise.resolve()
@@ -1392,7 +1402,7 @@ const SystemWord = () => {
                   handlePageOverflow();
                 }, 300);
               }, 50);
-            };
+            }, { once: true });
           };
 
           if (clipboardFile) {
@@ -1725,6 +1735,31 @@ const SystemWord = () => {
         setAppName(res[1]?.[1][3]);
         setExpertize(res[1]?.[1]);
         const raw = res[1]?.[13];
+        const rawFiles = res[1]?.[15];
+
+        // 15-field: [{1: fileId, 2: size}, ...] ko'rinishidagi mapping
+        const normalizeFilesMeta = (rf) => {
+          const list = Array.isArray(rf) ? rf : rf ? [rf] : [];
+          const out = {};
+          list
+            .flat()
+            .filter(Boolean)
+            .forEach((it) => {
+              const fileId = it?.[1] ?? it?.["1"];
+              const size = it?.[2] ?? it?.["2"];
+              if (!fileId) return;
+              const fid = String(fileId);
+              const sz = Number(size);
+              out[fid] = Number.isFinite(sz) ? sz : undefined;
+              // `files/` prefiksi bilan ham saqlab qo'yamiz
+              out[`files/${fid.replace(/^files\//i, "")}`] = Number.isFinite(sz)
+                ? sz
+                : undefined;
+            });
+          return out;
+        };
+
+        setUploadedFilesMeta(normalizeFilesMeta(rawFiles));
 
         const apkName = res[1]?.[8][0];
         const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i);
@@ -2655,9 +2690,12 @@ const SystemWord = () => {
       const uploadFile =
         file instanceof File ? new File([file], safeName, { type: safeType }) : file;
 
-      const imageRes = await uploadFileViaRpc(stRef, uploadFile, null, (p) => {
+      const imageRes = await uploadFileViaRpc(stRef, uploadFile, id, (p) => {
         if (imgElement) imgElement.dataset.uploadProgress = String(p);
       });
+
+
+      console.log(imageRes)
 
       const fileId = imageRes?.fileId || imageRes?.result?.fileId;
       if (fileId && imgElement) {
@@ -2665,12 +2703,91 @@ const SystemWord = () => {
         imgElement.dataset.uploaded = "true";
       }
 
+      if (fileId && imgElement) {
+        const srcUrl = await downloadFileAll(fileId, imageRes?.size);
+        if (srcUrl) imgElement.src = srcUrl;
+      }
+
+
+        const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: id,
+        15: {1:fileId, 2:imageRes?.size},
+      });
+      console.log(updateRes)
       return fileId || null;
     } catch (error) {
       console.log(error);
       return null;
     }
   };
+
+  const downloadFileAll = async (id, size) => {
+    if (!id) return null;
+    const fid = String(id).replace(/^files\//i, "");
+    const cacheKey = `files/${fid}`;
+
+    const cached = localStorage.getItem(cacheKey);
+    if (cached && cached.startsWith("blob:")) return cached;
+
+    const safeSize = Number(size);
+    const blob = await downloadFileViaRpcNew(
+      stRef,
+      fid,
+      fid,
+      Number.isFinite(safeSize) ? safeSize : undefined,
+      () => {},
+    );
+    const url = URL.createObjectURL(blob);
+    localStorage.setItem(cacheKey, url);
+    return url;
+  };
+
+  // ORDER_GET_ID dan kelgan 15-field bo'yicha rasmlarni URL qilib qo'yish
+  useEffect(() => {
+    if (editing) return;
+    const meta = uploadedFilesMeta || {};
+    const keys = Object.keys(meta);
+    if (!keys.length) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      const imgs = Array.from(
+        document.querySelectorAll('.page-content img[data-file-id]'),
+      );
+      for (const img of imgs) {
+        if (cancelled) return;
+        if (!img) continue;
+        if (img.dataset.srcResolved === "true") continue;
+
+        const dfidRaw = img.getAttribute("data-file-id") || img.dataset.fileId || "";
+        if (!dfidRaw) continue;
+
+        const dfid = dfidRaw.toString().trim();
+        const fid = dfid.replace(/^files\//i, "");
+
+        const size = meta[dfid] ?? meta[fid] ?? meta[`files/${fid}`];
+
+        try {
+          const url = await downloadFileAll(fid, size);
+          if (cancelled) return;
+          if (url) {
+            img.src = url;
+            img.dataset.srcResolved = "true";
+          }
+        } catch (e) {
+          // ignore single image failure
+          console.log(e);
+        }
+      }
+    };
+
+    // DOM render bo'lishi uchun microtask
+    Promise.resolve().then(run);
+    return () => {
+      cancelled = true;
+    };
+  }, [editing, uploadedFilesMeta, htmlContent, pages3]);
 
 
   const addNewTr = () => {
