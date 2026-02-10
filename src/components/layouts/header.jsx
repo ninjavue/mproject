@@ -4,7 +4,11 @@ import { METHOD } from "../../api/zirhrpc";
 import { useZirhStref } from "../../context/ZirhContext";
 import toast from "react-hot-toast";
 import { sendRpcRequest } from "../../rpc/rpcClient";
-import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
+import { downloadFileViaRpc, downloadFileViaRpcNew } from "../../rpc/fileRpc";
+import {
+  formatBufferToId,
+  CHAT_CURRENT_USER_ID_KEY,
+} from "../../utils/chatUnread";
 
 const Header = () => {
   const location = useLocation();
@@ -16,6 +20,7 @@ const Header = () => {
   const [avatar, setAvatar] = useState(defaultAvatar);
   const [activeYear, setActiveYear] = useState("2026");
   const [user, setUser] = useState({});
+  const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
 
   const messageRef = useRef(null);
   const notificationRef = useRef(null);
@@ -38,13 +43,64 @@ const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const downloadFileAll = async (id) => {
-    const blob = await downloadFileViaRpcNew(stRef, id, id, (p) => {
+  // Chat o‘qilmaganlar soni: localStorage + chat sahifasidan keladigan event
+  useEffect(() => {
+    const getTotal = () => {
+      try {
+        const s = localStorage.getItem("chat_unread_counts");
+        const obj = s ? JSON.parse(s) : {};
+        return Object.values(obj).reduce((sum, n) => sum + Number(n || 0), 0);
+      } catch {
+        return 0;
+      }
+    };
+    setChatUnreadTotal(getTotal());
+    const onChatUnread = (e) => {
+      const total = e?.detail?.total ?? getTotal();
+      setChatUnreadTotal(total);
+    };
+    window.addEventListener("chatUnreadTotal", onChatUnread);
+    return () => window.removeEventListener("chatUnreadTotal", onChatUnread);
+  }, []);
+
+  const downloadFileAll = async (id, size = 32420) => {
+  
+     return await downloadFileViaRpc(stRef, id, id, size, (p) => {
+      // console.log(p);
+      setUploadProgress(p);
+      setIsUploading(true);
+      if (p === 100) setIsUploading(false);
     });
-    const url = URL.createObjectURL(blob);
-    return url;
   };
 
+
+  const clearAllIndexedDB = () => {
+    return new Promise((resolve) => {
+      if (typeof indexedDB === "undefined") {
+        resolve();
+        return;
+      }
+      if (indexedDB.databases) {
+        indexedDB.databases().then((dbs) => {
+          const deletions = (dbs || []).map((db) => {
+            return new Promise((r) => {
+              const req = indexedDB.deleteDatabase(db.name);
+              req.onsuccess = () => r();
+              req.onerror = () => r();
+              req.onblocked = () => r();
+            });
+          });
+          Promise.all(deletions).then(resolve);
+        }).catch(() => {
+          indexedDB.deleteDatabase("fileStorage");
+          resolve();
+        });
+      } else {
+        indexedDB.deleteDatabase("fileStorage");
+        resolve();
+      }
+    });
+  };
 
   const handleLogout = async () => {
     try {
@@ -53,9 +109,11 @@ const Header = () => {
         localStorage.removeItem("AUTH_KEY_B64");
         localStorage.removeItem("data");
         localStorage.removeItem("checkUser");
+        localStorage.removeItem(CHAT_CURRENT_USER_ID_KEY);
+        await clearAllIndexedDB();
         toast.success("Tizimdan muvaffaqiyatli chiqildi");
         window.location.href = "/login";
-      }else{
+      } else {
         toast.error("Tizimdan chiqishda xatolik yuz berdi");
       }
     } catch (error) {
@@ -68,13 +126,22 @@ const Header = () => {
      try {
        const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});      
       if (resU.status === METHOD.OK) {
+        // console.log(resU)
         setUser(resU[1]);
+        try {
+          const uid = formatBufferToId(resU[1]._id);
+          if (uid) localStorage.setItem(CHAT_CURRENT_USER_ID_KEY, uid);
+        } catch (_) {}
         const avatarId = resU?.[1]?.[4]?.[5];
-        if (avatarId) {
-          const avatarUrl = await downloadFileAll(avatarId);
-          setAvatar(avatarUrl);
+        // console.log(avatarId)
+        // return
+        if (!avatarId || typeof avatarId !== "object" || Object.keys(avatarId).length === 0) {
+          setAvatar("../assets/images/avatar/avatar1.png");
         } else {
-          setAvatar(defaultAvatar);
+          const avatarUrl = await downloadFileAll(avatarId[1], avatarId[2]);
+          const url = URL.createObjectURL(avatarUrl);
+          // console.log(url)
+          setAvatar(url);
         }
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
@@ -86,6 +153,32 @@ const Header = () => {
 
     getUser();
   }, []);
+
+
+
+    const userRole = (role) => {
+    // console.log(role);
+    switch (role) {
+      case 1:
+        return "Admin";
+      case 2:
+        return "Departament boshlig'i";
+      case 3:
+        return "Bo'lim boshlig'i";
+      case 4:
+        return "Bosh mutaxassis";
+      case 5:
+        return "Yetakchi mutaxassis";
+      case 6:
+        return "Birinchi toifali mutaxassis";
+      case 7:
+        return "Shartnoma bo'limi";
+      case 8:
+        return "Tashkilot";
+      default:
+        return "Noma'lum";
+    }
+  };
 
   return (
     <div className="navbar-header border-b border-neutral-200 dark:border-neutral-600">
@@ -176,12 +269,17 @@ const Header = () => {
                   setNotificationOpen(false);
                   setProfileOpen(false);
                 }}
-                className="has-indicator w-10 h-10 bg-neutral-200 dark:bg-neutral-700 rounded-full flex justify-center items-center"
+                className="has-indicator w-10 h-10 bg-neutral-200 dark:bg-neutral-700 rounded-full flex justify-center items-center relative"
               >
                 <iconify-icon
                   icon="mage:email"
                   className="text-neutral-900 dark:text-white text-xl"
                 />
+                {chatUnreadTotal > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#2f6fec] text-white text-[11px] font-bold flex items-center justify-center">
+                    {chatUnreadTotal > 99 ? "99+" : chatUnreadTotal}
+                  </span>
+                )}
               </button>
 
               {messageOpen && (
@@ -190,11 +288,11 @@ const Header = () => {
                   className="z-10 absolute right-0 mt-2 bg-white dark:bg-neutral-700 rounded-2xl overflow-hidden shadow-lg max-w-[394px] w-full"
                 >
                   <div className="py-3 px-4 rounded-lg bg-primary-50 dark:bg-primary-600/25 m-4 flex items-center justify-between gap-2">
-                    <h6 className="text-lg text-neutral-900 font-semibold mb-0">
-                      Messaage
+                    <h6 className="text-lg text-neutral-900 font-semibold mb-0 dark:text-white">
+                      Xabarlar
                     </h6>
                     <span className="w-10 h-10 bg-white dark:bg-neutral-600 text-primary-600 dark:text-white font-bold flex justify-center items-center rounded-full">
-                      05
+                      {chatUnreadTotal > 99 ? "99+" : chatUnreadTotal}
                     </span>
                   </div>
                   <div className="scroll-sm !border-t-0 max-h-[400px] overflow-y-auto">
@@ -239,9 +337,13 @@ const Header = () => {
                     ))}
                   </div>
                   <div className="text-center py-3 px-4">
-                    <a className="text-primary-600 dark:text-primary-600 font-semibold hover:underline text-center">
-                      See All Message{" "}
-                    </a>
+                    <Link
+                      to="/page/chat"
+                      onClick={() => setMessageOpen(false)}
+                      className="text-primary-600 dark:text-primary-400 font-semibold hover:underline text-center"
+                    >
+                      Barcha xabarlar
+                    </Link>
                   </div>
                 </div>
               )}
@@ -366,7 +468,7 @@ const Header = () => {
                       <h6 className="text-lg text-neutral-900 font-semibold mb-0">
                         {user[4][1]} {user[4][2]} 
                       </h6>
-                      <span className="text-neutral-500">Admin</span>
+                      <span className="text-neutral-500">{userRole(user[3])}</span>
                     </div>
                     <button
                       type="button"

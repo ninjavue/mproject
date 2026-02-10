@@ -1,9 +1,10 @@
-import { useEffect } from "react";
-import { sendRpcRequest } from "../../api/webClient";
+import { useEffect, useState } from "react";
+// import { sendRpcRequest } from "../../api/webClient";
 import { METHOD } from "../../api/zirhrpc";
 import "./dashboard.css";
 import { useZirhStref } from "../../context/ZirhContext";
 import { useNavigate } from "react-router-dom";
+import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const Card = ({ label, value, icon, accent = "teal" }) => {
   function hexToRgba(hex, alpha) {
@@ -61,123 +62,182 @@ const Section = ({ title, items }) => (
 );
 
 const DashboardPage = () => {
-  const system = [
-    { label: "Jami:", value: 0, accent: "blue", icon: "bx bxs-circle" },
+
+    const [countS, setCountS] = useState(0);
+  const [statusCountS, setStatusCountS] = useState([]);
+  
+  const [count, setCount] = useState(0);
+  const [statusCount, setStatusCount] = useState([]);
+
+ const system = [
     {
-      label: "To'liq yakunlangan:",
-      value: 0,
+      id: 0,
+      label: "Jami:",
+      value: countS,
+      accent: "blue",
+      icon: "bx bxs-circle",
+    },
+    {
+      id: 1,
+      label: "Shartnoma kelgan:",
+      value:  statusCountS.find((item) => item.id === 1)?.count || 0,
       accent: "green",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 9,
+      label: "To'liq yakunlangan:",
+      value: statusCountS.find((item) => item.id === 9)?.count || 0,
+      accent: "green",
+      icon: "bx bxs-circle-half",
+    },
+    {
+      id: 7,
       label: "Qisman yakunlangan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 7)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 3,
       label: "Xat chiqarilgan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 3)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 4,
       label: "Xat kelgan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 4)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 5,
       label: "Jarayonda:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 5)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 67,
       label: "O'tib ketgan:",
       value: 0,
       accent: "red",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 6,
       label: "Hisobotga chiqarilgan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 6)?.count || 0,
       accent: "blue",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 8,
       label: "Qayta ekspertizada:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 8)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 10,
       label: "Vaqtincha to'xtatilgan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 10)?.count || 0,
       accent: "red",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 2,
       label: "Tizimga qo'shilgan:",
-      value: 0,
+      value: statusCountS.find((item) => item.id === 2)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
   ];
 
-  const mobile = [
-    { label: "Jami:", value: 4, accent: "blue", icon: "bx bxs-circle" },
+   const mobile = [
     {
-      label: "To'liq yakunlangan:",
-      value: 0,
+      id: 0,
+      label: "Jami:",
+      value: count,
+      accent: "blue",
+      icon: "bx bxs-circle",
+    },
+    {
+      id: 1,
+      label: "Shartnoma kelgan:",
+      value: statusCount.find((item) => item.id === 1)?.count || 0,
       accent: "green",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 9,
+      label: "To'liq yakunlangan:",
+      value: statusCount.find((item) => item.id === 9)?.count || 0,
+      accent: "green",
+      icon: "bx bxs-circle-half",
+    },
+    {
+      id: 7,
       label: "Qisman yakunlangan:",
-      value: 1,
+      value: statusCount.find((item) => item.id === 7)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 3,
       label: "Xat chiqarilgan:",
-      value: 1,
+      value: statusCount.find((item) => item.id === 3)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 4,
+      label: "Xat kelgan:",
+      value: statusCount.find((item) => item.id === 4)?.count || 0,
+      accent: "muted",
+      icon: "bx bxs-circle-quarter",
+    },
+    {
+      id: 5,
       label: "Jarayonda:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 5)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 67,
       label: "O'tib ketgan:",
       value: 0,
       accent: "red",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 6,
       label: "Hisobotga chiqarilgan:",
-      value: 2,
+      value: statusCount.find((item) => item.id === 6)?.count || 0,
       accent: "blue",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 8,
       label: "Qayta ekspertizada:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 8)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 10,
       label: "Vaqtincha to'xtatilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 10)?.count || 0,
       accent: "red",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 2,
       label: "Tizimga qo'shilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 2)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
@@ -185,6 +245,7 @@ const DashboardPage = () => {
 
   const { stRef } = useZirhStref();
   const navigate = useNavigate();
+  
 
   useEffect(() => {
     const getUser = async () => {
@@ -197,7 +258,50 @@ const DashboardPage = () => {
     };
 
     getUser();
+    getExpertizeCount();
+    getExpertizeCount1();
   }, []);
+
+
+    const getExpertizeCount = async () => {
+      try {
+        const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_COUNT, { 3: 2 });
+        if (res.status === METHOD.OK) {
+          const totalCount = res[1]?.reduce(
+            (sum, item) => sum + (item.count || 0),
+            0,
+          );
+  
+          const allCount = res[1]?.map((item) => {
+            return { id: item._id, count: item.count || 0 };
+          });
+          setCount(totalCount);
+          setStatusCount(allCount);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+       const getExpertizeCount1 = async () => {
+      try {
+        const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_COUNT, { 3: 1 });
+        if (res.status === METHOD.OK) {
+          const totalCount = res[1]?.reduce(
+            (sum, item) => sum + (item.count || 0),
+            0,
+          );
+  
+          const allCount = res[1]?.map((item) => {
+            return { id: item._id, count: item.count || 0 };
+          });
+          setCountS(totalCount);
+          setStatusCountS(allCount);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    };
 
   return (
     <div

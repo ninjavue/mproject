@@ -2246,15 +2246,115 @@ const SystemWord = () => {
     setTocPages(pages);
   }, [tocItemHtml]);
 
+  // Sarlavha matnini solishtirish uchun normalizatsiya (bo'shliq, apostrof)
+  const normalizeTitle = (s) =>
+    (s || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/[\u2018\u2019\u0027]/g, "'");
+
+  // newVuln elementlari blok (bitta div/p) yoki to'liq sahifa HTML bo'lishi mumkin; barchasini bloklar ro'yxatiga aylantiramiz
+  const flattenNewVulnToBlocks = (items) => {
+    const blocks = [];
+    const parser = new DOMParser();
+    (items || []).forEach((html) => {
+      if (!html || typeof html !== "string") return;
+      const doc = parser.parseFromString(html, "text/html");
+      const body = doc.body;
+      if (!body) return;
+      let children = Array.from(body.children);
+      if (children.length === 1 && children[0].children.length > 1) {
+        children = Array.from(children[0].children);
+      }
+      if (children.length > 1) {
+        children.forEach((el) => blocks.push(el.outerHTML));
+      } else if (children.length === 1) {
+        blocks.push(children[0].outerHTML);
+      } else {
+        const inner = body.innerHTML?.trim();
+        if (inner) blocks.push(inner);
+      }
+    });
+    return blocks;
+  };
+
+  // Zaiflikni jadvaldan va batafsil bo'limdan o'chirish (darajasi, nomi, tarifi, oqibatlari, tavsiyalar)
+  const deleteVulnerability = (row) => {
+    if (!row || row?.type !== "vuln") return;
+    const level = Number(row?.level);
+    const name = (row?.name || "").trim();
+    const resourceLabel = (row?.resourceLabel || "").trim();
+    if (!name) return;
+    const nameNorm = normalizeTitle(name);
+
+    const matchVuln = (v) => {
+      const vLevel = Number(v?.a1);
+      const vName = stripHtml(v?.a3 || "").trim();
+      const vResource = extractResourceHost(v?.a4 || "") || "Umumiy";
+      return vLevel === level && normalizeTitle(vName) === nameNorm && vResource === resourceLabel;
+    };
+
+    if (level === 1) setHighVuln((prev) => (prev || []).filter((v) => !matchVuln(v)));
+    else if (level === 2) setMediumVuln((prev) => (prev || []).filter((v) => !matchVuln(v)));
+    else if (level === 3) setLowVuln((prev) => (prev || []).filter((v) => !matchVuln(v)));
+
+    setAllVuln((prev) => (prev || []).filter((v) => !matchVuln(v)));
+
+    // Pastdagi batafsil bo'limdan: sarlavha, darajasi, tarifi, oqibatlari, tavsiyalar — barcha bloklarni o'chirish
+    // newVuln sahifa HTML yoki bloklar bo'lishi mumkin, avval bloklarga yoyib keyin o'chiramiz
+    setNewVuln((prev) => {
+      const blocks = flattenNewVulnToBlocks(prev);
+      const result = [];
+      let i = 0;
+      while (i < blocks.length) {
+        const html = blocks[i];
+        if (!html || typeof html !== "string") {
+          i++;
+          continue;
+        }
+        if (!html.includes("system-subtitle")) {
+          result.push(html);
+          i++;
+          continue;
+        }
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const el = doc.querySelector(".system-subtitle");
+        const text = (el?.textContent || "").trim();
+        const titleMatch = text.match(/^2\.2\.1\.\d+\.\s*(.+)$/);
+        const blockTitleNorm = titleMatch ? normalizeTitle(titleMatch[1]) : "";
+        if (!titleMatch || blockTitleNorm !== nameNorm) {
+          result.push(html);
+          i++;
+          continue;
+        }
+        let end = i + 1;
+        while (end < blocks.length) {
+          const nextHtml = blocks[end];
+          if (nextHtml && nextHtml.includes("system-subtitle")) {
+            const nextDoc = new DOMParser().parseFromString(nextHtml, "text/html");
+            const nextEl = nextDoc.querySelector(".system-subtitle");
+            const nextText = (nextEl?.textContent || "").trim();
+            if (/^2\.2\.1\.\d+\.\s/.test(nextText)) break;
+          }
+          end++;
+        }
+        i = end;
+      }
+      return result;
+    });
+  };
+
   const renderRiskTableBody = (pageRows, keyPrefix) => {
     const rows = Array.isArray(pageRows) ? pageRows : [];
     const meta = computeRiskLevelRowspanMeta(rows);
+    const colspan = editing ? 4 : 3;
 
     return rows.map((row, idx) => {
       if (row?.type === "resource") {
         return (
           <tr key={`${keyPrefix}-r-${idx}`} className="risk-resource">
-            <td colSpan={3}>“{row.label}” resursi</td>
+            <td colSpan={colspan}>"{row.label}” resursi</td>
           </tr>
         );
       }
@@ -2270,6 +2370,18 @@ const SystemWord = () => {
           )}
           <td className="risk-name">{row?.name}</td>
           <td className="risk-count">{row?.count}</td>
+          {editing && (
+            <td className="risk-delete p-1" contentEditable={false}>
+              <button
+                type="button"
+                onClick={() => deleteVulnerability(row)}
+                className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center mx-auto"
+                title="Zaiflikni o'chirish"
+              >
+                <iconify-icon icon="material-symbols:delete" width="18" height="18" />
+              </button>
+            </td>
+          )}
         </tr>
       );
     });
@@ -2371,17 +2483,14 @@ const SystemWord = () => {
 
       const payload = {
         19: id,
-        11: [
+        [field]: [
           {
             a1: docVuln?.vulnCount,
             a2: level,
-            a3: docVuln?.vuln?.[1]?.[1],
-            // a4: docVuln?.resource || "",
+            a3: docVuln?.vuln?.[1]?.[1]
           },
         ],
       };
-
-      console.log(payload)
 
       // console.log(docVuln);
       const newItem = payload?.[field]?.[0];
@@ -2396,14 +2505,13 @@ const SystemWord = () => {
       setPlatform("umumiy");
       setVulnUm((prev) => [...prev, payload]);
 
-      // return;
+      return;
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
-      console.log(res)
 
-      // if (res.status == METHOD.OK) {
-      //   if (field === 11) {
-      //   }
-      // }
+      if (res.status == METHOD.OK) {
+        if (field === 11) {
+        }
+      }
 
       // console.log("Yuborilgan payload:", payload);
       // console.log("Response:", res);
@@ -2568,7 +2676,7 @@ const SystemWord = () => {
       });
     });
 
-    console.log(allBlocks);
+    // console.log(allBlocks);
 
     // pagination qayta hisoblanadi
     const paged = paginateContent(allBlocks);
@@ -2579,7 +2687,7 @@ const SystemWord = () => {
       const tables = document.querySelectorAll("table.expert-table");
       const data = {};
 
-      console.log("Jami topilgan jadvallar:", tables.length);
+      // console.log("Jami topilgan jadvallar:", tables.length);
 
       tables.forEach((table, idx) => {
         // Agar jadvalda tbody bo'lsa, uning qatorlarini olamiz
@@ -2648,7 +2756,7 @@ const SystemWord = () => {
 
     const field8Data = [tablesAndLinksJson, ...paged];
 
-    console.log("Saving field8Data:", field8Data);
+    // console.log("Saving field8Data:", field8Data);
 
     const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
       19: id,
@@ -2689,7 +2797,7 @@ const SystemWord = () => {
       });
 
 
-      console.log(imageRes)
+      // console.log(imageRes)
 
       const fileId = imageRes?.fileId || imageRes?.result?.fileId;
       if (fileId && imgElement) {
@@ -2707,10 +2815,10 @@ const SystemWord = () => {
         19: id,
         15: {1:fileId, 2:imageRes?.size},
       });
-      console.log(updateRes)
+      // console.log(updateRes)
       return fileId || null;
     } catch (error) {
-      console.log(error);
+      // console.log(error);
       return null;
     }
   };
@@ -2750,7 +2858,6 @@ const SystemWord = () => {
         document.querySelectorAll('.page-content img[data-file-id]'),
       );
       for (const img of imgs) {
-        console.log(img)
         if (cancelled) return;
         if (!img) continue;
         if (img.dataset.srcResolved === "true") continue;
@@ -2766,7 +2873,6 @@ const SystemWord = () => {
         try {
           const url = await downloadFileAll(fid, size);
           if (cancelled) return;
-          cnso
           if (url) {
             img.src = url;
             img.dataset.srcResolved = "true";
@@ -2807,7 +2913,7 @@ const SystemWord = () => {
 
       <button
         onClick={saveAllChanges}
-        className="fixed bottom-10 z-50 right-10 shadow-lg flex justify-center items-center w-[60px] h-[60px] bg-blue-500 text-white text-3xl  rounded-full cursor-pointer hover:bg-blue-600"
+        className="fixed bottom-10 z-50 right-10 shadow-lg flex justify-center items-center w-[60px] h-[60px] bg-[#bb9769] text-white text-3xl  rounded-full cursor-pointer hover:bg-[#a07f5a]"
       >
         <iconify-icon icon="material-symbols:save"></iconify-icon>
       </button>
@@ -2815,7 +2921,7 @@ const SystemWord = () => {
       <div className="word-container dark:text-[#333] relative " ref={printRef}>
         <div className="flex justify-end mb-4 gap-2 print-btns sticky right-9 top-[80px]">
           <button
-            className="bg-blue-600 hvoer:bg-blue-700 text-white px-4 py-2 rounded mt-4"
+            className="bg-[#bb9769] hover:bg-[#a07f5a] text-white px-4 py-2 rounded mt-4"
             onClick={() => openModal(expertize)}
           >
             Zaiflik qo'shish
@@ -2823,7 +2929,7 @@ const SystemWord = () => {
           <button
             onClick={handlePrint}
             className={`mt-4 px-4 py-2 rounded text-white  items-end flex gap-2 
-    ${loading ? "" : "bg-blue-600 hover:bg-blue-700"}
+    ${loading ? "" : "bg-[#bb9769] hover:bg-[#a07f5a]"}
   `}
           >
             <iconify-icon
@@ -2853,7 +2959,7 @@ const SystemWord = () => {
               </div>
             ) : (
               <div className="change-btn flex gap-2 cursor-pointer">
-                <div className="bg-blue-600 hover:bg-blue-700">
+                <div className="bg-[#bb9769] hover:bg-[#a07f5a]">
                   <FaPen /> <span>Tahrirlash</span>
                 </div>
               </div>
@@ -3402,6 +3508,7 @@ const SystemWord = () => {
                       <th>Xavflilik darajasi</th>
                       <th>Aniqlangan zaiflik</th>
                       <th>Soni</th>
+                      {editing && <th style={{ width: "48px" }}></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -3469,6 +3576,7 @@ const SystemWord = () => {
                             <th>Xavflilik darajasi</th>
                             <th>Aniqlangan zaiflik</th>
                             <th>Soni</th>
+                            {editing && <th style={{ width: "48px" }}></th>}
                           </tr>
                         </thead>
                         <tbody>{renderRiskTableBody(p.left || [], `riskl-${pageIdx}`)}</tbody>
@@ -3481,6 +3589,7 @@ const SystemWord = () => {
                               <th>Xavflilik darajasi</th>
                               <th>Aniqlangan zaiflik</th>
                               <th>Soni</th>
+                              {editing && <th style={{ width: "48px" }}></th>}
                             </tr>
                           </thead>
                           <tbody>

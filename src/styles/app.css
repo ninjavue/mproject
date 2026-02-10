@@ -4,6 +4,7 @@
   border-radius: 16px;
   transition: background-color 0.6s ease;
 }
+
 .message-highlight-bubble {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) inset;
   transition: box-shadow 0.6s ease;
@@ -61,7 +62,7 @@
   display: none;
 }
 
-.sidebar.active:hover .logo-head{
+.sidebar.active:hover .logo-head {
   display: flex;
 }
 
@@ -808,7 +809,7 @@ table.depart-table {
   align-items: center;
 }
 
-.docx-wrapper > section {
+.docx-wrapper>section {
   background-color: #ffffff;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
   margin: 0 auto 24px;
@@ -1259,7 +1260,7 @@ object #save {
   align-items: start;
 }
 
-.system-risk-columns > .system-risk-table {
+.system-risk-columns>.system-risk-table {
   align-self: start;
   height: auto;
 }
@@ -1313,14 +1314,14 @@ background-item.is-visible:not(.backwards) {
 } */
 
 
-.docx-wrapper{
+.docx-wrapper {
   min-height: 97.5vh;
   background-color: #333 !important;
 }
 
 
 
-.dashboard-main-body{
+.dashboard-main-body {
   position: relative;
   min-height: 89vh;
   background-image:
@@ -1331,23 +1332,23 @@ background-item.is-visible:not(.backwards) {
   background-repeat: repeat;
 }
 
-.dark .dashboard-main-body{
+.dark .dashboard-main-body {
   background-image: none;
 }
 
-.menu-link .menu-icon{
+.menu-link .menu-icon {
   color: #bb9769;
 }
 
-.menu-link-active .menu-icon{
+.menu-link-active .menu-icon {
   color: #ffffff;
 }
 
-.sidebar.active .logo-text{
+.sidebar.active .logo-text {
   display: none;
 }
 
-.sidebar.active:hover .logo-text{
+.sidebar.active:hover .logo-text {
   display: block;
 }
 
@@ -1361,7 +1362,7 @@ background-item.is-visible:not(.backwards) {
 }
 
 
-.a4.system-c{
+.a4.system-c {
   padding-left: 70px !important;
   padding-right: 70px !important;
 }
@@ -1373,13 +1374,13 @@ background-item.is-visible:not(.backwards) {
 
 
 
-.word-container .a4.system-c .page-content table{
+.word-container .a4.system-c .page-content table {
   width: 100% !important;
   max-width: 100% !important;
   font-size: 17px !important;
 }
 
-.bg-sign{
+.bg-sign {
   position: relative;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
@@ -1390,8 +1391,49 @@ background-item.is-visible:not(.backwards) {
 }
 
 
-.word-container .a4.system-c .page-content.new-content{
+.word-container .a4.system-c .page-content.new-content {
   height: 812px;
   min-height: 812px;
   max-height: 812px;
+}
+
+
+.loaderSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #FFF;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+
+
+.status-step-group {
+  position: relative;
+}
+
+.status-step-group::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 2px;
+  background: #000;
+  left: -4px;
+  top: 14px
+}
+.status-step-group:first-child::before {
+  display: none;
 }

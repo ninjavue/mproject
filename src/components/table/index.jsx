@@ -10,6 +10,7 @@ import { downloadFileViaRpcNew } from "../../rpc/fileRpc";
 const CellValue = ({
   text,
   badge,
+  fileSize,
   download,
   button,
   linkToWord,
@@ -21,7 +22,7 @@ const CellValue = ({
       {url ? (
         <div
           className="flex items-center gap-2 font-bold text-gray-500"
-          onClick={() => onOpen?.(url, text)}
+          onClick={() => onOpen?.(url, text, fileSize)}
         >
           {text}
           {badge && (
@@ -119,6 +120,8 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
   const [printImages, setPrintImages] = React.useState([]);
   const printComponentRef = React.useRef(null);
 
+
+  // console.log(expData);
   const handleReactToPrint = useReactToPrint({
     contentRef: printComponentRef,
     documentTitle: "Hujjat",
@@ -135,8 +138,9 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
     return `${day}.${month}.${year}`;
   };
 
-  const openDoc = async (url, name) => {
-    const blob = await downloadFileAll(url);
+  const openDoc = async (url, name, fileSize) => {
+    // console.log(url, name, fileSize);
+    const blob = await downloadFileAll(url, name, fileSize);
     const fileName = (name || "").toLowerCase();
     const mime = blob.type || "";
 
@@ -157,6 +161,7 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
       mime === "application/msword" ||
       mime === "application/octet-stream"
     ) {
+      // console.log("word file");
       setPreviewUrl(null);
       setWordBlob(blob);
       setWordError(null);
@@ -167,18 +172,21 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
     alert("Fayl turi aniqlanmadi");
   };
 
-  const downloadFileAll = async (id) => {
+  const downloadFileAll = async (id, fileName, fileSize) => {
     const blob = await downloadFileViaRpcNew(
       stRef,
       id,
-      expData?.files[0]?.[2],
+      fileName ?? expData?.files[0]?.[2],
+      fileSize ?? expData?.files[0]?.[3],
       (p) => {
-        console.log(p);
+        // console.log(p);
         setUploadProgress(p);
         setIsUploading(true);
         if (p === 100) setIsUploading(false);
       },
     );
+
+    // console.log(blob);
 
     return blob;
   };
@@ -191,11 +199,33 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
     setOpen(false);
   };
 
+  const getArrayBufferFromBlob = React.useCallback(async (blob) => {
+    if (!blob) return null;
+    if (typeof blob.arrayBuffer === "function") {
+      return await blob.arrayBuffer();
+    }
+    if (blob instanceof Blob) {
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+      });
+    }
+    return null;
+  }, []);
+
   React.useEffect(() => {
     const renderDocx = async () => {
       if (!wordBlob || !docxContainerRef.current) return;
       try {
-        const buffer = await wordBlob.arrayBuffer();
+        const buffer = await getArrayBufferFromBlob(wordBlob);
+        if (!buffer) {
+          setWordError(
+            "Word faylini ochishda xatolik. Faylni qayta yuklab ko‘ring.",
+          );
+          return;
+        }
         docxContainerRef.current.innerHTML = "";
         await renderAsync(buffer, docxContainerRef.current, null, {
           className: "docx",
@@ -210,14 +240,15 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
       } catch (e) {
         console.error("docx render err", e);
         setWordError(
-          "Word faylini ochishda xatolik. Iltimos .docx formatida yuboring.",
+          "Word faylini ochishda xatolik. Iltimos .docx formatida yuboring yoki faylni qayta yuklab ko‘ring.",
         );
       }
     };
     renderDocx();
-  }, [wordBlob]);
+  }, [wordBlob, getArrayBufferFromBlob]);
 
   const handlePrint = async () => {
+    // console.log(expData)
     if (isPrinting) return;
     setIsPrinting(true);
     try {
@@ -275,6 +306,33 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
       setIsPrinting(false);
     }
   };
+
+
+  const getStatus = (status) => {
+    switch (status) {
+      case 1:
+        return "Shartnoma kelgan";
+      case 2:
+        return "Tizimga qo'shilgan";
+      case 3:
+        return "Xat chiqarilgan";
+      case 4:
+        return "Xat kelgan";
+      case 5:
+        return "Jarayon tekshirilmoqda";
+      case 6:
+        return "Hisobotga chiqarilgan";
+      case 7:
+        return "Qisman yakunlangan";
+      case 8:
+        return "Qayta ekspertizada";
+      case 9:
+        return "To'liq yakunlangan";
+      case 10:
+        return "Vaqtincha to'xtatilgan";
+      default:
+        return "Noma'lum";
+    } };
 
   return (
     <>
@@ -371,6 +429,7 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
             <CellValue
               text={expData?.files[0]?.[2]}
               url={expData?.files[0]?.[1]}
+              fileSize={expData?.files[0]?.[3]}
               download
               onOpen={openDoc}
             />
@@ -402,9 +461,9 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
 
         <Row4
           label1="Qaysi bosqichda"
-          value1={<CellValue text="Hisobotga chiqarilgan" />}
-          label2="Hisobot raqami"
-          value2={<CellValue text="234-xdfu-son" />}
+          value1={<CellValue text={getStatus(expData?.status)} />}
+          label2="Hisobot yuborilgan sanasi"
+          value2={<CellValue text="" />}
         />
 
         <Row4
@@ -416,14 +475,28 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
 
         <Row4
           label1="Xat chiqarilgan"
-          value1={<CellValue text="IM43476306.pdf" download />}
+          value1={
+            <CellValue
+              text={expData?.files[1]?.[2]}
+              url={expData?.files[1]?.[1]}
+              fileSize={expData?.files[1]?.[3]}
+              download
+              onOpen={openDoc}
+            />}
           label2="Mobil dastur"
           value2={<CellValue text="" />}
         />
 
         <Row4
           label1="Xat kelgan"
-          value1={<CellValue text="496M.pdf" download />}
+          value1={
+            <CellValue
+              text={expData?.files[2]?.[2]}
+              url={expData?.files[2]?.[1]}
+              fileSize={expData?.files[2]?.[3]}
+              download
+              onOpen={openDoc}
+            />}
           label2="Desktop dastur"
           value2={<CellValue text="" />}
         />
@@ -432,19 +505,33 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
           label1="Rozilik xati"
           value1={<CellValue text="" />}
           label2="Vaqtincha to'xtatilgan"
-          value2={<CellValue download />}
+          value2={
+            <CellValue
+              text={expData?.files[4]?.[2]}
+              url={expData?.files[4]?.[1]}
+              fileSize={expData?.files[4]?.[3]}
+              download
+              onOpen={openDoc}
+            />}
         />
 
         <Row4
           label1="Qayta expertiza"
-          value1={<CellValue text="" />}
+           value1={
+            <CellValue
+              text={expData?.files[5]?.[2]}
+              url={expData?.files[5]?.[1]}
+              fileSize={expData?.files[5]?.[3]}
+              download
+              onOpen={openDoc}
+            />}
           label2="To'liq yakunlangan"
           value2={<CellValue text="" />}
         />
 
         <Row4
           label1="Hisob raqami"
-          value1={<CellValue text="" />}
+          value1={<CellValue text={expData?.repport} />}
           label2="Summa"
           value2={<CellValue text={expData?.inn.toLocaleString()} />}
         />
@@ -465,9 +552,20 @@ const ExpertizaTable = ({ expData, link = "word" }) => {
 
         <Row4
           label1="To‘liq hisobot"
-          value1={<CellValue text="Test(iOS).pdf" download />}
+          value1={
+            <CellValue
+              text={""}
+          
+            />}
           label2="Dastlabki hash"
-          value2={<CellValue text="342-M.rar" download />}
+          value2={
+            <CellValue
+              text={expData?.files[8]?.[2]}
+              url={expData?.files[8]?.[1]}
+              fileSize={expData?.files[8]?.[3]}
+              download
+              onOpen={openDoc}
+             />}
         />
 
         <Row4

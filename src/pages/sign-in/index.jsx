@@ -38,11 +38,16 @@ const SignIn = () => {
   const { stRef } = useZirhStref();
   const [randomText, setRandomText] = useState("");
   const captchaRef = useRef(null);
+  const captchaRef2 = useRef(null);
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [signOne, setSignOne] = useState(false);
 
   const refreshCaptchaFromParent = () => {
     captchaRef.current?.refreshCaptcha();
+  };
+  const refreshCaptchaFromParent2 = () => {
+    captchaRef2.current?.refreshCaptcha();
   };
 
   const deriveKeyPairFromPassword = (password) => {
@@ -74,6 +79,8 @@ const SignIn = () => {
       const k = ec.genKeyPair().getPrivate();
       const R = ec.g.mul(k).encode("hex", false);
 
+      setOpen(false);
+      setSignOne(true);
       const res1 = await sendRpcRequest(stRef, METHOD.LOGIN_CHECK, {
         1: email,
         2: R,
@@ -83,13 +90,17 @@ const SignIn = () => {
       });
 
       if (res1.status !== METHOD.OK) {
+        setSignOne(false);
         if (res1.status === METHOD.CAPTCHA_ERR) {
-          toast.error("Captcha natijasi xato!");
           setOpen(false);
+          toast.error("Captcha natijasi xato!");
           refreshCaptchaFromParent();
           return;
         } else if (res1.status == METHOD.Not_Found) {
-          if (res1.result["1"] == "user not found") {
+          toast.error("Bunday foydalanuvchi mavjud emas!");
+          setOpen(false);
+          refreshCaptchaFromParent();
+          if (res1["1"] == "user not found") {
             toast.error("Bunday foydalanuvchi mavjud emas!");
             setOpen(false);
             refreshCaptchaFromParent();
@@ -97,11 +108,6 @@ const SignIn = () => {
         }
         setOpen(false);
         return;
-      }
-      if (res1.status == METHOD.OK) {
-        toast.success(email + " pochta manziliga tasdiqlash kodi yuborildi");
-        setSeconds(120);
-        setIsRunning(true);
       }
 
       const uuidR = res1[1].id;
@@ -117,19 +123,25 @@ const SignIn = () => {
         1: uuidR,
         2: newS,
       });
+
       if (res2.status === METHOD.BAD_REQUEST) return;
 
       if (res2.status == METHOD.PASSWORD_ERR) {
+        setSignOne(false);
         toast.error("Parol xato!");
-        setOpen(false);
         return;
       }
       if (res2.status === METHOD.OK) {
         setUuidCaptcha(res2[1].uuid);
         setStep(2);
         setOpen(false);
+        setSignOne(false);
+        toast.success(email + " pochta manziliga tasdiqlash kodi yuborildi");
+        setSeconds(120);
+        setIsRunning(true);
       }
     } catch (err) {
+      setSignOne(false);
       toast.error("Xatolik yuz berdi!");
     }
   };
@@ -209,6 +221,7 @@ const SignIn = () => {
     }
 
     if (password.length < 8) {
+      toast.error("Parol kamida 8 ta belgidan iborat bo'lishi kerak!");
       setOpen(false);
       return;
     }
@@ -217,6 +230,7 @@ const SignIn = () => {
   };
 
   const handleClickOpen2 = (e) => {
+    refreshCaptchaFromParent2();
     setOpen2(true);
   };
 
@@ -236,7 +250,7 @@ const SignIn = () => {
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${protocol}://10.10.115.40:8080/wsock`);
+    const ws = new WebSocket(`${protocol}://10.10.115.40/wsock`);
 
     ws.onopen = () => console.log("✅ WS connected");
     ws.onmessage = (e) => console.log("📩 message", e.data);
@@ -319,10 +333,15 @@ const SignIn = () => {
                   </div>
                   <button
                     type="button"
-                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
+                    disabled={signOne}
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#bb9769] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#bb9769] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0 disabled:opacity-70 disabled:pointer-events-none disabled:hover:translate-y-0"
                     onClick={handleClickOpen}
                   >
-                    Kirish
+                    {signOne ? (
+                      <span className="loaderSpinner"></span>
+                    ) : (
+                      "Kirish"
+                    )}
                   </button>
                 </form>
               </div>
@@ -335,7 +354,7 @@ const SignIn = () => {
                 <div className="mb-5">
                   <div className="w-full justify-center flex items-center gap-[5px] mb-8">
                     <img
-                      src="../assets/images/jamoa.jpg"
+                      src="../assets/jamoa.png"
                       className="w-[90px] h-[100px]"
                       alt="Jamoa"
                     />
@@ -367,7 +386,7 @@ const SignIn = () => {
                   </div>
                   <button
                     type="button"
-                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#bb9769] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#bb9769] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen2}
                   >
                     Tasdiqlash
@@ -390,7 +409,11 @@ const SignIn = () => {
       >
         <DialogTitle>{""}</DialogTitle>
         <DialogContent>
-          <Captcha ref={captchaRef} onSolve={handleCaptchaSolve} />
+          <Captcha
+            ref={captchaRef}
+            onSolve={handleCaptchaSolve}
+            autoFetch={false}
+          />
         </DialogContent>
         <DialogActions></DialogActions>
       </Dialog>
@@ -406,7 +429,11 @@ const SignIn = () => {
       >
         <DialogTitle>{""}</DialogTitle>
         <DialogContent>
-          <Captcha ref={captchaRef} onSolve={handleCaptchaSolve2} />
+          <Captcha
+            ref={captchaRef2}
+            onSolve={handleCaptchaSolve2}
+            autoFetch={false}
+          />
         </DialogContent>
         <DialogActions></DialogActions>
       </Dialog>

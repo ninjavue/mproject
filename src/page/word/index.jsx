@@ -903,7 +903,7 @@ const Word = () => {
     // console.log(id);
     try {
       const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_ID, { 1: id });
-      console.log(res)
+      // console.log(res)
       if (res.status === METHOD.OK) {
         setContractDate(formatDate(res[1]?.[2][1]));
         setHtmlContent(res[1]?.[8]);
@@ -1014,7 +1014,7 @@ const Word = () => {
       }
       // console.log(res);
     } catch (error) {
-      console.log(error);
+      // console.log(error);
       console.log("Xatolik yuz berdi!");
     }
   };
@@ -1256,7 +1256,7 @@ const Word = () => {
 
   const handleSubmit = async (docVuln) => {
     try {
-      console.log(docVuln);
+      // console.log(docVuln);
       const level = docVuln?.vuln?.[1]?.[0];
       if (!level) return;
 
@@ -1510,7 +1510,7 @@ const Word = () => {
       });
     });
 
-    console.log(allBlocks);
+    // console.log(allBlocks);
 
     // pagination qayta hisoblanadi
     const paged = paginateContent(allBlocks);
@@ -1521,7 +1521,7 @@ const Word = () => {
       const tables = document.querySelectorAll("table.expert-table");
       const data = {};
 
-      console.log("Jami topilgan jadvallar:", tables.length);
+      // console.log("Jami topilgan jadvallar:", tables.length);
 
       tables.forEach((table, idx) => {
         // Agar jadvalda tbody bo'lsa, uning qatorlarini olamiz
@@ -1569,7 +1569,7 @@ const Word = () => {
 
     const field8Data = [tablesJson, ...paged];
 
-    console.log("Saving field8Data:", field8Data);
+    // console.log("Saving field8Data:", field8Data);
 
     const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
       19: id,

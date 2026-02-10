@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { use, useEffect, useRef, useState } from "react";
 import "../dashboard/dashboard.css";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import Button from "@mui/material/Button";
 import { styled } from "@mui/material/styles";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import SaveIcon from "@mui/icons-material/Save";
 import { DesktopDatePicker } from "@mui/x-date-pickers/DesktopDatePicker";
 import Select from "react-select";
 
@@ -18,7 +19,7 @@ import toast from "react-hot-toast";
 import { sendRpcRequest } from "../../rpc/rpcClient";
 import { downloadFileViaRpc, uploadFileViaRpc } from "../../rpc/fileRpc";
 
-const Card = ({ label, value, icon, accent = "teal" }) => {
+const Card = ({ label, value, icon, accent = "teal", onClick, isSelected }) => {
   function hexToRgba(hex, alpha) {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -27,7 +28,13 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
   }
   return (
     <div
-      className="stat-card group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433]"
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+      className={`stat-card group relative overflow-hidden rounded-2xl border bg-white/80 bg-gradient-to-br from-white via-white to-slate-50
+         shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-[#2b2c40]/80 
+         dark:from-[#2b2c40] dark:via-[#2b2c40] dark:to-[#222433] ${isSelected ? "-translate-y-1 shadow-xl" : "border-slate-200/70"} ${onClick ? "cursor-pointer" : ""}`}
       data-accent={accent}
     >
       <div className="stat-card__top">
@@ -56,7 +63,7 @@ const Card = ({ label, value, icon, accent = "teal" }) => {
   );
 };
 
-const Section = ({ title, items }) => (
+const Section = ({ title, items, selectedStatusId, onCardClick }) => (
   <section className="stats-section">
     <h3 className="stats-section__title">{title}</h3>
     <div className="stats-grid">
@@ -67,6 +74,8 @@ const Section = ({ title, items }) => (
           value={it.value}
           icon={it.icon}
           accent={it.accent}
+          isSelected={selectedStatusId === it.id}
+          onClick={onCardClick ? () => onCardClick(it.id) : undefined}
         />
       ))}
     </div>
@@ -99,6 +108,7 @@ const Expertise = () => {
   const [oqibatlarText, setOqibatlarText] = useState("");
   const [tavsiyaText, setTavsiyaText] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen1, setDrawerOpen1] = useState(false);
   const [isUpdate, setIsUpdate] = useState(false);
   const [changedFields, setChangedFields] = useState([]);
   const [fileName, setFileName] = React.useState(null);
@@ -107,13 +117,16 @@ const Expertise = () => {
   const { stRef } = useZirhStref();
   const [items, setItems] = useState([]);
   const [editId, setEditId] = useState(null);
+  const [savingField, setSavingField] = useState(null); // 'startDate' | 'initialHash' | 'finalHash'
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [expertize, setExpertize] = useState([]);
   const [isPage, setIsPage] = useState(1);
   const [justPage, setJustPage] = useState(0);
   const [nextPage, setNextPage] = useState(null);
   const [signleExp, setSingleExp] = useState(null);
+  const [user, setUser] = useState({});
 
   const [formData, setFormData] = useState({
     orgName: "",
@@ -131,6 +144,8 @@ const Expertise = () => {
     orgType: "",
     ordEndDate: "",
     system: 1,
+    initialHashFile: null,
+    finalHashFile: null,
   });
   const [editItemOld, setEditItemOld] = useState({
     orgName: "",
@@ -147,67 +162,105 @@ const Expertise = () => {
     resPer: "",
     orgType: "",
     ordEndDate: "",
+    initialHashFile: null,
+    finalHashFile: null,
   });
 
+  const [selectedProcessStep, setSelectedProcessStep] = useState("");
+  const [processStepDate, setProcessStepDate] = useState(null);
+  const [processStepFile, setProcessStepFile] = useState(null);
+  const [processStepFileName, setProcessStepFileName] = useState("");
+  const [processStepNote, setProcessStepNote] = useState("");
+  const [savedProcessStepStatus, setSavedProcessStepStatus] = useState("");
+  const [savedProcessStepDate, setSavedProcessStepDate] = useState(null);
+  const [savedProcessStepFileName, setSavedProcessStepFileName] = useState("");
+  const [savedProcessStepNote, setSavedProcessStepNote] = useState("");
+  const [count, setCount] = useState(0);
+  const [statusCount, setStatusCount] = useState([]);
+  const [selectedStatusId, setSelectedStatusId] = useState(0);
+
   const system = [
-    { label: "Jami:", value: 0, accent: "blue", icon: "bx bxs-circle" },
     {
-      label: "To'liq yakunlangan:",
-      value: 0,
+      id: 0,
+      label: "Jami:",
+      value: count,
+      accent: "blue",
+      icon: "bx bxs-circle",
+    },
+    {
+      id: 1,
+      label: "Shartnoma kelgan:",
+      value: statusCount.find((item) => item.id === 1)?.count || 0,
       accent: "green",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 9,
+      label: "To'liq yakunlangan:",
+      value: statusCount.find((item) => item.id === 9)?.count || 0,
+      accent: "green",
+      icon: "bx bxs-circle-half",
+    },
+    {
+      id: 7,
       label: "Qisman yakunlangan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 7)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 3,
       label: "Xat chiqarilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 3)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 4,
       label: "Xat kelgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 4)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 5,
       label: "Jarayonda:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 5)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 67,
       label: "O'tib ketgan:",
       value: 0,
       accent: "red",
       icon: "bx bxs-circle-half",
     },
     {
+      id: 6,
       label: "Hisobotga chiqarilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 6)?.count || 0,
       accent: "blue",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 8,
       label: "Qayta ekspertizada:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 8)?.count || 0,
       accent: "aqua",
       icon: "bx bxs-circle-quarter",
     },
     {
+      id: 10,
       label: "Vaqtincha to'xtatilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 10)?.count || 0,
       accent: "red",
       icon: "bx bxs-circle-three-quarter",
     },
     {
+      id: 2,
       label: "Tizimga qo'shilgan:",
-      value: 0,
+      value: statusCount.find((item) => item.id === 2)?.count || 0,
       accent: "muted",
       icon: "bx bxs-circle-quarter",
     },
@@ -253,10 +306,13 @@ const Expertise = () => {
       orgType: "",
       ordEndDate: "",
       system: 1,
+      initialHashFile: null,
+      finalHashFile: null,
     });
     setDrawerOpen(true);
   };
   const closeDrawer = () => setDrawerOpen(false);
+  const closeDrawer1 = () => setDrawerOpen1(false);
 
   const getUserFullNameById = (userId) => {
     const user = items.find((item) => item.id === userId);
@@ -304,6 +360,7 @@ const Expertise = () => {
         setUploadProgress(p);
       },
     );
+    // console.log(doneRes);
     // console.log(formData);
 
     formData.contract = doneRes.fileId;
@@ -319,6 +376,7 @@ const Expertise = () => {
       9: {
         1: formData.contract,
         2: fileName,
+        3: file.size,
       },
       10: formData.contractDate,
       11: formData.contractPriceDate,
@@ -330,24 +388,37 @@ const Expertise = () => {
 
     // console.log(payload);
     const res = await sendRpcRequest(stRef, METHOD.ORDER_CREATE, payload);
+    // console.log(res);
 
     if (res.status == METHOD.OK) {
       toast.success("Muvaffaqiyatli qo'shildi!");
-      getAllExpertize();
+      const newId = res[1]?.id
+        ? typeof res[1].id === "string"
+          ? res[1].id
+          : bufferToObjectId(res[1].id?.buffer || res[1]._id?.buffer)
+        : `temp-${Date.now()}`;
+      const newRow = {
+        id: newId,
+        orgName: formData.orgName,
+        orgUuid: formData.orgId,
+        shortName: formData.ordName,
+        inn: formData.ordPrice,
+        director: formData.resPer,
+        orgType: formData.orgType,
+        number: formData.contractNumber,
+        contractDate: formData.contractDate,
+        startDate: formData.contractPriceDate,
+        endDate: formData.ordEndDate,
+        status: 1,
+        files: formData.contract ? [{ 2: fileName }] : [],
+        controllers: formData.controllers || [],
+        workers: formData.workers || [],
+        active: true,
+      };
+      setExpertize((prev) => [newRow, ...(prev || [])]);
     } else {
       toast.error("Xatolik yuz berdi!");
     }
-
-    // console.log(res);
-    // return;
-
-    // setItems([
-    //   ...items,
-    //   {
-    //     id: Date.now(),
-    //     ...formData,
-    //   },
-    // ]);
 
     setFormData({
       surname: "",
@@ -360,6 +431,121 @@ const Expertise = () => {
       image: "",
     });
     closeDrawer();
+  };
+
+  const saveStartDate = async () => {
+    if (!editId || !formData.startDate) return;
+    setSavingField("startDate");
+    try {
+      const res1 = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: editId,
+        2.8: formData.startDate,
+      });
+      if (res1.status !== METHOD.OK) {
+        toast.error(res1?.message || "Sanani saqlashda xatolik");
+        return;
+      }
+      const res2 = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: editId,
+        3: 5,
+      });
+      if (res2.status === METHOD.OK) {
+        toast.success("Sana saqlandi!");
+        setEditItemOld((prev) => ({ ...prev, startDate: formData.startDate }));
+      } else {
+        toast.error(res2?.message || "Status yangilashda xatolik");
+      }
+    } catch (error) {
+      toast.error(error?.message || "Saqlashda xatolik");
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  const saveInitialHashFile = async () => {
+    if (
+      !editId ||
+      !formData.initialHashFile ||
+      !(formData.initialHashFile instanceof File)
+    )
+      return;
+    setSavingField("initialHash");
+    try {
+      setUploadProgress(0);
+      setIsUploading(true);
+      const uploadRes = await uploadFileViaRpc(
+        stRef,
+        formData.initialHashFile,
+        editId,
+        (p) => {
+          setUploadProgress(p);
+          if (p === 100) setIsUploading(false);
+        },
+      );
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: editId,
+        6.9: {
+          1: uploadRes.fileId,
+          2: formData.initialHashFile.name,
+          3: formData.initialHashFile.size,
+        },
+      });
+      if (res.status === METHOD.OK) {
+        toast.success("Boshlang'ich hash fayli saqlandi!");
+        setFormData((prev) => ({ ...prev, initialHashFile: null }));
+        setEditItemOld((prev) => ({ ...prev, initialHashFile: null }));
+      } else {
+        toast.error(res?.message || "Saqlashda xatolik");
+      }
+    } catch (error) {
+      toast.error(error?.message || "Saqlashda xatolik");
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  const saveFinalHashFile = async () => {
+    if (
+      !editId ||
+      !formData.finalHashFile ||
+      !(formData.finalHashFile instanceof File)
+    )
+      return;
+    setSavingField("finalHash");
+    try {
+      setUploadProgress(0);
+      setIsUploading(true);
+      const uploadRes = await uploadFileViaRpc(
+        stRef,
+        formData.finalHashFile,
+        editId,
+        (p) => {
+          setUploadProgress(p);
+          if (p === 100) setIsUploading(false);
+        },
+      );
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: editId,
+        6.11: {
+          1: uploadRes.fileId,
+          2: formData.finalHashFile.name,
+          3: formData.finalHashFile.size,
+        },
+      });
+
+      // console.log(res);
+      if (res.status === METHOD.OK) {
+        toast.success("Yakuniy hash fayli saqlandi!");
+        setFormData((prev) => ({ ...prev, finalHashFile: null }));
+        setEditItemOld((prev) => ({ ...prev, finalHashFile: null }));
+      } else {
+        toast.error(res?.message || "Saqlashda xatolik");
+      }
+    } catch (error) {
+      toast.error(error?.message || "Saqlashda xatolik");
+    } finally {
+      setSavingField(null);
+    }
   };
 
   const formatBufferToId = (data) => {
@@ -378,14 +564,27 @@ const Expertise = () => {
     return bytes.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
-  const getAllExpertize = async (id = null, nextPage = true) => {
-    // console.log("id", id);
+  const getAllExpertize = async (
+    id = null,
+    nextPage = true,
+    statusId = 0,
+    searchText = null,
+  ) => {
     try {
-      const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_PAGE, {
+      const payload = {
         1: id,
         2: nextPage,
         3: 1,
-      });
+        4: statusId,
+      };
+      const trimmed = searchText != null ? String(searchText).trim() : "";
+      if (trimmed !== "") {
+        payload[5] = trimmed;
+      }else{
+        payload[5] = null;
+      }
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_PAGE, payload);
+      // console.log(res);
       if (res.status == METHOD.OK) {
         const page = formatBufferToId(res[1].cursorId);
         if (page != null) {
@@ -407,8 +606,11 @@ const Expertise = () => {
         const formattedData = list.map((item) => {
           const base = item["1"] || [];
           const dates = item["2"] || {};
+          const sU = item["5"];
+          // console.log(sU);
           return {
             id: bufferToObjectId(item._id?.buffer),
+            repport: base["10"] || "",
             orgName: base[0] || "",
             orgUuid: base[1] || "",
             shortName: base[3] || "",
@@ -416,16 +618,21 @@ const Expertise = () => {
             director: base[5] || "",
             orgType: base[6] || "",
             contractDate: dates["1"] || null,
-            startDate: dates["2"] || null,
+            startDate: dates["8"] || null,
             endDate: dates["3"] || null,
             status: item["3"],
             number: item["10"],
-            files: (item["6"] || []).filter(Boolean),
+            files: item["6"] || [],
             controllers: (item["7"] || []).filter((p) => p.a3 === 1),
             workers: (item["7"] || []).filter((p) => p.a3 === 2),
             active: item["18"],
+            dates: item["2"] || {},
+            sU: sU,
           };
         });
+
+
+        // console.log(formattedData);
 
         return formattedData;
       }
@@ -445,20 +652,6 @@ const Expertise = () => {
             res[1].map(async (user, index) => {
               const info = user["4"] || [];
 
-              let imageFileId = info[5] || "";
-              if (
-                imageFileId == "6968e7a2e3b6146a0601b78f" ||
-                imageFileId.length < 30
-              ) {
-                imageFileId = "9276c76090ee854fbea8670b32975676";
-              }
-              const checkFileId = localStorage.getItem(imageFileId);
-              if (imageFileId && !checkFileId) {
-                await downloadFileAll(
-                  imageFileId || "9276c76090ee854fbea8670b32975676",
-                );
-              }
-
               return {
                 id: bufferToObjectId(user._id?.buffer),
                 email: user["1"] || "",
@@ -468,8 +661,7 @@ const Expertise = () => {
                 name: info[2] || "",
                 partName: info[3] || "",
                 phone: info[4] || "",
-                image: imageFileId,
-                count: user["7"] || user[7]
+                count: user["7"] || user[7],
               };
             }),
           );
@@ -477,17 +669,36 @@ const Expertise = () => {
           // console.log(expertize);
           setItems(mappedItems);
         }
-        const expr = await getAllExpertize();
-        setExpertize(expr);
       } catch (error) {
         console.log(error);
       }
     };
 
     getAllUser();
-
-    // console.log(expertize);
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const fetch = async () => {
+      const data = await getAllExpertize(
+        null,
+        true,
+        selectedStatusId,
+        debouncedSearchTerm || null,
+      );
+      if (data) {
+        setExpertize(data);
+        setJustPage(0);
+      }
+    };
+    fetch();
+  }, [debouncedSearchTerm, selectedStatusId]);
 
   const normalizedQuery = searchTerm.trim().toLowerCase();
   const filteredExpertize = normalizedQuery
@@ -528,6 +739,16 @@ const Expertise = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setProcessStepDate(null);
+    setProcessStepFile(null);
+    setProcessStepFileName("");
+    setProcessStepNote("");
+    setSavedProcessStepDate(null);
+    setSavedProcessStepFileName("");
+    setSavedProcessStepNote("");
+  }, [selectedProcessStep]);
 
   const downloadFileAll = async (id) => {
     await downloadFileViaRpc(stRef, id, id, (p) => {
@@ -709,8 +930,226 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     }
   };
 
+  const handleInitialHashFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFormData((prev) => ({ ...prev, initialHashFile: file }));
+  };
+
+  const handleFinalHashFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setFormData((prev) => ({ ...prev, finalHashFile: file }));
+  };
+
+  const handleHashDrop = (field, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (field === "initial") {
+      setFormData((prev) => ({ ...prev, initialHashFile: file }));
+    } else {
+      setFormData((prev) => ({ ...prev, finalHashFile: file }));
+    }
+  };
+
+  const handleHashDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleProcessStepFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setProcessStepFileName(file.name);
+    setProcessStepFile(file);
+  };
+
+  const sendProcessStepPayload = async (payload) => {
+    if (!formData.id) {
+      toast.error("Buyurtma tanlanmagan");
+      return false;
+    }
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
+      if (res.status === METHOD.OK) {
+        if (payload[3] != null) {
+          setExpertize((prev) =>
+            (prev || []).map((item) =>
+              item.id === formData.id ? { ...item, status: payload[3] } : item,
+            ),
+          );
+        }
+        toast.success("Saqlandi");
+        return true;
+      }
+      toast.error(res.message || "Saqlashda xatolik");
+      return false;
+    } catch (err) {
+      // console.error(err);
+      toast.error("Saqlashda xatolik");
+      return false;
+    }
+  };
+
+  const handleTekshirtirish = async (orderId) => {
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: orderId,
+        5: 2,
+      });
+      if (res.status === METHOD.OK) {
+        setExpertize((prev) =>
+          (prev || []).map((item) =>
+            item.id === orderId ? { ...item, sU: 2 } : item,
+          ),
+        );
+        toast.success("Tekshirishga yuborildi");
+      } else {
+        toast.error(res.message || "Xatolik");
+      }
+    } catch (err) {
+      // console.error(err);
+      toast.error("Saqlashda xatolik");
+    }
+  };
+  const handleNextExp = async (orderId) => {
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: orderId,
+        5: 3,
+      });
+      if (res.status === METHOD.OK) {
+        setExpertize((prev) =>
+          (prev || []).map((item) =>
+            item.id === orderId ? { ...item, sU: 3 } : item,
+          ),
+        );
+        toast.success("Bo'lim boshlig'iga yuborildi");
+      } else {
+        toast.error(res.message || "Xatolik");
+      }
+    } catch (err) {
+      // console.error(err);
+      toast.error("Saqlashda xatolik");
+    }
+  };
+
+  const handleBackExp = async (orderId) => {
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+        19: orderId,
+        5: 1,
+      });
+      if (res.status === METHOD.OK) {
+        setExpertize((prev) =>
+          (prev || []).map((item) =>
+            item.id === orderId ? { ...item, sU: 1 } : item,
+          ),
+        );
+        toast.success("Bajaruvchiga yuborildi");
+      } else {
+        toast.error(res.message || "Xatolik");
+      }
+    } catch (err) {
+      // console.error(err);
+      toast.error("Saqlashda xatolik");
+    }
+  };
+
+  const handleSaveProcessStepStatus = async () => {
+    if (!selectedProcessStep) {
+      toast.error("Jarayonni tanlang");
+      return;
+    }
+    const ok = await sendProcessStepPayload({
+      19: formData.id,
+      3: parseInt(selectedProcessStep, 10),
+    });
+    if (ok) setSavedProcessStepStatus(selectedProcessStep);
+  };
+
+  const handleSaveProcessStepDate = async (dateKey) => {
+    if (!processStepDate) {
+      toast.error("Sanani tanlang");
+      return;
+    }
+    const ok = await sendProcessStepPayload({
+      19: formData.id,
+      [dateKey]: processStepDate,
+    });
+    if (ok) setSavedProcessStepDate(processStepDate);
+  };
+
+  const handleSaveProcessStepFile = async (fileKey) => {
+    if (!processStepFile) {
+      toast.error("Faylni tanlang");
+      return;
+    }
+    setUploadProgress(0);
+    setIsUploading(true);
+    try {
+      const uploadRes = await uploadFileViaRpc(
+        stRef,
+        processStepFile,
+        formData.id,
+        (p) => {
+          setUploadProgress(p);
+          if (p === 100) setIsUploading(false);
+        },
+      );
+      const fileSize = processStepFile.size || 0;
+      const name = processStepFileName || processStepFile.name;
+      const ok = await sendProcessStepPayload({
+        19: formData.id,
+        [fileKey]: {
+          1: uploadRes.fileId,
+          2: name,
+          3: fileSize,
+        },
+      });
+      if (ok) setSavedProcessStepFileName(name);
+    } catch (err) {
+      setIsUploading(false);
+      throw err;
+    }
+  };
+
+  const userMe = async () => {
+    const res = await sendRpcRequest(stRef, METHOD.USER_GET, {});
+    if (res.status === METHOD.OK) {
+      // console.log(res[1]);
+      const u = {
+        id: formatBufferToId(res[1]?._id),
+        email: res[1][1],
+        full_name: res[1][4]?.[1] + " " + res[1][4]?.[2] + " " + res[1][4]?.[3],
+        role: res[1][3],
+      };
+
+      setUser(u);
+    }
+  };
+
+  useEffect(() => {
+    userMe();
+  }, []);
+
+  const handleSaveProcessStepNote = async () => {
+    if (!processStepNote?.trim()) {
+      toast.error("Ma'lumot yozing");
+      return;
+    }
+    const trimmed = processStepNote.trim();
+    const ok = await sendProcessStepPayload({
+      19: formData.id,
+      1.11: trimmed,
+    });
+    if (ok) setSavedProcessStepNote(trimmed);
+  };
+
   const handleEdit = async (item) => {
-    console.log(item);
+    // console.log(item);
     try {
       if (item) {
         setFormData({
@@ -755,6 +1194,32 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       } else {
         return;
       }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleNextStep = async (item) => {
+    try {
+      // console.log(item);
+      setEditId(item.id);
+      setFormData((prev) => ({
+        ...prev,
+        id: item.id,
+        contractDate: item.contractDate || prev.contractDate,
+        initialHashFile: null,
+        finalHashFile: null,
+      }));
+      setDrawerOpen1(true);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const handleIsJarayon = () => {
+    try {
+      // console.log(editId);
+      setDrawerOpen1(false);
     } catch (error) {
       console.log(error);
     }
@@ -842,7 +1307,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       Object.keys(fieldMap).forEach((key) => {
         if (formData[key] !== editItemOld[key]) {
           const code = fieldMap[key];
-          console.log(code);
+          // console.log(code);
           if (code == 6.3 || code == 6.1) {
             payload[code] = {
               1: formData[key],
@@ -867,9 +1332,9 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         return;
       }
 
-      console.log("Payload:", payload);
+      // console.log("Payload:", payload);
       const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload);
-      console.log(res);
+      // console.log(res);
 
       if (res.status === METHOD.OK) {
         setItems((prev) =>
@@ -908,7 +1373,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         toast.error("Xatolik: Server ma'lumotni qabul qilmadi");
       }
     } catch (err) {
-      console.error("Update Error:", err);
+      // console.error("Update Error:", err);
       toast.error("Foydalanuvchi yangilanmadi, tizim xatosi");
     }
   };
@@ -921,7 +1386,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     }
   };
   const formatDate = (dateString) => {
-    if (!dateString) return "—";
+    if (!dateString) return "";
     const date = new Date(dateString);
 
     const day = String(date.getDate()).padStart(2, "0");
@@ -933,8 +1398,12 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
 
   const handleNextPage = async (id) => {
     try {
-      const newData = await getAllExpertize(id, true);
-
+      const newData = await getAllExpertize(
+        id,
+        true,
+        selectedStatusId,
+        debouncedSearchTerm || null,
+      );
       if (newData) {
         setExpertize(newData);
         setJustPage(justPage + 1);
@@ -946,8 +1415,12 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
 
   const handleBackPage = async (id) => {
     try {
-      const newData = await getAllExpertize(id, false);
-
+      const newData = await getAllExpertize(
+        id,
+        false,
+        selectedStatusId,
+        debouncedSearchTerm || null,
+      );
       if (newData) {
         setExpertize(newData);
         setJustPage(justPage - 1);
@@ -955,6 +1428,11 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     } catch (error) {
       console.error("Back Page Error:", error);
     }
+  };
+
+  const handleStatusCardClick = (cardId) => {
+    setSelectedStatusId(cardId);
+    setJustPage(0);
   };
 
   const getUser = (item) => {
@@ -979,7 +1457,6 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     );
   };
 
-
   const handleControllerChange = (selectedOptions) => {
     const formattedControllers = selectedOptions
       ? selectedOptions.map((option) => ({
@@ -992,7 +1469,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
       ...prev,
       controllers: formattedControllers,
     }));
-    console.log(formattedControllers);
+    // console.log(formattedControllers);
     markFieldChanged(
       5.1,
       JSON.stringify(formattedControllers),
@@ -1019,11 +1496,210 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
     );
   };
 
+  const getExpertizeCount = async () => {
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.ORDER_GET_COUNT, { 3: 1 });
+      // console.log(res);
+      if (res.status === METHOD.OK) {
+        const totalCount = res[1]?.reduce(
+          (sum, item) => sum + (item.count || 0),
+          0,
+        );
+
+        const allCount = res[1]?.map((item) => {
+          return { id: item._id, count: item.count || 0 };
+        });
+        setCount(totalCount);
+        setStatusCount(allCount);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    getExpertizeCount();
+  }, []);
+
   return (
     <>
       {drawerOpen && (
         <div onClick={closeDrawer} className="fixed inset-0 bg-black/40 z-40" />
       )}
+      {drawerOpen1 && (
+        <div
+          onClick={closeDrawer1}
+          className="fixed inset-0 bg-black/40 z-40"
+        />
+      )}
+      {/* test */}
+      <div
+        className={`expertise-drawer fixed top-0 right-0 h-full w-[700px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
+        ${drawerOpen1 ? "translate-x-0" : "translate-x-full"}`}
+      >
+        <div className="p-6 border-b flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-500">Yangilash</h2>
+          <button onClick={closeDrawer1} className="text-xl">
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="flex gap-2 items-start">
+            <div className="relative w-full flex-1">
+              <div className="mb-4">
+                <label className="text-sm text-gray-500 uppercase">
+                  Ekspertiza uchun zaruriy chora-tadbirlar tashkil etilgan sana
+                </label>
+              </div>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DesktopDatePicker
+                  value={formData.startDate ? dayjs(formData.startDate) : null}
+                  onChange={(newValue) => {
+                    const nextValue =
+                      newValue && newValue.isValid()
+                        ? newValue.toISOString()
+                        : "";
+                    setFormData((prev) => ({
+                      ...prev,
+                      startDate: nextValue,
+                    }));
+                    markFieldChanged(4.7, nextValue, editItemOld.startDate);
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      size: "small",
+                      className: "mt-6 border rounded-md bg-transparent ",
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+            </div>
+            {formData.startDate && (
+              <button
+                type="button"
+                onClick={saveStartDate}
+                disabled={savingField === "startDate"}
+                className="mt-10 p-2  text-[#bb9769]  border-r rounded-full disabled:opacity-60"
+                title="Sanani saqlash"
+              >
+                {savingField === "startDate" ? (
+                  <span className="text-sm">...</span>
+                ) : (
+                  <SaveIcon sx={{ fontSize: 22 }} />
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Boshlang'ich hash: fayl tanlanganda save icon */}
+          <div className="space-y-4 mt-6">
+            <div className="w-full flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="text-sm text-gray-500 uppercase block mb-2">
+                  BOSHLANG'ICH HASH QIYMATI
+                </label>
+                <label
+                  htmlFor="initial-hash-file"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                  onDragOver={handleHashDragOver}
+                  onDrop={(e) => handleHashDrop("initial", e)}
+                >
+                  <CloudUploadIcon
+                    sx={{ fontSize: 48, color: "#696cff", mb: 1 }}
+                  />
+                  <span className="text-sm text-gray-500 dark:text-gray-400 text-center px-2">
+                    Faylni shu maydonga tashlang yoki maydonni bosing
+                  </span>
+                  {formData.initialHashFile && (
+                    <span className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                      {formData.initialHashFile.name}
+                    </span>
+                  )}
+                  <input
+                    id="initial-hash-file"
+                    type="file"
+                    className="hidden"
+                    onChange={handleInitialHashFileChange}
+                  />
+                </label>
+              </div>
+              {formData.initialHashFile && (
+                <button
+                  type="button"
+                  onClick={saveInitialHashFile}
+                  disabled={savingField === "initialHash"}
+                  className="mt-10 p-2  text-[#bb9769]  border-r rounded-full disabled:opacity-60"
+                  title="Boshlang'ich hash faylini saqlash"
+                >
+                  {savingField === "initialHash" ? (
+                    <span className="text-sm">...</span>
+                  ) : (
+                    <SaveIcon sx={{ fontSize: 22 }} />
+                  )}
+                </button>
+              )}
+            </div>
+            <div className="w-full flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="text-sm text-gray-500 uppercase block mb-2">
+                  YAKUNIY HASH QIYMATI
+                </label>
+                <label
+                  htmlFor="final-hash-file"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg border-gray-300 dark:border-gray-500 bg-gray-50 dark:bg-gray-700/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                  onDragOver={handleHashDragOver}
+                  onDrop={(e) => handleHashDrop("final", e)}
+                >
+                  <CloudUploadIcon
+                    sx={{ fontSize: 48, color: "#696cff", mb: 1 }}
+                  />
+                  <span className="text-sm text-gray-500 dark:text-gray-400 text-center px-2">
+                    Faylni shu maydonga tashlang yoki maydonni bosing
+                  </span>
+                  {formData.finalHashFile && (
+                    <span className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                      {formData.finalHashFile.name}
+                    </span>
+                  )}
+                  <input
+                    id="final-hash-file"
+                    type="file"
+                    className="hidden"
+                    onChange={handleFinalHashFileChange}
+                  />
+                </label>
+              </div>
+              {formData.finalHashFile && (
+                <button
+                  type="button"
+                  onClick={saveFinalHashFile}
+                  disabled={savingField === "finalHash"}
+                  className="mt-10 p-2  text-[#bb9769]  border-r rounded-full disabled:opacity-60"
+                  title="Yakuniy hash faylini saqlash"
+                >
+                  {savingField === "finalHash" ? (
+                    <span className="text-sm">...</span>
+                  ) : (
+                    <SaveIcon sx={{ fontSize: 22 }} />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={closeDrawer1}
+              className="bg-gray-200 dark:bg-gray-400 px-4 py-2 rounded-md"
+            >
+              Yopish
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* test */}
       <div
         className={`expertise-drawer fixed top-0 right-0 h-full w-[700px] pr-[30px] bg-white dark:bg-[#2b2c40] z-50 transform transition-transform duration-300
         ${drawerOpen ? "translate-x-0" : "translate-x-full"}`}
@@ -1257,9 +1933,11 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
               <Button
                 component="label"
                 variant="outlined"
+                fullWidth
                 startIcon={<CloudUploadIcon />}
                 sx={{
                   height: "42px",
+                  width: "100%",
                   borderColor: "rgba(0, 0, 0, 0.23)",
                   color: "#566a7f",
                   textTransform: "none",
@@ -1615,110 +2293,579 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
           </div>
 
           {isUpdate && (
-            <div className="flex justify-between gap-4 items-center">
-              <div className="relative w-[48%] flex flex-col justify-end">
-                {isUpdate && !changedFields.includes(5.5) && (
-                  <button
-                    type="button"
-                    className="field-action-btn edit"
-                    onClick={() => {
-                      document.getElementById("perm-letter-file")?.click();
-                    }}
+            <>
+              <div className="relative flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="text-sm text-gray-500 uppercase">
+                    Jarayonni tanlang
+                  </label>
+                  <select
+                    id="processStep"
+                    value={selectedProcessStep}
+                    onChange={(e) => setSelectedProcessStep(e.target.value)}
+                    className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent"
                   >
-                    <iconify-icon icon="ri:edit-2-line" />
-                  </button>
-                )}
-                <label className="text-sm text-gray-500 uppercase mb-1">
-                  Ruhsat xati
-                </label>
-
-                <Button
-                  component="label"
-                  variant="outlined"
-                  startIcon={<CloudUploadIcon />}
-                  sx={{
-                    height: "42px",
-                    borderColor: "rgba(0, 0, 0, 0.23)",
-                    color: "#566a7f",
-                    textTransform: "none",
-                    "&:hover": {
-                      borderColor: "#696cff",
-                    },
-                  }}
-                >
-                  {fileName || "Faylni tanlang"}
-                  <input
-                    type="file"
-                    hidden
-                    id="perm-letter-file"
-                    name="permLetter"
-                    onChange={(e) => {
-                      handleFileChange1(e);
-                    }}
-                  />
-                </Button>
-                {changedFields.includes(5.5) && (
-                  <button
-                    onClick={handleUpdate}
-                    type="button"
-                    className="field-action-btn save"
-                  >
-                    <iconify-icon icon="material-symbols:save-outline" />
-                  </button>
-                )}
+                    <option value="">Jarayonni tanlang</option>
+                    <option value="1">Shartnoma kelgan</option>
+                    <option value="2">Tizimga qo'shilgan</option>
+                    <option value="3">Xat chiqarilgan</option>
+                    <option value="4">Xat kelgan</option>
+                    <option value="5">Jarayonda</option>
+                    <option value="6">Hisobotga chiqarilgan</option>
+                    <option value="7">Qisman yakunlangan</option>
+                    <option value="8">Qayta ekspertiza</option>
+                    <option value="9">To'liq yakunlangan</option>
+                    <option value="10">Vaqtincha to'xtatilgan</option>
+                  </select>
+                </div>
+                {selectedProcessStep &&
+                  selectedProcessStep !== savedProcessStepStatus && (
+                    <button
+                      type="button"
+                      onClick={handleSaveProcessStepStatus}
+                      className="field-action-btn save"
+                      title="Statusni saqlash"
+                    >
+                      <iconify-icon icon="material-symbols:save-outline" />
+                    </button>
+                  )}
               </div>
-              <div className="relative w-[48%] flex flex-col justify-end">
-                {isUpdate && !changedFields.includes(5.6) && (
-                  <button
-                    type="button"
-                    className="field-action-btn edit"
-                    onClick={() => {
-                      document.getElementById("consent-letter-file")?.click();
-                    }}
-                  >
-                    <iconify-icon icon="ri:edit-2-line" />
-                  </button>
-                )}
-                <label className="text-sm text-gray-500 uppercase mb-1">
-                  Rozilik xati
-                </label>
 
-                <Button
-                  component="label"
-                  variant="outlined"
-                  startIcon={<CloudUploadIcon />}
-                  sx={{
-                    height: "42px",
-                    borderColor: "rgba(0, 0, 0, 0.23)",
-                    color: "#566a7f",
-                    textTransform: "none",
-                    "&:hover": {
-                      borderColor: "#696cff",
-                    },
-                  }}
-                >
-                  {fileName || "Faylni tanlang"}
-                  <input
-                    type="file"
-                    hidden
-                    id="consent-letter-file"
-                    name="consentLetter"
-                    onChange={(e) => {
-                      handleFileChange2(e);
-                    }}
-                  />
-                </Button>
-                {changedFields.includes(5.6) && (
-                  <button
-                    onClick={handleUpdate}
-                    type="button"
-                    className="field-action-btn save"
-                  >
-                    <iconify-icon icon="material-symbols:save-outline" />
-                  </button>
-                )}
-              </div>
-            </div>
+              {selectedProcessStep === "3" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.5)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase mb-1">
+                        Fayl
+                      </label>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<CloudUploadIcon />}
+                        sx={{
+                          height: "42px",
+                          width: "100%",
+                          borderColor: "rgba(0, 0, 0, 0.23)",
+                          color: "#566a7f",
+                          textTransform: "none",
+                          "&:hover": { borderColor: "#696cff" },
+                        }}
+                      >
+                        {processStepFileName || "Faylni tanlang"}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleProcessStepFileChange}
+                        />
+                      </Button>
+                    </div>
+                    {(processStepFile || processStepFileName) &&
+                      processStepFileName !== savedProcessStepFileName && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepFile(6.2)}
+                          className="field-action-btn save"
+                          title="Faylni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "4" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.6)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase mb-1">
+                        Fayl
+                      </label>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<CloudUploadIcon />}
+                        sx={{
+                          height: "42px",
+                          width: "100%",
+                          borderColor: "rgba(0, 0, 0, 0.23)",
+                          color: "#566a7f",
+                          textTransform: "none",
+                          "&:hover": { borderColor: "#696cff" },
+                        }}
+                      >
+                        {processStepFileName || "Faylni tanlang"}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleProcessStepFileChange}
+                        />
+                      </Button>
+                    </div>
+                    {(processStepFile || processStepFileName) &&
+                      processStepFileName !== savedProcessStepFileName && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepFile(6.3)}
+                          className="field-action-btn save"
+                          title="Faylni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "6" && (
+                <div className="mt-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.1)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "7" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.11)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Ma'lumot
+                      </label>
+                      <input
+                        type="text"
+                        value={processStepNote}
+                        onChange={(e) => setProcessStepNote(e.target.value)}
+                        className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent"
+                        placeholder="Ma'lumot yozing"
+                      />
+                    </div>
+                    {processStepNote?.trim() &&
+                      processStepNote.trim() !== savedProcessStepNote && (
+                        <button
+                          type="button"
+                          onClick={handleSaveProcessStepNote}
+                          className="field-action-btn save"
+                          title="Ma'lumotni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "8" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.12)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase mb-1">
+                        Fayl
+                      </label>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<CloudUploadIcon />}
+                        sx={{
+                          height: "42px",
+                          width: "100%",
+                          borderColor: "rgba(0, 0, 0, 0.23)",
+                          color: "#566a7f",
+                          textTransform: "none",
+                          "&:hover": { borderColor: "#696cff" },
+                        }}
+                      >
+                        {processStepFileName || "Faylni tanlang"}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleProcessStepFileChange}
+                        />
+                      </Button>
+                    </div>
+                    {(processStepFile || processStepFileName) &&
+                      processStepFileName !== savedProcessStepFileName && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepFile(6.6)}
+                          className="field-action-btn save"
+                          title="Faylni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "9" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.13)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase mb-1">
+                        Fayl
+                      </label>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<CloudUploadIcon />}
+                        sx={{
+                          height: "42px",
+                          width: "100%",
+                          borderColor: "rgba(0, 0, 0, 0.23)",
+                          color: "#566a7f",
+                          textTransform: "none",
+                          "&:hover": { borderColor: "#696cff" },
+                        }}
+                      >
+                        {processStepFileName || "Faylni tanlang"}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleProcessStepFileChange}
+                        />
+                      </Button>
+                    </div>
+                    {(processStepFile || processStepFileName) &&
+                      processStepFileName !== savedProcessStepFileName && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepFile(6.7)}
+                          className="field-action-btn save"
+                          title="Faylni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {selectedProcessStep === "10" && (
+                <div className="mt-4 space-y-4">
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase">
+                        Sana
+                      </label>
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DesktopDatePicker
+                          value={
+                            processStepDate ? dayjs(processStepDate) : null
+                          }
+                          onChange={(newValue) => {
+                            setProcessStepDate(
+                              newValue && newValue.isValid()
+                                ? newValue.toISOString()
+                                : null,
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              className:
+                                "mt-1 border rounded-md bg-transparent",
+                            },
+                          }}
+                        />
+                      </LocalizationProvider>
+                    </div>
+                    {processStepDate &&
+                      processStepDate !== savedProcessStepDate && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepDate(2.9)}
+                          className="field-action-btn save"
+                          title="Sanani saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                  <div className="relative flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-sm text-gray-500 uppercase mb-1">
+                        Fayl
+                      </label>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<CloudUploadIcon />}
+                        sx={{
+                          height: "42px",
+                          width: "100%",
+                          borderColor: "rgba(0, 0, 0, 0.23)",
+                          color: "#566a7f",
+                          textTransform: "none",
+                          "&:hover": { borderColor: "#696cff" },
+                        }}
+                      >
+                        {processStepFileName || "Faylni tanlang"}
+                        <input
+                          type="file"
+                          hidden
+                          onChange={handleProcessStepFileChange}
+                        />
+                      </Button>
+                    </div>
+                    {(processStepFile || processStepFileName) &&
+                      processStepFileName !== savedProcessStepFileName && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveProcessStepFile(6.5)}
+                          className="field-action-btn save"
+                          title="Faylni saqlash"
+                        >
+                          <iconify-icon icon="material-symbols:save-outline" />
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {!isUpdate && (
@@ -1740,7 +2887,12 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
         </div>
       </div>
       <div className="dashboard-page" style={{ margin: "-20px" }}>
-        <Section title="Tizim ekspertizalar" items={system} />
+        <Section
+          title="Tizim ekspertizalar"
+          items={system}
+          selectedStatusId={selectedStatusId}
+          onCardClick={handleStatusCardClick}
+        />
         <div className="mt-10">
           <div className="bg-white rounded-md shadow-sm pb-20 dark:bg-[#2b2c40]">
             <div className="mb-6 px-6 pt-6">
@@ -1748,13 +2900,13 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                 Qidiruv filter
               </h4>
               <div className="mt-3 flex items-center gap-4">
-                <select className="h-10 w-64 rounded-lg border border-slate-200 bg-white px-4 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200">
+                <select className="h-10 w-64 rounded-lg border border-slate-200 bg-white dark:bg-transparent px-4 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200">
                   <option>Foydalanuvchini tanlang ...</option>
                 </select>
                 <div className="ml-auto flex items-center">
                   <div className="relative">
                     <input
-                      className="h-10 w-64 rounded-lg border border-slate-200 bg-white px-4 pr-10 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
+                      className="h-10 w-64 rounded-lg border border-slate-200 bg-white dark:bg-transparent px-4 pr-10 text-[14px] text-slate-500 shadow-sm outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200"
                       placeholder="Qidiruv..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -1767,19 +2919,21 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                       ></iconify-icon>
                     </span>
                   </div>
-                  <button
-                    className="ml-4 inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
-                    onClick={openDrawer}
-                  >
-                    Tizim qo'shish
-                  </button>
+                  {user.role === 1 && (
+                    <button
+                      className="ml-4 inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
+                      onClick={openDrawer}
+                    >
+                      Tizim qo'shish
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
             <div className="overflow-x-auto rounded-lg">
               <table className="min-w-full text-sm text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase border-b border-slate-200">
+                  <tr className="bg-slate-50 text-slate-500 text-[13px] uppercase border-b border-slate-200 dark:bg-transparent">
                     <th className="px-4 py-3 font-medium">N</th>
                     <th className="px-4 py-3 font-medium">TASHKILOT NOMI</th>
                     <th className="px-4 py-3 font-medium text-wrap max-w-[250px]">
@@ -1808,36 +2962,36 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                       key={r.id}
                       className="border-b border-slate-100 align-middle hover:bg-slate-50 dark:hover:bg-[#2b2c40]"
                     >
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 dark:text-white">
                         {i + 1}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center dark:text-white">
                         {r.orgName}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center max-w-[250px] whitespace-normal break-words">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center max-w-[250px] whitespace-normal break-words dark:text-white">
                         {r.shortName}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center dark:text-white  ">
                         {r.number}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 dark:text-white">
                         {r?.controllers?.map((b, idx) => (
                           <span className="block mb-1" key={idx}>
                             {b.a2}
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-3 align-middle whitespace-pre-line text-[15px] text-slate-600">
+                      <td className="px-4 py-3 align-middle whitespace-pre-line text-[15px] text-slate-600 dark:text-white">
                         {r?.workers?.map((b, idx) => (
                           <span className="block mb-1" key={idx}>
                             {b.a2}
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 w-[200px]">
-                        {r.start}
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 w-[200px] dark:text-white text-center">
+                        {formatDate(r.startDate)}
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center w-[200px]">
+                      <td className="px-4 py-3 align-middle text-[15px] text-slate-600 text-center w-[200px] dark:text-white">
                         {formatDate(r.endDate)}
                       </td>
                       <td className="px-4 py-3 align-middle text-center">
@@ -1851,29 +3005,39 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                           {r.hisobot || "Chiqarilmagan"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 align-middle text-[15px] text-center text-slate-600">
+                      <td className="px-4 py-3 align-middle text-[15px] text-center text-slate-600 dark:text-white">
                         {r.ball || "0/15"}
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <div className="h-full flex relative">
                           {STATUS_STEPS.map((step, index) => {
                             const isActive = r.status >= step.id;
+                            const stepBgClass = !isActive
+                              ? "status-step-inactive"
+                              : "status-step-active";
+                            const stepStyle =
+                              step.id > r.status
+                                ? { background: "linear-gradient(145deg, #9ca3af, #6b7280)" }
+                                : r.status === 10 && step.id === 10
+                                  ? { background: "linear-gradient(145deg, #dc2626, #b91c1c)" }
+                                  : r.status === 9 && step.id === 9
+                                    ? { background: "linear-gradient(145deg, #16a34a, #15803d)" }
+                                    : r.status >= step.id && (r.status === 9 || r.status === 10)
+                                      ? { background: "linear-gradient(145deg, #2563eb, #1d4ed8)" }
+                                      : undefined;
 
                             return (
                               <div
                                 key={step.id}
-                                className="relative group"
+                                className="relative group status-step-group"
                                 style={{
-                                  marginLeft: index === 0 ? 0 : -14,
+                                  marginLeft: index === 0 ? 0 : 1,
                                   zIndex: index,
                                 }}
                               >
                                 <span
-                                  className={`status-step w-7 h-7 cursor-pointer rounded-full border border-white dark:border-[#2b2c40] ${
-                                    isActive
-                                      ? "status-step-active bg-blue-700"
-                                      : "status-step-inactive bg-gray-400"
-                                  } flex items-center justify-center`}
+                                  className={`status-step w-7 h-7 cursor-pointer rounded-full border border-white dark:border-[#2b2c40] ${stepBgClass} flex items-center justify-center`}
+                                  style={stepStyle}
                                 >
                                   <span className="text-[10px] text-white font-bold">
                                     {step.id}
@@ -1891,16 +3055,30 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <div className="flex items-center gap-2">
-                          <button
-                            className="p-2 rounded-md hover:bg-blue-500 hover:text-white bg-blue-400 text-white"
-                            onClick={() => handleEdit(r)}
-                          >
-                            <iconify-icon
-                              icon="tabler:edit"
-                              width="20"
-                              height="20"
-                            ></iconify-icon>
-                          </button>
+                          {user.role === 1 || user.role === 3 ? (
+                            <button
+                              className="p-2 rounded-md hover:bg-blue-500 hover:text-white bg-blue-400 text-white"
+                              onClick={() => handleEdit(r)}
+                            >
+                              <iconify-icon
+                                icon="tabler:edit"
+                                width="20"
+                                height="20"
+                              ></iconify-icon>
+                            </button>
+                          ) : (
+                            <button
+                              className="p-2 rounded-md hover:bg-blue-500 hover:text-white bg-blue-400 text-white"
+                              onClick={() => handleNextStep(r)}
+                            >
+                              <iconify-icon
+                                icon="tabler:edit"
+                                width="20"
+                                height="20"
+                              ></iconify-icon>
+                            </button>
+                          )}
+
                           <button
                             className="p-2 rounded-md bg-slate-200 text-slate-500 hover:bg-slate-400 hover:text-white"
                             onClick={() => handleModal(r.id)}
@@ -1911,6 +3089,47 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                               height="20"
                             ></iconify-icon>
                           </button>
+                          {r.status === 5 &&
+                            (r.workers || []).some(
+                              (w) => String(w.a1) === String(user?.id),
+                            ) &&
+                            (r.sU === 2 ? (
+                              <span className="ml-2 px-4 py-2 rounded-full border-2 border-slate-300 bg-slate-100 text-slate-500 text-sm font-medium dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-400">
+                                Tekshirilmoqda
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="ml-2 px-4 py-2 rounded-full border-2 border-cyan-500 bg-white text-cyan-500 text-sm font-medium hover:bg-cyan-50 transition-colors dark:bg-transparent dark:text-cyan-400 dark:border-cyan-400 dark:hover:bg-cyan-500/10"
+                                onClick={() => handleTekshirtirish(r.id)}
+                              >
+                                Tekshirtirish
+                              </button>
+                            ))}
+                          {r.status === 5 &&
+                            (r.controllers || []).some(
+                              (c) => String(c.a1) === String(user?.id),
+                            ) &&
+                            (r.sU === 2 ? (
+                              <div className="flex justify-center gap-3">
+                                <button
+                                  className="ml-2 px-4 py-2 rounded-full border-2 border-red-500 bg-white text-red-500 text-sm font-medium hover:bg-red-50 transition-colors dark:bg-transparent dark:text-red-400 dark:border-red-400 dark:hover:bg-cyan-500/10"
+                                  onClick={() => handleBackExp(r.id)}
+                                  type="button"
+                                >
+                                  Qaytarish
+                                </button>
+                                <button
+                                  className="ml-2 px-4 py-2 rounded-full border-2 border-cyan-500 bg-white text-cyan-500 text-sm font-medium hover:bg-cyan-50 transition-colors dark:bg-transparent dark:text-cyan-400 dark:border-cyan-400 dark:hover:bg-cyan-500/10"
+                                  onClick={() => handleNextExp(r.id)}
+                                  type="button"
+                                >
+                                  Tasdiqlash
+                                </button>
+                              </div>
+                            ) : (
+                              <></>
+                            ))}
                         </div>
                       </td>
                     </tr>
@@ -1934,7 +3153,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         // setCurrentPage((p) => Math.max(1, p - 1))
                       }
                       // disabled={currentPage === 1}
-                      className="px-3 py-1.5 border rounded-md text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="px-3 py-1.5 border rounded-md text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
                     >
                       Oldingi
                     </button>
@@ -1947,7 +3166,7 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         // setCurrentPage((p) => Math.min(totalPages, p + 1))
                       }
                       disabled={nextPage == null}
-                      className="px-3 py-1.5 border rounded-md text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="px-3 py-1.5 border rounded-md text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-white"
                     >
                       Keyingi
                     </button>

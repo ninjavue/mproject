@@ -128,7 +128,7 @@ const ExpertizeModal = ({
 
   useEffect(() => {
     getVuln();
-    // console.log(vulnOptions);
+    console.log(item);
   }, []);
 
   const handleSelectVuln = (selected) => {

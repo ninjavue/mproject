@@ -22,7 +22,7 @@ export default class ErrorBoundary extends React.Component {
     if (error) {
       return (
         <div style={{ padding: 20, fontFamily: 'sans-serif' }}>
-          <h2 style={{ color: 'red' }}>App render error</h2>
+          <h2 style={{ color: 'red' }}>Sayt ishga tushmadi!</h2>
           <pre style={{ whiteSpace: 'pre-wrap', background: '#111', color: '#fff', padding: 12 }}>
             {String(error && error.toString())}
             {info?.componentStack && '\n\nComponent stack:\n' + info.componentStack}

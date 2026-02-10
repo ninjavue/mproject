@@ -13,7 +13,7 @@ import { sendRpcRequest } from "../../rpc/rpcClient";
 
 const GRID_SIZE = 10;
 
-const Captcha = forwardRef(({ onSolve }, ref) => {
+const Captcha = forwardRef(({ onSolve, autoFetch = true }, ref) => {
   const [captcha, setCaptcha] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState({ x: 20, y: 230 }); // Boshlang'ich pozitsiya
@@ -44,17 +44,17 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
       const res = await sendRpcRequest(stRef, METHOD.CAPTCHA_GET, {});
       if (res && res.status === METHOD.OK && res[1]) {
         setCaptcha(res[1]);
-        setPosition({ x: 20, y: 230 }); // Puzzleni joyiga qaytarish
-        setDragging(false);            // Draggingni to'xtatish
-        setTimer(30);    
+        setPosition({ x: 20, y: 230 }); 
+        setDragging(false);
+        setTimer(60);    
         retryCountRef.current = 0;
       } else if (res && res.status !== METHOD.OK && retryAttempt < 3) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         return fetchCaptcha(retryAttempt + 1);
       }
     } catch (error) {
       if (retryAttempt < 1) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         return fetchCaptcha(retryAttempt + 1);
       }
     }
@@ -65,8 +65,10 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
   }));
 
   useEffect(() => {
-    fetchCaptcha(0);
-  }, []);
+    if (autoFetch) {
+      fetchCaptcha(0);
+    }
+  }, [autoFetch]);
 
   useEffect(() => {
     let interval;
@@ -97,7 +99,7 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
     const x = e.clientX - containerRect.left - startPosition.current.x;
     const y = e.clientY - containerRect.top - startPosition.current.y;
 
-    // Chegaralardan chiqib ketmaslik
+    // Chegaralar
     const newX = Math.max(0, Math.min(x, containerRect.width - 40));
     const newY = Math.max(0, Math.min(y, containerRect.height - 40));
 
@@ -116,11 +118,11 @@ const Captcha = forwardRef(({ onSolve }, ref) => {
     }
   };
 
-  // Refresh tugmasi uchun maxsus handler
+  // Refresh 
   const handleRefreshClick = (e) => {
     setOldCaptcha(captcha)
     e.preventDefault();
-    e.stopPropagation(); // OnMouseUp va boshqa eventlar ishlab ketmasligi uchun
+    e.stopPropagation(); 
     fetchCaptcha();
   };
 

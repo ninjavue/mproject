@@ -30,18 +30,24 @@ const ForgotPassword = () => {
   const { stRef } = useZirhStref();
   const [uuidCaptcha, setUuidCaptcha] = useState(null);
   const navigate = useNavigate();
+  const [signOne, setSignOne] = useState(false);
 
   const captchaRef = useRef(null);
+  const captchaRef2 = useRef(null);
 
   const refreshCaptchaFromParent = () => {
-    console.log("test captcha");
     captchaRef.current?.refreshCaptcha();
+  };
+  const refreshCaptchaFromParent2 = () => {
+    captchaRef2.current?.refreshCaptcha();
   };
 
   const handleRequestCode = async (x, y, captchaId) => {
     refreshCaptchaFromParent();
 
     try {
+      setOpen(false);
+      setSignOne(true);
       const res = await sendRpcRequest(stRef, METHOD.USER_PASS_RESET, {
         1: email,
         3: captchaId,
@@ -51,8 +57,8 @@ const ForgotPassword = () => {
 
       if (res.status == METHOD.OK) {
         setUuidCaptcha(res[1].uuid);
+        setSignOne(false);
         toast.success("Pochta manzilingizga tasdiqlash kodi yuborildi");
-        setOpen(false);
         setStep(2);
       } else {
         if (res.status == METHOD.CAPTCHA_ERR) {
@@ -60,6 +66,9 @@ const ForgotPassword = () => {
           setOpen(false);
           refreshCaptchaFromParent();
         } else if (res.status == METHOD.Not_Found) {
+          setSignOne(false);
+          toast.error("Bunday foydalanuvchi mavjud emas!");
+
           if (res["1"] == "user not found") {
             setOpen(false);
             refreshCaptchaFromParent();
@@ -85,7 +94,6 @@ const ForgotPassword = () => {
     try {
       refreshCaptchaFromParent();
 
-      console.log(uuidCaptcha, code, password, confirmPassword);
       if (uuidCaptcha && code && password && confirmPassword) {
         const { publicKey } = deriveKeyPairFromPassword(password);
 
@@ -97,7 +105,6 @@ const ForgotPassword = () => {
           5: x,
           6: y,
         });
-        console.log(res);
 
         if (res.status === METHOD.OK) {
           setStep(1);
@@ -128,10 +135,12 @@ const ForgotPassword = () => {
   };
 
   const handleClickOpen = () => {
+    refreshCaptchaFromParent();
     setOpen(true);
   };
 
   const handleClickOpen2 = () => {
+    refreshCaptchaFromParent2();
     setOpen2(true);
   };
 
@@ -183,12 +192,17 @@ const ForgotPassword = () => {
                   </div>
                   <button
                     type="button"
+                    disabled={signOne}
                     data-modal-target="popup-modal"
                     data-modal-toggle="popup-modal"
-                    className=" w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
+                    className=" w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#bb9769] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#bb9769] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen}
                   >
-                    Davom etish
+                    {signOne ? (
+                      <span className="loaderSpinner"></span>
+                    ) : (
+                      "Davom etish"
+                    )}
                   </button>
                   <div className="text-center">
                     <Link
@@ -255,7 +269,7 @@ const ForgotPassword = () => {
                     type="button"
                     data-modal-target="popup-modal"
                     data-modal-toggle="popup-modal"
-                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#696cff] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#565edc] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
+                    className="w-full mt-8 text-center justify-center inline-flex items-center gap-2 rounded-md bg-[#bb9769] px-5 py-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#bb9769] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#696cff]/50 active:translate-y-0"
                     onClick={handleClickOpen2}
                   >
                     Parolni tiklash
@@ -286,7 +300,11 @@ const ForgotPassword = () => {
       >
         <DialogTitle>{""}</DialogTitle>
         <DialogContent>
-          <Captcha ref={captchaRef} onSolve={handleCaptchaSolve} />
+          <Captcha
+            ref={captchaRef}
+            onSolve={handleCaptchaSolve}
+            autoFetch={false}
+          />
         </DialogContent>
         <DialogActions></DialogActions>
       </Dialog>
@@ -302,7 +320,11 @@ const ForgotPassword = () => {
       >
         <DialogTitle>{""}</DialogTitle>
         <DialogContent>
-          <Captcha ref={captchaRef} onSolve={handleCaptchaSolve2} />
+          <Captcha
+            ref={captchaRef2}
+            onSolve={handleCaptchaSolve2}
+            autoFetch={false}
+          />
         </DialogContent>
         <DialogActions></DialogActions>
       </Dialog>

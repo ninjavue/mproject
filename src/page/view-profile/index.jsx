@@ -10,12 +10,29 @@ const ViewProfile = () => {
   const [user, setUser] = useState({});
   const [activeTab, setActiveTab] = useState("edit-profile");
   const [avatar, setAvatar] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   useEffect(() => {
     const getUser = async () => {
       const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
+      // console.log(resU[1][4][4]);
+      setFullName(resU[1][4][1] + " " + resU[1][4][2] + " " + resU[1][4][3]);
+      setPhone(resU[1][4][4]);
+    
       if (resU.status === METHOD.OK) {
-        const avatarUrl = await downloadFileAll(resU[1][4][5]);
+          const avatarObj = resU?.[1]?.[4]?.[5];
+
+        if(!avatarObj ||
+    typeof avatarObj !== "object" ||
+    Object.keys(avatarObj).length === 0){
+          setAvatar("../assets/images/avatar/avatar1.png");
+        }else{
+        const avatarUrl = await downloadFileAll(
+          resU[1][4][5][1],
+          resU[1][4][5][2],
+        );
         setAvatar(avatarUrl);
+      }
         setUser(resU[1]);
       } else if (resU.status === METHOD.Not_Found) {
         localStorage.removeItem("checkUser");
@@ -25,22 +42,55 @@ const ViewProfile = () => {
     getUser();
   }, []);
 
-
-  const downloadFileAll = async (id) => {
-    const blob = await downloadFileViaRpcNew(stRef, id, id, (p) => {
-    
-    });
+  const downloadFileAll = async (id, size) => {
+    console.log(id, size)
+    const blob = await downloadFileViaRpcNew(stRef, id, id, size, (p) => {});
     const url = URL.createObjectURL(blob);
     return url;
+  };
+
+  const userRole = (role) => {
+    // console.log(role);
+    switch (role) {
+      case 1:
+        return "Admin";
+      case 2:
+        return "Departament boshlig'i";
+      case 3:
+        return "Bo'lim boshlig'i";
+      case 4:
+        return "Bosh mutaxassis";
+      case 5:
+        return "Yetakchi mutaxassis";
+      case 6:
+        return "Birinchi toifali mutaxassis";
+      case 7:
+        return "Shartnoma bo'limi";
+      case 8:
+        return "Tashkilot";
+      default:
+        return "Noma'lum";
+    }
+  };
+
+  const userSection = (sec) => {
+    switch (sec) {
+      case 1:
+        return "Axborot tizimlari kiberxavfsizligi";
+      case 2:
+        return "Mobil ilovalar kiberxavfsizligi";
+      case 3:
+        return "Kiberxavfsizlik uzelini kuzatib borish";
+      default:
+        return "Noma'lum";
+    }
   };
 
   return (
     <>
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-          <h6 className="font-semibold mb-0 dark:text-white">
-            Mening hisobim
-          </h6>
+          <h6 className="font-semibold mb-0 dark:text-white">Mening hisobim</h6>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-4">
@@ -57,13 +107,8 @@ const ViewProfile = () => {
                     alt
                     className="border br-white border-width-2-px max-w-[200px] min-w-[200px] min-h-[200px] object-cover rounded-full object-fit-cover mx-auto"
                   />
-                  <h6 className="mb-0 mt-4">
-                    {" "}
-                     {user?.[4]?.[2]}
-                  </h6>
-                  <span className="text-secondary-light mb-4">
-                    {user?.[1]}
-                  </span>
+                  <h6 className="mb-0 mt-4"> {user?.[4]?.[2]}</h6>
+                  <span className="text-secondary-light mb-4">{user?.[1]}</span>
                 </div>
                 <div className="mt-6">
                   <h6 className="text-xl mb-4">Mening ma'lumotlarim</h6>
@@ -82,7 +127,7 @@ const ViewProfile = () => {
                         Pochta
                       </span>
                       <span className="w-[70%] text-secondary-light font-medium">
-                        :   {user?.[1]}
+                        : {user?.[1]}
                       </span>
                     </li>
                     <li className="flex items-center gap-1 mb-3">
@@ -94,13 +139,23 @@ const ViewProfile = () => {
                         : {user?.[4]?.[4]}
                       </span>
                     </li>
+
                     <li className="flex items-center gap-1 mb-3">
                       <span className="w-[30%] text-base font-semibold text-neutral-600 dark:text-neutral-200">
                         {" "}
-                        Bo'lim
+                        Bo'lim nomi
                       </span>
                       <span className="w-[70%] text-secondary-light font-medium">
-                        : Design
+                        : {userSection(user?.[4]?.[0])}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-1 mb-3">
+                      <span className="w-[30%] text-base font-semibold text-neutral-600 dark:text-neutral-200">
+                        {" "}
+                        Lavozimi
+                      </span>
+                      <span className="w-[70%] text-secondary-light font-medium">
+                        : {userRole(user?.[3])}
                       </span>
                     </li>
                   </ul>
@@ -195,14 +250,15 @@ const ViewProfile = () => {
                               htmlFor="name"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Full Name{" "}
-                              <span className="text-danger-600">*</span>
+                              F.I.SH. <span className="text-danger-600">*</span>
                             </label>
                             <input
                               type="text"
                               className="form-control rounded-lg"
                               id="name"
-                              placeholder="Enter Full Name"
+                              disabled
+                              defaultValue={fullName}
+                              placeholder="Familya Ism Sharif"
                             />
                           </div>
                         </div>
@@ -212,13 +268,16 @@ const ViewProfile = () => {
                               htmlFor="email"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Email <span className="text-danger-600">*</span>
+                              Pochta manzilingiz{" "}
+                              <span className="text-danger-600">*</span>
                             </label>
                             <input
                               type="email"
                               className="form-control rounded-lg"
                               id="email"
-                              placeholder="Enter email address"
+                              disabled
+                              defaultValue={user?.[1]}
+                              placeholder="Pochta manzilingizni kiriting"
                             />
                           </div>
                         </div>
@@ -228,13 +287,15 @@ const ViewProfile = () => {
                               htmlFor="number"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Phone
+                              Telefon
                             </label>
                             <input
                               type="email"
                               className="form-control rounded-lg"
                               id="number"
-                              placeholder="Enter phone number"
+                              disabled
+                              defaultValue={"+998" + phone}
+                              placeholder="Telefon raqamingizni kiriting"
                             />
                           </div>
                         </div>
@@ -244,16 +305,14 @@ const ViewProfile = () => {
                               htmlFor="depart"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Department{" "}
+                              Bo'lim{" "}
                               <span className="text-danger-600">*</span>{" "}
                             </label>
                             <select
                               className="form-control rounded-lg form-select"
                               id="depart"
                             >
-                              <option>Enter Event Title </option>
-                              <option>Enter Event Title One </option>
-                              <option>Enter Event Title Two</option>
+                              <option>{userSection(user?.[4]?.[0])}</option>
                             </select>
                           </div>
                         </div>
@@ -263,16 +322,16 @@ const ViewProfile = () => {
                               htmlFor="desig"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Designation{" "}
+                              Lavozimingiz{" "}
                               <span className="text-danger-600">*</span>{" "}
                             </label>
                             <select
                               className="form-control rounded-lg form-select"
                               id="desig"
                             >
-                              <option>Enter Designation Title </option>
-                              <option>Enter Designation Title One </option>
-                              <option>Enter Designation Title Two</option>
+                              <option selected disabled>
+                                {userRole(user[3])}
+                              </option>
                             </select>
                           </div>
                         </div>
@@ -282,17 +341,16 @@ const ViewProfile = () => {
                               htmlFor="Language"
                               className="inline-block font-semibold text-neutral-600 dark:text-neutral-200 text-sm mb-2"
                             >
-                              Language{" "}
+                              Til{" "}
                               <span className="text-danger-600">*</span>{" "}
                             </label>
                             <select
                               className="form-control rounded-lg form-select"
                               id="Language"
                             >
-                              <option> English</option>
-                              <option> Bangla </option>
-                              <option> Hindi</option>
-                              <option> Arabic</option>
+                              <option selected disabled>
+                                Uzbek
+                              </option>
                             </select>
                           </div>
                         </div>
@@ -362,7 +420,9 @@ const ViewProfile = () => {
                     </div>
                   </div>
                   <div
-                    className={activeTab === "notification-password" ? "" : "hidden"}
+                    className={
+                      activeTab === "notification-password" ? "" : "hidden"
+                    }
                     id="notification-password"
                     role="tabpanel"
                     aria-labelledby="notification-password-tab"

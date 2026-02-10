@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Aside from "./aside";
 import Header from "./header";
 import Footer from "./footer";
+import { ChatUnreadListener } from "../ChatUnreadListener";
 import { useEffect, useState, useRef } from "react";
 
 const Main = () => {
@@ -102,84 +103,85 @@ const Main = () => {
   const timerRef = useRef(null);
   const inputRef = useRef(null);
 
-  const lockApp = () => {
-    try {
-      localStorage.setItem('app_locked', '1');
-    } catch (e) {}
-    setLocked(true);
-  };
+  // const lockApp = () => {
+  //   try {
+  //     localStorage.setItem('app_locked', '1');
+  //   } catch (e) {}
+  //   setLocked(true);
+  // };
 
-  const unlockApp = () => {
-    try {
-      localStorage.removeItem('app_locked');
-    } catch (e) {}
-    setLocked(false);
-    setPassword('');
-    startTimer();
-  };
+  // const unlockApp = () => {
+  //   try {
+  //     localStorage.removeItem('app_locked');
+  //   } catch (e) {}
+  //   setLocked(false);
+  //   setPassword('');
+  //   startTimer();
+  // };
 
-  const startTimer = () => {
-    clearTimeout(timerRef.current);
-    if (locked) return;
-    timerRef.current = setTimeout(() => {
-      lockApp();
-    }, 300000); 
-  };
+  // const startTimer = () => {
+  //   clearTimeout(timerRef.current);
+  //   if (locked) return;
+  //   timerRef.current = setTimeout(() => {
+  //     lockApp();
+  //   }, 300000); 
+  // };
 
-  useEffect(() => {
-    if (locked) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [locked]);
+  // useEffect(() => {
+  //   if (locked) {
+  //     setTimeout(() => {
+  //       inputRef.current?.focus();
+  //     }, 50);
+  //     document.body.style.overflow = 'hidden';
+  //   } else {
+  //     document.body.style.overflow = '';
+  //   }
+  //   return () => {
+  //     document.body.style.overflow = '';
+  //   };
+  // }, [locked]);
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.altKey && (e.key === 'l' || e.key === 'L')) {
-        e.preventDefault();
-        lockApp();
-      }
-    };
+  // useEffect(() => {
+  //   const onKey = (e) => {
+  //     if (e.altKey && (e.key === 'l' || e.key === 'L')) {
+  //       e.preventDefault();
+  //       lockApp();
+  //     }
+  //   };
 
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  useEffect(() => {
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-    const reset = () => {
-      if (locked) return;
-      startTimer();
-    };
+  //   window.addEventListener('keydown', onKey);
+  //   return () => window.removeEventListener('keydown', onKey);
+  // }, []);
+  // useEffect(() => {
+  //   const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+  //   const reset = () => {
+  //     if (locked) return;
+  //     startTimer();
+  //   };
 
-    events.forEach((ev) => window.addEventListener(ev, reset));
-    startTimer();
+  //   events.forEach((ev) => window.addEventListener(ev, reset));
+  //   startTimer();
 
-    return () => {
-      events.forEach((ev) => window.removeEventListener(ev, reset));
-      clearTimeout(timerRef.current);
-    };
-  }, [locked]);
+  //   return () => {
+  //     events.forEach((ev) => window.removeEventListener(ev, reset));
+  //     clearTimeout(timerRef.current);
+  //   };
+  // }, [locked]);
 
-  const handlePasswordSubmit = (e) => {
-    e && e.preventDefault();
-    if (password === '0316') {
-      setError('');
-      unlockApp();
-    } else {
-      setPassword('');
-      setError("Parol noto'g'ri. Qayta urinib ko'ring.");
-    }
-  };
+  // const handlePasswordSubmit = (e) => {
+  //   e && e.preventDefault();
+  //   if (password === '0316') {
+  //     setError('');
+  //     unlockApp();
+  //   } else {
+  //     setPassword('');
+  //     setError("Parol noto'g'ri. Qayta urinib ko'ring.");
+  //   }
+  // };
 
   return (
     <div className="dark:bg-neutral-800 bg-neutral-100 dark:text-white">
+      <ChatUnreadListener />
       <Aside />
       <main className="dashboard-main bg-[#f5f5f9] dark:bg-[#1e1e2f]" >
         <Header />
@@ -189,7 +191,7 @@ const Main = () => {
         <Footer />
       </main>
 
-      {locked && (
+      {/* {locked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-300 dark:bg-gray-900 ">
           <div className="bg-white dark:dark:bg-[#2b2c40] rounded-lg shadow-xl w-full max-w-md mx-4">
             <div className="p-6">
@@ -224,7 +226,7 @@ const Main = () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
 
     </div>

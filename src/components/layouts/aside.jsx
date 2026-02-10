@@ -1,7 +1,63 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { METHOD } from "../../api/zirhrpc";
+import { sendRpcRequest } from "../../rpc/rpcClient";
+import { useZirhStref } from "../../context/ZirhContext";
 
 const Aside = () => {
+  const [user, setUser] = useState({});
+  const { stRef } = useZirhStref();
+  const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
+
+  const formatBufferToId = (data) => {
+    if (!data) return null;
+    const bufferArray = data.buffer
+      ? Object.values(data.buffer)
+      : Object.values(data);
+
+    return bufferArray
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+  };
+
+  const userMe = async () => {
+    const res = await sendRpcRequest(stRef, METHOD.USER_GET, {});
+    if (res.status === METHOD.OK) {
+      const u = {
+        id: formatBufferToId(res[1]?._id),
+        email: res[1][1],
+        full_name: res[1][4]?.[1] + " " + res[1][4]?.[2] + " " + res[1][4]?.[3],
+        role: res[1][3],
+      };
+
+      setUser(u);
+    }
+  };
+
+  useEffect(() => {
+    userMe();
+  }, []);
+
+  // Chat o‘qilmaganlar soni: localStorage + chat sahifasidan keladigan event
+  useEffect(() => {
+    const getTotal = () => {
+      try {
+        const s = localStorage.getItem("chat_unread_counts");
+        const obj = s ? JSON.parse(s) : {};
+        return Object.values(obj).reduce((sum, n) => sum + Number(n || 0), 0);
+      } catch {
+        return 0;
+      }
+    };
+    setChatUnreadTotal(getTotal());
+    const onChatUnread = (e) => {
+      const total = e?.detail?.total ?? getTotal();
+      setChatUnreadTotal(total);
+    };
+    window.addEventListener("chatUnreadTotal", onChatUnread);
+    return () => window.removeEventListener("chatUnreadTotal", onChatUnread);
+  }, []);
+
   const MenuLink = ({ to, children }) => (
     <NavLink
       to={to}
@@ -24,7 +80,6 @@ const Aside = () => {
       <div>
         <Link to="/" className="sidebar-logo border-r">
           <div className="flex items-center logo-head gap-2 m-auto pt-5">
-           
             <p className="overflow-hidden transition-all duration-300 font-semibold text-[20px] leading-[26px] h-[54px]  text-[#57534e] uppercase">
               Kiberxavfsizlik markazi
             </p>
@@ -37,13 +92,16 @@ const Aside = () => {
           /> */}
         </Link>
       </div>
-      <div data-v-edbccf60="" class="flex items-center bg-transparent border-r pb-6">
+      <div
+        data-v-edbccf60=""
+        class="flex items-center bg-transparent border-r pb-6"
+      >
         <span className="w-full opacity-100 h-[1.5px] flex bg-[#bb9769] transition-all duration-300"></span>
-       <img
-              src="/assets/jamoa.png"
-              alt="site logo"
-              style={{ width: 50, height: 60 }}
-            />
+        <img
+          src="/assets/jamoa.png"
+          alt="site logo"
+          style={{ width: 50, height: 60 }}
+        />
         <span className="w-full opacity-100 h-[1.5px] flex bg-[#bb9769] transition-all duration-300"></span>
       </div>
       <div className="sidebar-menu-area">
@@ -96,15 +154,17 @@ const Aside = () => {
               <span>Hisobot</span>
             </MenuLink>
           </li>
-          <li>
-            <MenuLink to="/page/user-add">
-              <iconify-icon
-                icon="material-symbols:person-add-outline"
-                className="menu-icon"
-              />
-              <span>Foydalanuvchi qo'shish</span>
-            </MenuLink>
-          </li>
+          {(user.role === 1 || user.role === 3) && (
+            <li>
+              <MenuLink to="/page/user-add">
+                <iconify-icon
+                  icon="material-symbols:person-add-outline"
+                  className="menu-icon"
+                />
+                <span>Foydalanuvchi qo'shish</span>
+              </MenuLink>
+            </li>
+          )}
           <li>
             <MenuLink to="/page/development">
               <iconify-icon icon="ri:table-view" className="menu-icon" />
@@ -124,6 +184,11 @@ const Aside = () => {
                 className="menu-icon"
               />
               <span>Chat</span>
+              {chatUnreadTotal > 0 && (
+                <span className="flex justify-center items-center rounded-full ml-auto">
+                  {chatUnreadTotal > 99 ? "99+" : chatUnreadTotal}
+                </span>
+              )}
             </MenuLink>
           </li>
           {/* <li className="sidebar-menu-group-title">Tizim ekspertizalar</li>

@@ -28,14 +28,19 @@ const ChatPage = () => {
   const [chats, setChats] = useState([]);
   const [fullName, setFullName] = useState("");
   const [groups, setGroups] = useState([]);
+  const [lastMsgId, setLastMsgId] = useState("");
 
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerFileType, setViewerFileType] = useState(null);
   const [viewerZipEntries, setViewerZipEntries] = useState([]);
+  const [viewerFromZip, setViewerFromZip] = useState(false);
   const [viewerSelectedFile, setViewerSelectedFile] = useState(null);
   const [viewerFileUrl, setViewerFileUrl] = useState(null);
   const [viewerDocxHtml, setViewerDocxHtml] = useState(null);
   const [viewerError, setViewerError] = useState(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerLoadProgress, setViewerLoadProgress] = useState(0);
+  const [viewerLoadingFileName, setViewerLoadingFileName] = useState("");
   const [user, setUser] = useState(null);
   const [channelOpen, setChannelOpen] = useState(false);
   const [open1, setOpen1] = useState(false);
@@ -70,8 +75,27 @@ const ChatPage = () => {
   const [userEmail, setUserEmail] = useState("");
   const [privateId, setPrivateId] = useState(null);
   const [countD, setCountD] = useState(0);
-  const [unreadCounts, setUnreadCounts] = useState({});
+  const UNREAD_STORAGE_KEY = "chat_unread_counts";
+  const getStoredUnreadCounts = () => {
+    try {
+      const s = localStorage.getItem(UNREAD_STORAGE_KEY);
+      return s ? JSON.parse(s) : {};
+    } catch {
+      return {};
+    }
+  };
+  const persistUnreadCounts = (obj) => {
+    try {
+      localStorage.setItem(UNREAD_STORAGE_KEY, JSON.stringify(obj));
+    } catch (_) {}
+  };
+  const [unreadCounts, setUnreadCounts] = useState(getStoredUnreadCounts);
   const [replyTo, setReplyTo] = useState(null);
+
+  const totalUnread = Object.values(unreadCounts).reduce(
+    (s, n) => s + Number(n || 0),
+    0,
+  );
 
   const bottomRef = useRef(null);
   const scrollTimeoutRef = useRef(null);
@@ -82,6 +106,8 @@ const ChatPage = () => {
   const scrollTypeRef = useRef("initial"); // 'initial' | 'top' | 'bottom'
   const scrollContainerRef = useRef(null);
   const viewerBackgroundUrlRef = useRef(null);
+  const lastChatViewUpdateRef = useRef(null); // bir xil diapazon uchun qayta so'rov yuborilishini oldini olish
+  const currentConvIdRef = useRef(null); // qaysi suhbat ko'rsatilayotgani (eski getMsg javoblarini ignore qilish uchun)
 
   const { stRef } = useZirhStref();
 
@@ -105,7 +131,13 @@ const ChatPage = () => {
     return imageAvatar;
   };
 
-  const selectConversation = async (item) => {
+  const selectConversation = async (item, options = {}) => {
+    const { resetUnread = true } = options;
+    const newConvId = !item?.userId ? item?.id : item?.userId;
+    currentConvIdRef.current = newConvId;
+    setConvId(newConvId);
+    setMessages([]);
+    setSelected(item);
     setSinglGroup(item);
     const usres = await sendRpcRequest(stRef, METHOD.CHAT_ONLINE_CHECK, {
       1: item.id2,
@@ -114,43 +146,47 @@ const ChatPage = () => {
       setUserAll((prev) =>
         prev.map((u) => (u.id2 === item.id2 ? { ...u, status: usres[1] } : u)),
       );
+      setSelected((prev) => (prev ? { ...prev, status: usres[1] } : prev));
     }
 
     if (!item?.userId) {
       getMsg(item?.id);
-      setConvId(item?.id);
     } else {
       getMsg(item?.userId);
-      setConvId(item?.userId);
     }
 
     const group = groupAll.find((g) => formatBufferToId(g._id) === item?.id);
-    if (!group) return;
 
     setGroupId(item.id);
 
-    if (group[1] === 2 || group[1] === 3) {
-      const users = Array.from(
-        new Map(
-          group.otherMembers
-            .map((it) => items.find((u) => u.id === formatBufferToId(it?.[2])))
-            .filter(Boolean)
-            .map((u) => [u.id, u]),
-        ).values(),
-      );
-      setSGroupUsers(users);
+    if (group) {
+      if (group[1] === 2 || group[1] === 3) {
+        const users = Array.from(
+          new Map(
+            group.otherMembers
+              .map((it) =>
+                items.find((u) => u.id === formatBufferToId(it?.[2])),
+              )
+              .filter(Boolean)
+              .map((u) => [u.id, u]),
+          ).values(),
+        );
+        setSGroupUsers(users);
+      } else {
+        setSGroupUsers([]);
+      }
     } else {
       setSGroupUsers([]);
     }
 
-    setSelected(item);
-    setMessages(sampleMessagesFor(item));
-
-    const activeChatId = item?.userId || item?.id;
-    setUnreadCounts((prev) => ({
-      ...prev,
-      [activeChatId]: 0,
-    }));
+    if (resetUnread) {
+      const activeChatId = item?.userId || item?.id;
+      setUnreadCounts((prev) => {
+        const next = { ...prev, [activeChatId]: 0 };
+        persistUnreadCounts(next);
+        return next;
+      });
+    }
   };
 
   useEffect(() => {
@@ -197,8 +233,14 @@ const ChatPage = () => {
     }
   }, [activeTab, people, groups, channels, selected]);
 
+  // Brauzer tab sarlavhasi va favicon’da o‘qilmaganlar soni (Zimbra uslubida)
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("chatUnreadTotal", { detail: { total: totalUnread } }),
+    );
+  }, [totalUnread]);
+
   useZirhEvent(null, async (data) => {
-    console.log(data);
     const normalizeStatusValue = (value) => {
       if (value === true || value === false) return value;
       if (value === 1 || value === "1") return true;
@@ -218,25 +260,24 @@ const ChatPage = () => {
       const userId = user?.id;
       const isOwnMessage = userId && senderId === userId;
 
-      console.log("Message event:", {
-        incomingConvId,
-        senderId,
-        userId,
-        isOwnMessage,
-        convId,
-        shouldIncrementUnread:
-          !isOwnMessage && (!convId || incomingConvId !== convId),
-      });
+      // console.log("Message event:", {
+      //   incomingConvId,
+      //   senderId,
+      //   userId,
+      //   isOwnMessage,
+      //   convId,
+      //   shouldIncrementUnread:
+      //     !isOwnMessage && (!convId || incomingConvId !== convId),
+      // });
 
       // If message is from another conversation and not from me, increment unread count
       if (!isOwnMessage && (!convId || incomingConvId !== convId)) {
-        console.log("Incrementing unread for:", incomingConvId);
         setUnreadCounts((prev) => {
           const updated = {
             ...prev,
             [incomingConvId]: (prev[incomingConvId] || 0) + 1,
           };
-          console.log("Updated unread counts:", updated);
+          persistUnreadCounts(updated);
           return updated;
         });
       }
@@ -268,7 +309,7 @@ const ChatPage = () => {
           mime: "application/pdf",
           url: null,
         },
-        read: isOwnMessage ? true : false,
+        read: false,
         progress: 0,
         status: "done",
       };
@@ -294,9 +335,7 @@ const ChatPage = () => {
         const type = tpe;
 
         if (type === 1 && member.user_info) {
-          const userId = formatBufferToId(member.user_info._id);
-          console.log(member);
-
+          const userId = formatBufferToId(member?.[1]);
           const user = {
             id: userId,
             id2: formatBufferToId(member[2]),
@@ -355,7 +394,7 @@ const ChatPage = () => {
       setMessages((prev) => {
         let changed = false;
         const next = prev.map((msg) => {
-          if (!msg.read) {
+          if (!msg.read && msg.sender !== "me") {
             changed = true;
             return { ...msg, read: true };
           }
@@ -364,14 +403,28 @@ const ChatPage = () => {
         return changed ? next : prev;
       });
     } else if (data.methodId === METHOD.CHAT_USER_STATUS) {
-      const rawUserId = data?.params?.["1"] ?? data?.params?.[1];
+      const rawUserId = String(
+        data?.params?.["1"] ?? data?.params?.[1] ?? "",
+      ).trim();
       const rawStatus = data?.params?.["2"] ?? data?.params?.[2];
 
       setUserAll((prev) =>
         prev.map((u) =>
-          u.id2 === rawUserId ? { ...u, status: rawStatus } : u,
+          String(u.id2 || "") === rawUserId ? { ...u, status: rawStatus } : u,
         ),
       );
+      // const user = selected;
+      // selected.status = rawStatus
+      // setSelected(selected)
+      setSelected((prev) => {
+        if (!prev || String(prev.id2 || "") !== rawUserId) return prev;
+        return { ...prev, status: rawStatus };
+      });
+      console.log(selected)
+      console.log(people)
+      // console.log(rawUserId)
+      // console.log(user)
+      // console.log(selected)
     }
   });
 
@@ -389,7 +442,7 @@ const ChatPage = () => {
           : "bg-blue-500 text-white"
       }`;
     return (
-      <div className="flex items-center gap-4 px-2 py-1 bg-white dark:bg-gray-900">
+      <div className="flex items-center gap-4 px-2 py-1 bg-white dark:bg-transparent">
         <button
           type="button"
           onClick={() => setBtnActive("shaxsiy")}
@@ -462,18 +515,17 @@ const ChatPage = () => {
     return "ri-file-2-line";
   };
 
-  const downloadFileAll = async (id) => {
-    const blob = await downloadFileViaRpcNew(stRef, id, id, (p) => {
+  const downloadFileAll = async (id, fileName = "test", size = null) => {
+    // return "null"
+    const blob = await downloadFileViaRpcNew(stRef, id, fileName, size, (p) => {
       setUploadProgress(p);
       setIsUploading(true);
       if (p === 100) setIsUploading(false);
     });
-    const url = URL.createObjectURL(blob);
-    localStorage.setItem(id, url);
-    return url;
+    return blob;
   };
-  const downloadFileDocAll = async (id) => {
-    return await downloadFileViaRpcNew(stRef, id, id, (p) => {
+  const downloadFileDocAll = async (id, size = null) => {
+    return await downloadFileViaRpcNew(stRef, id, id, size, (p) => {
       setUploadProgress(p);
       setIsUploading(true);
       if (p === 100) setIsUploading(false);
@@ -489,7 +541,10 @@ const ChatPage = () => {
       return;
     }
 
+    if (convId === null) return;
+
     const id = Date.now() + Math.random();
+
     const newMsg = {
       id,
       type: "file",
@@ -498,6 +553,7 @@ const ChatPage = () => {
       time: new Date().toString(),
       replyToId: replyTo?.id || null,
       file: {
+        id: null,
         name: file.name,
         size: file.size,
         mime: file.type,
@@ -508,7 +564,6 @@ const ChatPage = () => {
       read: false,
     };
 
-    if (convId === null) return;
     setMessages((s) => [...s, newMsg]);
 
     try {
@@ -521,17 +576,44 @@ const ChatPage = () => {
         );
       });
 
-      const fileId = doneRes.fileId;
-      if (fileId && file.type.startsWith("image/")) {
-        const url = await downloadFileAll(fileId);
-        newMsg.file.id = url;
+      const fileId = doneRes?.fileId;
+      if (!fileId) {
+        setMessages((cur) =>
+          cur.map((m) => (m.id === id ? { ...m, status: "error" } : m)),
+        );
+        toast.error("Fayl yuklanmadi");
+        return;
       }
 
-      setMessages((cur) =>
-        cur.map((m) =>
-          m.id === id ? { ...m, progress: 100, status: "done" } : m,
-        ),
-      );
+      if (file.type.startsWith("image/")) {
+        const blob = await downloadFileAll(fileId, file.name, file.size);
+        const url1 = URL.createObjectURL(blob);
+        setMessages((cur) =>
+          cur.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  progress: 100,
+                  status: "done",
+                  file: { ...m.file, id: url1 },
+                }
+              : m,
+          ),
+        );
+      } else {
+        setMessages((cur) =>
+          cur.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  progress: 100,
+                  status: "done",
+                  file: { ...m.file, id: fileId },
+                }
+              : m,
+          ),
+        );
+      }
 
       const res = await sendRpcRequest(stRef, METHOD.CHAT_SEND_MSG_CLIENT, {
         1: convId,
@@ -541,26 +623,28 @@ const ChatPage = () => {
           3: {
             1: fileId,
             2: file.name,
+            3: file.size,
           },
         },
         4: replyTo?.id || null,
       });
-
-      // console.log(res);
-      if (res.status !== METHOD.OK) {
+      // console.log(res)
+      const success =
+        res &&
+        (res.status === METHOD.OK || res.status === 56 || res.ok === true);
+      if (!success) {
         setMessages((cur) =>
           cur.map((m) => (m.id === id ? { ...m, status: "error" } : m)),
         );
       }
     } catch (error) {
-      // console.log(error);
       setMessages((cur) =>
         cur.map((m) => (m.id === id ? { ...m, status: "error" } : m)),
       );
+      toast.error("Xabar yuborishda xatolik");
     } finally {
       setReplyTo(null);
     }
-    // ensure autoscroll for sent file messages
     scrollTypeRef.current = "initial";
   };
 
@@ -624,14 +708,29 @@ const ChatPage = () => {
     return date.toString();
   };
 
+  const isServerMessageId = (value) => {
+    if (value == null) return false;
+    const s = String(value).trim();
+    return /^[a-f0-9]{24}$/i.test(s);
+  };
+
+  const isTimestamp = (value) => {
+    if (value == null) return false;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 1e12 && n <= 1e14;
+  };
+
   const getMsg = async (id, msgId = null, msgType = false) => {
     try {
-      if (convId === null) return;
+
+      if(msgId !== null && msgId === lastMsgId) return;
+      setLastMsgId(msgId);
+      
 
       let type;
 
       if (msgId === null && msgType === false) {
-        type = 1;
+        type = 2;
       } else if (msgId !== null && msgType === false) {
         type = 2;
       } else if (msgId !== null && msgType === true) {
@@ -644,10 +743,12 @@ const ChatPage = () => {
         3: msgId,
       };
       const res = await sendRpcRequest(stRef, METHOD.CHAT_GET_MSG, payload);
+      // console.log(res);
       if (res.status === METHOD.OK) {
+        if (currentConvIdRef.current !== id) return;
         const raw = res[1];
         setCountD(raw?.count);
-
+        // console.log(res[1])
         const list = Array.isArray(raw)
           ? raw
           : Array.isArray(raw?.data)
@@ -669,7 +770,7 @@ const ChatPage = () => {
             file: {
               id: item[3][3]?.[1],
               name: item[3][3]?.[2],
-              size: "30",
+              size: item[3][3]?.[3],
               mime: "application/pdf",
               url: null,
             },
@@ -685,18 +786,41 @@ const ChatPage = () => {
             fileName.endsWith(".jpeg") ||
             fileName.endsWith(".png");
           if (isImage && item.file.id) {
-            item.file.id = await downloadFileAll(item.file.id);
+            // console.log("isImage", isImage, fileName);
+            // console.log("test");
+            const blob = await downloadFileAll(
+              item.file.id,
+              item.file.name || "file",
+              item.file.size,
+            );
+            if (
+              fileName.endsWith(".zip") ||
+              fileName.endsWith(".apk") ||
+              fileName.endsWith(".aar") ||
+              fileName.endsWith(".xapk") ||
+              fileName.endsWith(".rar") ||
+              fileName.endsWith(".ipa")
+            ) {
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = fileName || "file.p";
+              a.click();
+            } else {
+              item.file.id = URL.createObjectURL(blob);
+            }
           }
         }
         if (msgType === true) {
           skipNextScrollRef.current = true;
           setMessages((prev) => [...messages, ...prev]);
+          // console.log(messages, "messages");
           const _t = setTimeout(() => {
             skipNextScrollRef.current = false;
           }, 600);
           return () => clearTimeout(_t);
         } else {
           setMessages(messages);
+          // console.log(messages, "messages");
         }
       }
     } catch (error) {
@@ -706,37 +830,106 @@ const ChatPage = () => {
 
   const openViewer = async (message) => {
     if (!message || !message.file) return;
+
     if (viewerFileUrl) URL.revokeObjectURL(viewerFileUrl);
     setViewerFileUrl(null);
+    setViewerError(null);
+    setViewerFileType(null);
+    setViewerSelectedFile(null);
+    setViewerZipEntries([]);
+
+    const needDownload =
+      !message.file.blob && !message.file.url && message.file.id;
+
+    if (needDownload) {
+      setViewerOpen(true);
+      setViewerLoading(true);
+      setViewerLoadProgress(0);
+      setViewerLoadingFileName(message.file.name || "Fayl");
+    }
+
     try {
-      setViewerError(null);
       let blob;
+      const idOrUrl = message.file.id || message.file.url;
+      const isBlobUrl =
+        typeof idOrUrl === "string" && idOrUrl.startsWith("blob:");
       if (message.file.blob) {
         blob = message.file.blob;
-      } else if (message.file.url) {
-        const res = await fetch(message.file.url);
+      } else if (message.file.url || isBlobUrl) {
+        const res = await fetch(idOrUrl);
         blob = await res.blob();
+        setViewerLoading(false);
       } else {
-        setIsUploading(true);
-        blob = await downloadFileDocAll(message.file.id);
-        setIsUploading(false);
+        const fileSize = message.file.size || 1024 * 1024;
+        blob = await downloadFileViaRpcNew(
+          stRef,
+          message.file.id,
+          message.file.name || message.file.id,
+          fileSize,
+          (p) => setViewerLoadProgress(Math.min(100, Math.max(0, p))),
+        );
+        setViewerLoading(false);
       }
 
       const fileName = (message.file.name || "").toLowerCase();
-      const mime = message.file.mime || blob.type || "";
+      const mime = message.file.mime || blob?.type || "";
+
+      if (fileName.endsWith(".apk") || fileName.endsWith(".ipa")) {
+        setViewerLoading(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download =
+          message.file.name ||
+          (fileName.endsWith(".apk") ? "file.apk" : "file.ipa");
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`${message.file.name || "Fayl"} yuklab olindi`);
+        if (needDownload) setViewerOpen(false);
+        return;
+      }
+
+      const isImageFile =
+        /\.(png|jpg|jpeg|gif|bmp|webp)$/i.test(fileName) ||
+        (mime && mime.startsWith("image/"));
+      if (isImageFile) {
+        setViewerLoading(false);
+        const url = URL.createObjectURL(blob);
+        setViewerFileUrl(url);
+        setViewerFileType("image");
+        setViewerSelectedFile(null);
+        setViewerDocxHtml(null);
+        setViewerFromZip(false);
+        setViewerOpen(true);
+        return;
+      }
 
       if (fileName.endsWith(".zip")) {
         const zip = await JSZip.loadAsync(blob);
+        const viewableExt = [".pdf", ".docx", ".doc", ".apk", ".ipa"];
+        const hasViewable = Object.keys(zip.files).some((p) => {
+          const entry = zip.files[p];
+          if (entry.dir) return false;
+          const name = (p.split("/").pop() || "").toLowerCase();
+          return viewableExt.some((ext) => name.endsWith(ext));
+        });
+        if (!hasViewable) {
+          setViewerLoading(false);
+          setViewerOpen(false);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = message.file.name || "file.zip";
+          a.click();
+          URL.revokeObjectURL(url);
+          toast.success(`${message.file.name || "ZIP"} yuklab olindi`);
+          return;
+        }
         const entries = [];
         for (const p of Object.keys(zip.files)) {
           const entry = zip.files[p];
           const name = p.split("/").pop();
-          if (
-            !entry.dir &&
-            (name.endsWith(".pdf") ||
-              name.endsWith(".docx") ||
-              name.endsWith(".doc"))
-          ) {
+          if (!entry.dir && name) {
             const fileBlob = await entry.async("blob");
             entries.push({ name, blob: fileBlob });
           }
@@ -745,6 +938,7 @@ const ChatPage = () => {
         setViewerFileType("application/zip");
         setViewerSelectedFile(null);
         setViewerDocxHtml(null);
+        setViewerFromZip(false);
         setViewerOpen(true);
         return;
       }
@@ -773,8 +967,14 @@ const ChatPage = () => {
         setViewerOpen(true);
         return;
       }
+
+      if (needDownload && !blob) {
+        setViewerError("Fayl yuklanmadi");
+      }
     } catch (err) {
       console.error("Viewer open error", err);
+      setViewerLoading(false);
+      setViewerError("Faylni ochishda xatolik yuz berdi");
     }
   };
 
@@ -793,11 +993,35 @@ const ChatPage = () => {
       if (viewerFileUrl) URL.revokeObjectURL(viewerFileUrl);
       const url = URL.createObjectURL(finalBlob);
       setViewerFileUrl(url);
+    } else {
+      setViewerFileUrl(null);
     }
 
     setViewerSelectedFile(finalBlob);
     setViewerFileType(mime);
     setViewerDocxHtml(null);
+    setViewerFromZip(true);
+  };
+
+  const downloadZipEntry = (entry) => {
+    const url = URL.createObjectURL(entry.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = entry.name || "file";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${entry.name} yuklab olindi`);
+  };
+
+  const backToZipList = () => {
+    if (viewerFileUrl) {
+      URL.revokeObjectURL(viewerFileUrl);
+      setViewerFileUrl(null);
+    }
+    setViewerSelectedFile(null);
+    setViewerDocxHtml(null);
+    setViewerFileType("application/zip");
+    setViewerFromZip(false);
   };
 
   const handlePrint = async () => {
@@ -869,6 +1093,10 @@ const ChatPage = () => {
     setViewerOpen(false);
     setViewerSelectedFile(null);
     setViewerFileType(null);
+    setViewerFromZip(false);
+    setViewerLoading(false);
+    setViewerLoadProgress(0);
+    setViewerLoadingFileName("");
   };
 
   const getAllChat = async () => {
@@ -922,12 +1150,14 @@ const ChatPage = () => {
                     avatar: item.otherMembers[0]?.user_info.field4[5],
                     last: "",
                     unread: 0,
+                    status: false,
                   },
                 ];
               }),
           ).values(),
         );
 
+        console.log(usersData, "usersData");
         const channelData = Array.from(
           new Map(
             res[1]
@@ -944,13 +1174,15 @@ const ChatPage = () => {
           ).values(),
         );
 
-        selectConversation(usersData[0]);
-
         setChannels(channelData);
         setUserAll(usersData);
         setGroupAll(res[1]);
         setGroups(groupsData);
         setChats(res[1]);
+        // Dastlabki yuklanishda birinchi suhbatni tanlash, lekin o'qilmagan sonini nolamaslik
+        if (usersData?.length > 0) {
+          selectConversation(usersData[0], { resetUnread: false });
+        }
       } else {
         console.log("Xatolik yuz berdi");
       }
@@ -1020,6 +1252,7 @@ const ChatPage = () => {
       try {
         const resU = await sendRpcRequest(stRef, METHOD.USER_GET, {});
         if (resU.status === METHOD.OK) {
+          // console.log(resU[1]);
           resU[1].id = formatBufferToId(resU[1]._id);
           const full_name = resU[1]?.[4]?.[1] + " " + resU[1]?.[4]?.[2];
           setFullName(full_name);
@@ -1052,6 +1285,7 @@ const ChatPage = () => {
         2: user.id,
         3: groupName,
       };
+
       const res = await sendRpcRequest(stRef, METHOD.CHAT_CREATE_CONV, payload);
 
       if (res.status === METHOD.OK) {
@@ -1511,7 +1745,6 @@ const ChatPage = () => {
       };
 
       if (urls.length === 1) {
-        // apply only to first page to avoid painting all pages
         applyBackground(sections[0], urls[0]);
       } else {
         sections.forEach((section, idx) => {
@@ -1573,12 +1806,18 @@ const ChatPage = () => {
 
     const res = await sendRpcRequest(stRef, METHOD.USER_GET_PHOTO, { 1: id });
 
-    const foundAvatar = res[1];
+    const foundAvatar = res[1][1];
+    const foundSize = res[1][2];
+    if (foundAvatar.length < 10) {
+      return "../assets/images/avatar/avatar1.png";
+    }
     let avatarUrl = null;
     if (res.status === METHOD.OK) {
-      avatarUrl = await downloadFileAll(foundAvatar);
+      avatarUrl = await downloadFileAll(foundAvatar, "avatar.png", foundSize);
     }
-    return avatarUrl;
+
+    const url = URL.createObjectURL(avatarUrl);
+    return url;
   };
 
   useEffect(() => {
@@ -1774,7 +2013,10 @@ const ChatPage = () => {
 
     const fromMsgId = unreadMessages[0].id;
     const toMsgId = unreadMessages[unreadMessages.length - 1].id;
-    // console.log(fromMsgId, toMsgId, convId)
+
+    const viewKey = `${fromMsgId}-${toMsgId}-${convId}`;
+    if (lastChatViewUpdateRef.current === viewKey) return;
+    lastChatViewUpdateRef.current = viewKey;
 
     chatViewUpdate(fromMsgId, toMsgId, convId);
   }, [messages, selected, user, convId]);
@@ -1847,6 +2089,9 @@ const ChatPage = () => {
     if (!msgId || !convId) return;
     getMsg(convId, msgId);
   };
+
+
+
 
   return (
     <>
@@ -1996,18 +2241,22 @@ const ChatPage = () => {
                 </div>
                 <div className>
                   <h6 className="text-base mb-0">{fullName}</h6>
-                  <p className="mb-0 text-xs">Online</p>
+                  <p className="mb-0 text-xs text-blue-400">Online</p>
                 </div>
               </div>
               {/* chat-sidebar-single end */}
+
               <div className="dropdown">
-                <button
-                  onClick={() => setOpen(!open)}
-                  className="text-neutral-800 dark:text-white"
-                  type="button"
-                >
-                  <i className="ri-more-2-fill" />
-                </button>
+                {(user?.[3] == 1 || user?.[3] == 3) && (
+                  <button
+                    onClick={() => setOpen(!open)}
+                    className="text-neutral-800 dark:text-white"
+                    type="button"
+                  >
+                    <i className="ri-more-2-fill" />
+                  </button>
+                )}
+
                 {open && (
                   <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50">
                     <button
@@ -2057,7 +2306,7 @@ const ChatPage = () => {
                     className={`flex items-center justify-between gap-3 rounded-2xl border border-transparent px-4 py-3 transition-all duration-200 hover:bg-[#f6f8fb] hover:shadow-sm dark:hover:bg-[#2b2c40] ${selected?.id === item.id ? "bg-[#eef4ff] border-[#d6e4ff] dark:bg-[#2b3a55] dark:border-[#3a4a68] shadow-sm" : ""}`}
                   >
                     <div className="flex items-center gap-2">
-                      {activeTab === "shaxsiy" ? <Avatar /> : <Avatar />}
+                      {activeTab === "shaxsiy" ? <div className="relative"><Avatar /> {item.status?<span className="absolute bottom-0 right-0 w-[8px] h-[8px] rounded-full min-h-[8px] min-w-[8px] bg-blue-500"></span>:""}</div>: <Avatar />}
                       <div className="info">
                         <h6
                           className={`text-base mb-1 line-clamp-1 text-start font-semibold ${selected?.id === item.id ? "text-[#1f2937] dark:text-white" : "text-[#4b5563] dark:text-gray-200"}`}
@@ -2200,7 +2449,11 @@ const ChatPage = () => {
                         <h6 className="text-base mb-0">
                           {selected ? selected.name : " "}
                         </h6>
-                        <p className="mb-0">{selectedStatusLabel}</p>
+                        <p
+                          className={`mb-0 ${selected?.status ? "text-blue-500" : "text-gray-600"}`}
+                        >
+                          {selected?.status ? "Online" : "Offline"}
+                        </p>
                       </div>
                     </div>
                     <div className="action inline-flex items-center gap-3">
@@ -2339,14 +2592,15 @@ const ChatPage = () => {
                             <React.Fragment key={m.id}>
                               {showDate && (
                                 <div className="w-full flex justify-center">
-                                  <span className="px-3 py-1 text-[12px] rounded-full bg-slate-100 text-slate-600">
+                                  <span className="px-3 py-1 text-[12px] rounded-full bg-slate-100 text-slate-600 dark:text-slate-600">
                                     {dateLabel}
                                   </span>
                                 </div>
                               )}
                               <div
                                 data-message-id={m.id}
-                                className={`max-w-[700px] ${m.sender === "me" ? "ms-auto text-white" : "text-neutral-900 flex items-end gap-3"}`}
+                                onDoubleClick={() => setReplyTo(m)}
+                                className={`max-w-[700px] ${m.sender === "me" ? "w-full ms-auto text-white flex justify-end" : "text-neutral-900 flex items-end gap-3"}`}
                               >
                                 {m.type === "text" &&
                                   (m.sender === "me" ? (
@@ -2354,7 +2608,7 @@ const ChatPage = () => {
                                       <div
                                         data-message-bubble
                                         className="bg-[#effdde] rounded-2xl rounded-ee-none p-2 relative min-w-[100px]"
-                                        onDoubleClick={() => setReplyTo(m)}
+                                        
                                         title="Javob berish"
                                       >
                                         {m.replyToId && (
@@ -2366,21 +2620,21 @@ const ChatPage = () => {
                                               scrollToMessage(m.replyToId)
                                             }
                                           >
-                                            <div className="text-[11px] font-semibold text-[#45a32d]">
+                                            <div className="text-[11px] font-semibold text-[#45a32d] dark:text-[#45a32d]">
                                               {replySender}
                                             </div>
-                                            <div className="text-[11px] text-gray-800 truncate">
+                                            <div className="text-[11px] text-gray-800 truncate dark:text-gray-800">
                                               {replyText}
                                             </div>
                                           </div>
                                         )}
-                                        <p className="text-gray-600">
-                                          {m.text}
+                                        <p className="text-gray-600 dark:text-gray-600">
+                                          {m.text} 
                                         </p>
-                                        <p className="text-[11px] text-[#45a32d] text-right mr-4 ">
+                                        <p className="text-[11px] text-[#45a32d] dark:text-[#45a32d] text-right mr-4 ">
                                           {timeText}
                                         </p>
-                                        <p className="text-base text-[#45a32d]  text-right absolute bottom-[2px] right-1">
+                                        <p className="text-base text-[#45a32d] dark:text-[#45a32d]  text-right absolute bottom-[2px] right-1">
                                           {m.read ? (
                                             <iconify-icon icon="tabler:checks"></iconify-icon>
                                           ) : (
@@ -2401,13 +2655,13 @@ const ChatPage = () => {
                                       />
                                       <div
                                         data-message-bubble
-                                        className="bg-neutral-50 dark:bg-dark-3 rounded-xl rounded-es-none px-3 py-2 relative min-w-[100px]"
+                                        className="bg-neutral-50 dark:bg-neutral-50 rounded-xl rounded-es-none px-3 py-2 relative min-w-[100px]"
                                         onDoubleClick={() => setReplyTo(m)}
                                         title="Javob berish"
                                       >
                                         {m.replyToId && (
                                           <div
-                                            className="mb-2 rounded-md bg-white px-2 py-1 border-l-4 border-blue-400 min-w-[200px] cursor-pointer"
+                                            className="mb-2 rounded-md bg-white dark:bg-white px-2 py-1 border-l-4 border-blue-400 min-w-[200px] cursor-pointer"
                                             role="button"
                                             tabIndex={0}
                                             onClick={() =>
@@ -2422,8 +2676,10 @@ const ChatPage = () => {
                                             </div>
                                           </div>
                                         )}
-                                        <p className="">{m.text}</p>
-                                        <p className="mb-[-3px] text-[11px] text-neutral-500 text-right">
+                                        <p className="dark:text-gray-600">
+                                          {m.text}
+                                        </p>
+                                        <p className="mb-[-3px] text-[11px] text-neutral-500 dark:text-neutral-500 text-right">
                                           {timeText}
                                         </p>
                                       </div>
@@ -2463,10 +2719,10 @@ const ChatPage = () => {
                                         title="Javob berish"
                                       >
                                         <div className="flex items-center gap-3">
-                                          <div className="relative w-10 h-10 flex items-center justify-center">
+                                          <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
                                             {m.status === "uploading" && (
                                               <svg
-                                                className="absolute inset-0"
+                                                className="absolute inset-0 w-full h-full animate-spin"
                                                 viewBox="0 0 40 40"
                                               >
                                                 <circle
@@ -2474,7 +2730,7 @@ const ChatPage = () => {
                                                   cy="20"
                                                   r="18"
                                                   stroke="#e2e8f0"
-                                                  strokeWidth="3"
+                                                  strokeWidth="5"
                                                   fill="none"
                                                 />
                                                 <circle
@@ -2498,22 +2754,71 @@ const ChatPage = () => {
                                                 />
                                               </svg>
                                             )}
-                                            <i
-                                              className={`${getFileIconClass(m.file.mime, m.file.name)} text-2xl ${
-                                                m.status === "uploading"
-                                                  ? "text-blue-500"
-                                                  : "text-gray-400"
-                                              }`}
-                                            />
+                                            {(() => {
+                                              const fileName =
+                                                m.file?.name || "";
+                                              const isImageFile =
+                                                /\.(png|jpg|jpeg|gif|bmp|webp)$/i.test(
+                                                  fileName,
+                                                );
+                                              const ext =
+                                                fileName
+                                                  .split(".")
+                                                  .pop()
+                                                  ?.toLowerCase() || "file";
+                                              if (isImageFile) {
+                                                return (
+                                                  <i
+                                                    className={`${getFileIconClass(m.file.mime, m.file.name)} text-2xl ${
+                                                      m.status === "uploading"
+                                                        ? "text-blue-500"
+                                                        : "text-gray-400"
+                                                    }`}
+                                                  />
+                                                );
+                                              }
+                                              return (
+                                                <span
+                                                  className={`relative inline-flex items-center justify-center min-w-[46px] h-[50px] px-2.5 rounded-xl font-semibold text-[11px] lowercase overflow-hidden ${
+                                                    m.status === "uploading"
+                                                      ? "1"
+                                                      : ""
+                                                  }`}
+                                                >
+                                                  {/* Orqa fondagi SVG (folder/file icon) */}
+                                                  <svg
+                                                    className="absolute inset-0 w-[90%] h-[90%]  pointer-events-none"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    style={{
+                                                      transform: "scale(1.45)",
+                                                    }}
+                                                  >
+                                                    <g fill="#3993fb">
+                                                      <path d="m12 2l.117.007a1 1 0 0 1 .876.876L13 3v4l.005.15a2 2 0 0 0 1.838 1.844L15 9h4l.117.007a1 1 0 0 1 .876.876L20 10v9a3 3 0 0 1-2.824 2.995L17 22H7a3 3 0 0 1-2.995-2.824L4 19V5a3 3 0 0 1 2.824-2.995L7 2z" />
+                                                      <path d="M19 7h-4l-.001-4.001z" />
+                                                    </g>
+                                                  </svg>
+                                                  <span className="relative z-[1] text-white-700 dark:text-gray-200 text-md">
+                                                    {ext.length > 4
+                                                      ? ext.slice(0, 4)
+                                                      : ext}
+                                                  </span>
+                                                </span>
+                                              );
+                                            })()}
                                           </div>
                                           <div className="flex-1">
                                             <div className="flex items-center justify-between gap-2">
-                                              <div className="text-sm font-medium line-clamp-1 text-gray-700">
-                                                {m.file.name}
+                                              <div>
+                                                <div className="text-sm font-medium line-clamp-1 text-gray-700">
+                                                  {m.file.name}
+                                                </div>
+                                                <div className="text-xs text-gray-500 dark:text-gray-500">
+                                                  {formatBytes(m.file.size)}
+                                                </div>
                                               </div>
-                                              {/* <div className="text-xs text-neutral-300">
-                                                {formatBytes(m.file.size)}
-                                              </div> */}
                                             </div>
                                             {/* <div className="text-xs text-neutral-300 mt-1">
                                               {m.status === "uploading"
@@ -2573,7 +2878,7 @@ const ChatPage = () => {
                                           className={`text-[11px] text-right mr-4 mb-[-10px] ${
                                             m.sender === "me"
                                               ? "text-[#45a32d]"
-                                              : "text-neutral-500"
+                                              : "text-neutral-500 dark:text-neutral-800"
                                           }`}
                                         >
                                           {timeText}
@@ -2600,7 +2905,7 @@ const ChatPage = () => {
                     </div>
                     <div className="sticky bottom-0 z-10 bg-transparent">
                       {replyTo && (
-                        <div className="mx-6 mb-2 flex items-start justify-between border-t border-slate-200 bg-transparent px-3 py-2">
+                        <div className="mx-6 mb-[-14px]  rounded-t-xl mr-[80px] flex items-start justify-between border-t bg-white border-slate-200 bg-transparent px-3 py-2">
                           <div className="flex items-start gap-2 min-w-0">
                             <iconify-icon
                               icon="mdi:reply"
@@ -2637,7 +2942,9 @@ const ChatPage = () => {
                         onSubmit={onSendText}
                         className="chat-message-box flex items-center gap-3 py-3 mt-auto "
                       >
-                        <div className="flex items-center gap-3 w-full bg-transparent border border-neutral-200 rounded-full px-4 py-2 shadow-sm bg-white ml-6">
+                        <div
+                          className={`flex items-center gap-3 w-full bg-transparent border border-neutral-200 rounded-full px-4 py-2 shadow-sm bg-white ml-6 ${replyTo ? "rounded-b-xl rounded-t-none" : ""}`}
+                        >
                           <input
                             value={text}
                             onChange={(e) => setText(e.target.value)}
@@ -2663,7 +2970,7 @@ const ChatPage = () => {
                           ref={fileInputRef}
                           onChange={onFileChange}
                           type="file"
-                          accept=".jpg,.png,.jpeg,.doc,.docx,.pdf,.zip"
+                          accept=".jpg,.png,.jpeg,.doc,.docx,.pdf,.zip,.apk,.ipa"
                           className="hidden"
                         />
                         <button
@@ -2685,25 +2992,35 @@ const ChatPage = () => {
                   {viewerOpen && (
                     <div className="fixed inset-0 bg-black/70 dark:bg-black/80 flex items-center justify-center z-50 ">
                       <div className="absolute top-8 right-[40px] flex gap-4 z-50">
-                        <button
-                          onClick={handlePrint}
-                          disabled={isPrinting}
-                          className={`text-white ${isPrinting ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"} p-3 rounded-full flex items-center justify-center shadow-lg`}
-                          title="Chop etish"
-                        >
-                          {isPrinting ? (
-                            <iconify-icon
-                              icon="line-md:loading-twotone-loop"
-                              width="32"
-                            />
-                          ) : (
-                            <iconify-icon
-                              icon="material-symbols:print-outline"
-                              width="32"
-                            />
-                          )}
-                        </button>
-
+                        {viewerFromZip && (
+                          <button
+                            onClick={backToZipList}
+                            className="text-white bg-slate-600 hover:bg-slate-500 p-3 rounded-full flex items-center justify-center shadow-lg"
+                            title="ZIP ro'yxatiga qaytish"
+                          >
+                            <iconify-icon icon="mdi:arrow-left" width="32" />
+                          </button>
+                        )}
+                        {!viewerLoading && (
+                          <button
+                            onClick={handlePrint}
+                            disabled={isPrinting}
+                            className={`text-white ${isPrinting ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"} p-3 rounded-full flex items-center justify-center shadow-lg`}
+                            title="Chop etish"
+                          >
+                            {isPrinting ? (
+                              <iconify-icon
+                                icon="line-md:loading-twotone-loop"
+                                width="32"
+                              />
+                            ) : (
+                              <iconify-icon
+                                icon="material-symbols:print-outline"
+                                width="32"
+                              />
+                            )}
+                          </button>
+                        )}
                         <button
                           onClick={handleCloseViewer}
                           className="text-white bg-red-600 hover:bg-red-700 p-3 rounded-full flex items-center justify-center shadow-lg"
@@ -2711,28 +3028,177 @@ const ChatPage = () => {
                           <iconify-icon icon="ic:round-close" width="32" />
                         </button>
                       </div>
+                      {/* Telegram-style loading: circular progress */}
+                      {viewerLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+                          <div className="relative w-24 h-24">
+                            <svg
+                              className="w-24 h-24 -rotate-90"
+                              viewBox="0 0 96 96"
+                            >
+                              <circle
+                                cx="48"
+                                cy="48"
+                                r="44"
+                                fill="none"
+                                stroke="rgba(255,255,255,0.2)"
+                                strokeWidth="6"
+                              />
+                              <circle
+                                cx="48"
+                                cy="48"
+                                r="44"
+                                fill="none"
+                                stroke="white"
+                                strokeWidth="6"
+                                strokeLinecap="round"
+                                strokeDasharray={`${(viewerLoadProgress / 100) * 276.5} 276.5`}
+                                style={{
+                                  transition: "stroke-dasharray 0.15s ease-out",
+                                }}
+                              />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-white text-xl font-semibold">
+                              {viewerLoadProgress}%
+                            </span>
+                          </div>
+                          <p className="mt-4 text-white/90 text-sm max-w-[280px] truncate text-center px-2">
+                            {viewerLoadingFileName}
+                          </p>
+                          <p className="mt-1 text-white/60 text-xs">
+                            Yuklanmoqda...
+                          </p>
+                        </div>
+                      )}
                       <div className="docs w-[1000px] h-[100vh] max-w-[1100px] overflow-auto relative">
-                        {/* ZIP listing */}
+                        {/* ZIP listing — markazda chiroyli kartochkalar */}
                         {viewerFileType === "application/zip" && (
-                          <div>
-                            <h3 className="text-lg font-bold mb-3">
-                              ZIP ichidagi fayllar:
-                            </h3>
-                            {viewerZipEntries.length === 0 && (
-                              <p>ZIP fayl ichida fayl mavjud emas.</p>
-                            )}
-                            <ul>
-                              {viewerZipEntries.map((e, i) => (
-                                <li key={i} className="mb-2">
-                                  <button
-                                    className="text-blue-600 hover:underline"
-                                    onClick={() => openZipEntry(e)}
-                                  >
-                                    {e.name}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
+                          <div className="min-h-[100vh] flex flex-col items-center justify-center px-6 py-12">
+                            <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-8 text-center">
+                              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-100 mb-6">
+                                <iconify-icon
+                                  icon="mdi:folder-zip"
+                                  className="text-slate-600"
+                                  width="40"
+                                  height="40"
+                                />
+                              </div>
+                              <h3 className="text-xl font-bold text-slate-800 mb-1">
+                                ZIP ichidagi fayllar
+                              </h3>
+                              <p className="text-slate-500 text-sm mb-8">
+                                Ko‘rish uchun faylni tanlang
+                              </p>
+                              {viewerZipEntries.length === 0 ? (
+                                <p className="text-slate-600 py-8">
+                                  ZIP fayl ichida fayl topilmadi.
+                                </p>
+                              ) : (
+                                <div className="grid grid-cols-1  gap-4">
+                                  {viewerZipEntries.map((e, i) => {
+                                    const nameLower = e.name.toLowerCase();
+                                    const isPdf = nameLower.endsWith(".pdf");
+                                    const isWord =
+                                      nameLower.endsWith(".docx") ||
+                                      nameLower.endsWith(".doc");
+                                    const isApk = nameLower.endsWith(".apk");
+                                    const isIpa = nameLower.endsWith(".ipa");
+                                    const isViewable = isPdf || isWord;
+                                    const isDownloadable = !isViewable || isApk || isIpa;
+                                    const handleClick = () =>
+                                      isDownloadable
+                                        ? downloadZipEntry(e)
+                                        : openZipEntry(e);
+                                    return (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        onClick={handleClick}
+                                        className="flex items-center gap-4 w-full p-4 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg group"
+                                      >
+                                        <div
+                                          className={`shrink-0 w-14 h-14 rounded-xl flex items-center justify-center ${
+                                            isPdf
+                                              ? "bg-red-500/90 group-hover:bg-red-500"
+                                              : isDownloadable
+                                                ? "bg-green-600/90 group-hover:bg-green-600"
+                                                : "bg-blue-600/90 group-hover:bg-blue-600"
+                                          }`}
+                                        >
+                                          {isPdf ? (
+                                            <iconify-icon
+                                              icon="mdi:file-pdf-box"
+                                              className="text-white"
+                                              width="28"
+                                              height="28"
+                                            />
+                                          ) : isDownloadable ? (
+                                            <iconify-icon
+                                              icon="mdi:download"
+                                              className="text-white"
+                                              width="28"
+                                              height="28"
+                                            />
+                                          ) : (
+                                            <iconify-icon
+                                              icon="mdi:file-word-box"
+                                              className="text-white"
+                                              width="28"
+                                              height="28"
+                                            />
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <span className="text-slate-800 font-medium block truncate">
+                                            {e.name}
+                                          </span>
+                                          <span className="text-slate-500 text-xs">
+                                            {isPdf
+                                              ? "PDF hujjat"
+                                              : isApk
+                                                ? "APK — yuklab olish"
+                                                : isIpa
+                                                  ? "IPA — yuklab olish"
+                                                  : isWord
+                                                    ? "Word hujjat"
+                                                    : "Yuklab olish"}
+                                          </span>
+                                        </div>
+                                        {isDownloadable ? (
+                                          <iconify-icon
+                                            icon="mdi:download"
+                                            className="text-slate-500 group-hover:text-green-600 shrink-0"
+                                            width="24"
+                                            height="24"
+                                          />
+                                        ) : (
+                                          <iconify-icon
+                                            icon="mdi:chevron-right"
+                                            className="text-slate-400 group-hover:text-slate-600 shrink-0"
+                                            width="24"
+                                            height="24"
+                                          />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Rasm — katta ko‘rinish */}
+                        {viewerFileUrl && viewerFileType === "image" && (
+                          <div className="flex items-center justify-center min-h-[100vh] p-4 bg-black/90">
+                            <img
+                              src={viewerFileUrl}
+                              alt="Rasm"
+                              className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded shadow-2xl"
+                              style={{ maxHeight: "90vh" }}
+                              onClick={(e) => e.stopPropagation()}
+                              onContextMenu={(e) => e.preventDefault()}
+                            />
                           </div>
                         )}
 

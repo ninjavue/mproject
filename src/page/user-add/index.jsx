@@ -69,13 +69,73 @@ const UserAdd = () => {
   };
   const closeDrawer = () => setDrawerOpen(false);
 
-  const downloadFileAll = async (id) => {
-    await downloadFileViaRpc(stRef, id, id, (p) => {
-      console.log(p);
+  const downloadFileAll = async (id, size = 32420) => {
+    console.log("Downloading file with ID:", id, "and size:", size);
+  
+     return await downloadFileViaRpc(stRef, id, id, size, (p) => {
+      // console.log(p);
       setUploadProgress(p);
       setIsUploading(true);
       if (p === 100) setIsUploading(false);
     });
+  };
+
+
+  const getAllUser = async () => {
+    try {
+      const res = await sendRpcRequest(stRef, METHOD.USER_GET_FULL, {});
+      const userList = res && res[1];
+      if (res.status === METHOD.OK && Array.isArray(userList)) {
+        const mappedItems = await Promise.all(
+          userList.map(async (user, index) => {
+            const info = user["4"] || [];
+
+            const FALLBACK_AVATAR = "/assets/images/avatar/avatar1.png";
+            let imageFileId = info[5] || "";
+            const isValidImageFileId =
+              imageFileId &&
+              typeof imageFileId === "object" &&
+              imageFileId[1] != null &&
+              imageFileId[2] != null;
+
+            let imageSrc = FALLBACK_AVATAR;
+            if (isValidImageFileId) {
+              try {
+                const checkFileId = localStorage.getItem(imageFileId[1]);
+                let imageLink = null;
+                if (!checkFileId) {
+                  imageLink = await downloadFileAll(
+                    imageFileId[1],
+                    imageFileId[2],
+                  );
+                }
+                if (imageLink) {
+                  imageSrc = URL.createObjectURL(imageLink);
+                }
+              } catch (err) {
+                imageSrc = FALLBACK_AVATAR;
+              }
+            }
+
+            return {
+              id: bufferToObjectId(user._id?.buffer),
+              email: user["1"] || "",
+              role: user["3"] || "",
+              department: info[0] || "",
+              surname: info[1] || "",
+              name: info[2] || "",
+              partName: info[3] || "",
+              phone: info[4] || "",
+              image: imageSrc,
+            };
+          }),
+        );
+        setItems(mappedItems);
+      }
+    } catch (error) {
+      console.log(error);
+      toast.error("Foydalanuvchilar ro‘yxati yuklanmadi. Ulanishni tekshiring.");
+    }
   };
 
   const handleChange = (e) => {
@@ -124,9 +184,11 @@ const UserAdd = () => {
       },
     );
 
-    console.log(doneRes);
+    // console.log(doneRes);
 
-    formData.image = doneRes.fileId;
+    formData.image = doneRes["fileId"];
+    // console.log(formData.image, doneRes["size"]) 
+    // return
     const res = await sendRpcRequest(stRef, METHOD.USER_CREATE, {
       1: formData.surname,
       2: formData.name,
@@ -135,10 +197,13 @@ const UserAdd = () => {
       5: formData.role,
       6: formData.department,
       7: formData.phone,
-      8: formData.image,
+      8: {1: formData.image, 2: doneRes["size"]},
     });
 
-    await downloadFileAll(formData.image || "9276c76090ee854fbea8670b32975676");
+    const imageLink = await downloadFileAll(formData.image, doneRes?.size);
+    // URL.revokeObjectURL(formData.image);
+    formData.image = imageLink;
+    getAllUser();
 
     // console.log("addUser:", res);
 
@@ -168,53 +233,16 @@ const UserAdd = () => {
       await fetchProfile();
     };
 
-    const getAllUser = async () => {
-      console.log("get all user")
-      try {
-        const res = await sendRpcRequest(stRef, METHOD.USER_GET_FULL, {});
-        console.log(res);
-        if (res.status === METHOD.OK) {
-          const mappedItems = await Promise.all(
-            res[1].map(async (user, index) => {
-              const info = user["4"] || [];
+    fetchData();
 
-              let imageFileId = info[5] || "";
-              if (
-                imageFileId == "6968e7a2e3b6146a0601b78f" ||
-                imageFileId.length < 30
-              ) {
-                imageFileId = "9276c76090ee854fbea8670b32975676";
-              }
-              const checkFileId = localStorage.getItem(imageFileId);
-              if (imageFileId && !checkFileId) {
-                await downloadFileAll(
-                  imageFileId || "9276c76090ee854fbea8670b32975676",
-                );
-              }
-
-              return {
-                id: bufferToObjectId(user._id?.buffer),
-                email: user["1"] || "",
-                role: user["3"] || "",
-                department: info[0] || "",
-                surname: info[1] || "",
-                name: info[2] || "",
-                partName: info[3] || "",
-                phone: info[4] || "",
-                image: imageFileId,
-              };
-            }),
-          );
-          setItems(mappedItems);
-        }
-      } catch (error) {
-        console.log(error);
-      }
+    // Birinchi marta ulanish tayyor bo‘lishini kutmay yuborish mummkin; tayyor bo‘lganda yoki allaqachon tayyor bo‘lsa yuklash
+    const onReady = () => {
+      getAllUser();
     };
 
     getAllUser();
-
-    fetchData();
+    window.addEventListener("zirh:ready", onReady);
+    return () => window.removeEventListener("zirh:ready", onReady);
   }, []);
 
   const getAvatar = (fileId) => {
@@ -222,7 +250,7 @@ const UserAdd = () => {
       fileId || "9276c76090ee854fbea8670b32975676",
     );
     if (!imageAvatar) {
-      return "https://via.placeholder.com/150";
+      return "https://picsum.photos/200/300?random=1";
     }
     return imageAvatar;
   };
@@ -293,6 +321,8 @@ const UserAdd = () => {
     try {
       const payload = { 1: formData.id };
 
+      const fileSize = formData?.image?.size
+
       if (formData.image && formData.image instanceof File) {
         setUploadProgress(0);
         setIsUploading(true);
@@ -307,8 +337,10 @@ const UserAdd = () => {
           },
         );
 
-        formData.image = uploadRes.result["fileId"];
-        await downloadFileAll(formData.image);
+        // console.log(uploadRes)
+
+        formData.image = uploadRes["fileId"];
+   
       }
 
       const fieldMap = {
@@ -326,12 +358,18 @@ const UserAdd = () => {
       Object.keys(fieldMap).forEach((key) => {
         if (formData[key] !== editItemOld[key]) {
           const code = fieldMap[key];
-
-          if (key === "department" || key === "role") {
+          
+          if (key === "image") {
+            payload[code] = {
+              1: formData[key],
+              2: fileSize
+            };
+          } else if (key === "department" || key === "role") {
             payload[code] = parseInt(formData[key]);
           } else {
             payload[code] = formData[key];
           }
+
 
           updatedFieldCodes.push(code);
         }
@@ -343,9 +381,13 @@ const UserAdd = () => {
       }
 
       // console.log("Payload:", payload);
+      // return
       const res = await sendRpcRequest(stRef, METHOD.USER_UPDATE, payload);
+      // console.log(res)
+
 
       if (res.status === METHOD.OK) {
+        getAllUser();
         setItems((prev) =>
           prev.map((item) =>
             item.id === formData.id ? { ...item, ...formData } : item,
@@ -363,7 +405,7 @@ const UserAdd = () => {
         toast.error("Xatolik: Server ma'lumotni qabul qilmadi");
       }
     } catch (err) {
-      console.error("Update Error:", err);
+      // console.error("Update Error:", err);
       toast.error("Foydalanuvchi yangilanmadi, tizim xatosi");
     }
   };
@@ -674,7 +716,7 @@ const UserAdd = () => {
                     <td className="px-6 py-4 text-gray-700 font-medium dark:text-gray-300">
                       {item?.image ? (
                         <img
-                          src={getAvatar(item?.image)}
+                          src={item?.image}
                           alt="user"
                           className="w-10 h-10 rounded-full object-cover"
                         />

@@ -24,7 +24,7 @@ const PaginatedDocument = ({ initialHtml, isEditing, onUpdate }) => {
     const measureDiv = measureRef.current;
     if (!measureDiv) return;
 
-    console.log(initialHtml)
+    // console.log(initialHtml)
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = html;
     const nodes = Array.from(tempDiv.childNodes);
