@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import JSZip, { file } from "jszip";
 import html2canvas from "html2canvas";
 import { useReactToPrint } from "react-to-print";
@@ -76,6 +76,7 @@ const ChatPage = () => {
   const [privateId, setPrivateId] = useState(null);
   const [countD, setCountD] = useState(0);
   const UNREAD_STORAGE_KEY = "chat_unread_counts";
+  const LAST_ACTIVITY_STORAGE_KEY = "chat_last_activity";
   const getStoredUnreadCounts = () => {
     try {
       const s = localStorage.getItem(UNREAD_STORAGE_KEY);
@@ -89,7 +90,31 @@ const ChatPage = () => {
       localStorage.setItem(UNREAD_STORAGE_KEY, JSON.stringify(obj));
     } catch (_) {}
   };
+  const getStoredLastActivity = () => {
+    try {
+      const s = localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY);
+      return s ? JSON.parse(s) : {};
+    } catch {
+      return {};
+    }
+  };
+  const persistLastActivity = (obj) => {
+    try {
+      localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, JSON.stringify(obj));
+    } catch (_) {}
+  };
   const [unreadCounts, setUnreadCounts] = useState(getStoredUnreadCounts);
+  const [lastActivityAt, setLastActivityAt] = useState(getStoredLastActivity);
+
+  const updateLastActivity = (convId) => {
+    if (!convId) return;
+    const ts = Date.now();
+    setLastActivityAt((prev) => {
+      const next = { ...prev, [convId]: ts };
+      persistLastActivity(next);
+      return next;
+    });
+  };
   const [replyTo, setReplyTo] = useState(null);
 
   const totalUnread = Object.values(unreadCounts).reduce(
@@ -213,12 +238,19 @@ const ChatPage = () => {
   }, [items, groupAll, selected]);
 
   useEffect(() => {
-    const list =
+    const raw =
       activeTab === "shaxsiy"
         ? people
         : activeTab === "guruh"
           ? groups
           : channels;
+    const getConvId = (i) =>
+      activeTab === "shaxsiy" ? i?.userId || i?.id : i?.id;
+    const list = [...raw].sort((a, b) => {
+      const tsA = lastActivityAt[getConvId(a)] || 0;
+      const tsB = lastActivityAt[getConvId(b)] || 0;
+      return tsB - tsA;
+    });
     if (list.length === 0) return;
     const isSelectedInList = selected
       ? list.some(
@@ -231,7 +263,7 @@ const ChatPage = () => {
     if (!selected || !isSelectedInList) {
       selectConversation(list[0]);
     }
-  }, [activeTab, people, groups, channels, selected]);
+  }, [activeTab, people, groups, channels, selected, lastActivityAt]);
 
   // Brauzer tab sarlavhasi va favicon’da o‘qilmaganlar soni (Zimbra uslubida)
   useEffect(() => {
@@ -259,6 +291,9 @@ const ChatPage = () => {
       const senderId = formatBufferToId(data.params[2]);
       const userId = user?.id;
       const isOwnMessage = userId && senderId === userId;
+
+      // Suhbatni yuqoriga ko‘tirish (Telegram uslubi)
+      updateLastActivity(incomingConvId);
 
       // console.log("Message event:", {
       //   incomingConvId,
@@ -354,6 +389,7 @@ const ChatPage = () => {
             if (prev.some((u) => u.id === user.id)) return prev;
             return [user, ...prev];
           });
+          updateLastActivity(userId);
 
           selectConversation(user);
         } else if (type === 2) {
@@ -370,6 +406,7 @@ const ChatPage = () => {
             if (prev.some((g) => g.id === group.id)) return prev;
             return [group, ...prev];
           });
+          updateLastActivity(groupId);
         } else if (type === 3) {
           const channelId = formatBufferToId(member._id || member[1]);
 
@@ -384,6 +421,7 @@ const ChatPage = () => {
             if (prev.some((c) => c.id === channel.id)) return prev;
             return [channel, ...prev];
           });
+          updateLastActivity(channelId);
         }
       });
     } else if (data.methodId === METHOD.CHAT_MSG_VIEW) {
@@ -420,8 +458,6 @@ const ChatPage = () => {
         if (!prev || String(prev.id2 || "") !== rawUserId) return prev;
         return { ...prev, status: rawStatus };
       });
-      console.log(selected)
-      console.log(people)
       // console.log(rawUserId)
       // console.log(user)
       // console.log(selected)
@@ -473,13 +509,20 @@ const ChatPage = () => {
 
   const setBtnActive = (tab) => {
     setActiveTab(tab);
-    if (tab === "shaxsiy") {
-      selectConversation(people[0]);
-    } else if (tab === "guruh") {
-      selectConversation(groups[0]);
-    } else if (tab === "kanal") {
-      selectConversation(channels[0]);
-    }
+    const raw =
+      tab === "shaxsiy"
+        ? people
+        : tab === "guruh"
+          ? groups
+          : channels;
+    if (raw?.length === 0) return;
+    const getConvId = (i) => (tab === "shaxsiy" ? i?.userId || i?.id : i?.id);
+    const sorted = [...raw].sort((a, b) => {
+      const tsA = lastActivityAt[getConvId(a)] || 0;
+      const tsB = lastActivityAt[getConvId(b)] || 0;
+      return tsB - tsA;
+    });
+    selectConversation(sorted[0]);
   };
 
   const formatBytes = (bytes) => {
@@ -565,6 +608,8 @@ const ChatPage = () => {
     };
 
     setMessages((s) => [...s, newMsg]);
+
+    updateLastActivity(convId);
 
     try {
       const doneRes = await uploadFileViaRpc(stRef, file, convId, (p) => {
@@ -683,6 +728,8 @@ const ChatPage = () => {
 
     if (convId === null) return;
 
+    updateLastActivity(convId);
+
     const res = await sendRpcRequest(stRef, METHOD.CHAT_SEND_MSG_CLIENT, {
       1: convId,
       2: user.id,
@@ -762,7 +809,7 @@ const ChatPage = () => {
             type: item[3][1] === 1 ? "text" : "file",
             time: getTime(formatBufferToId(item._id)),
             sender:
-              formatBufferToId(item[2]) === user.id
+              formatBufferToId(item[2]) === (user?.id ?? null)
                 ? "me"
                 : formatBufferToId(item[2]),
             text: item[3][2],
@@ -1157,7 +1204,6 @@ const ChatPage = () => {
           ).values(),
         );
 
-        console.log(usersData, "usersData");
         const channelData = Array.from(
           new Map(
             res[1]
@@ -1779,6 +1825,25 @@ const ChatPage = () => {
     return () => clearTimeout(_t);
   }, [messages]);
 
+  const sortByLastActivity = (list, getConvId) =>
+    [...(list || [])].sort((a, b) => {
+      const tsA = lastActivityAt[getConvId(a)] || 0;
+      const tsB = lastActivityAt[getConvId(b)] || 0;
+      return tsB - tsA;
+    });
+  const sortedPeople = useMemo(
+    () => sortByLastActivity(people, (i) => i?.userId || i?.id),
+    [people, lastActivityAt],
+  );
+  const sortedGroups = useMemo(
+    () => sortByLastActivity(groups, (i) => i?.id),
+    [groups, lastActivityAt],
+  );
+  const sortedChannels = useMemo(
+    () => sortByLastActivity(channels, (i) => i?.id),
+    [channels, lastActivityAt],
+  );
+
   const selectedPerson =
     activeTab === "shaxsiy"
       ? people.find(
@@ -2289,10 +2354,10 @@ const ChatPage = () => {
 
             <div className="chat-all-list flex flex-col gap-1.5 mt-3 max-h-[65vh] min-h-[65vh] overflow-y-auto">
               {(activeTab === "shaxsiy"
-                ? people
+                ? sortedPeople
                 : activeTab === "guruh"
-                  ? groups
-                  : channels
+                  ? sortedGroups
+                  : sortedChannels
               ).map((item) => {
                 const chatId = item?.userId || item?.id;
                 const unreadCount = unreadCounts[chatId] || 0;

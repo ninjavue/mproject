@@ -3009,25 +3009,29 @@ Mazkur turdagi zaiflik “MASWE-0058” (inglizcha. Insecure Deep Links – Xavf
                         {r.ball || "0/15"}
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        <div className="h-full flex relative">
+                       <div className="h-full flex relative">
                           {STATUS_STEPS.map((step, index) => {
                             const isActive = r.status >= step.id;
                             const stepBgClass = !isActive
                               ? "status-step-inactive"
                               : "status-step-active";
                             const stepStyle =
-                              isActive && r.status === 10
-                                ? { background: "linear-gradient(145deg, #dc2626, #b91c1c)" }
-                                : isActive && r.status === 9
-                                  ? { background: "linear-gradient(145deg, #16a34a, #15803d)" }
-                                  : undefined;
+                              step.id > r.status
+                                ? { background: "linear-gradient(145deg, #9ca3af, #6b7280)" }
+                                : r.status === 10 && step.id === 10
+                                  ? { background: "linear-gradient(145deg, #dc2626, #b91c1c)" }
+                                  : r.status === 9 && step.id === 9
+                                    ? { background: "linear-gradient(145deg, #16a34a, #15803d)" }
+                                    : r.status >= step.id && (r.status === 9 || r.status === 10)
+                                      ? { background: "linear-gradient(145deg, #2563eb, #1d4ed8)" }
+                                      : undefined;
 
                             return (
                               <div
                                 key={step.id}
-                                className="relative group"
+                                className="relative group status-step-group"
                                 style={{
-                                  marginLeft: index === 0 ? 0 : -14,
+                                  marginLeft: index === 0 ? 0 : 1,
                                   zIndex: index,
                                 }}
                               >

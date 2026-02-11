@@ -94,7 +94,7 @@ const Aside = () => {
       </div>
       <div
         data-v-edbccf60=""
-        class="flex items-center bg-transparent border-r pb-6"
+        class="flex items-center bg-transparent border-r pb-6 dark:border-[#374151]"
       >
         <span className="w-full opacity-100 h-[1.5px] flex bg-[#bb9769] transition-all duration-300"></span>
         <img
@@ -185,7 +185,7 @@ const Aside = () => {
               />
               <span>Chat</span>
               {chatUnreadTotal > 0 && (
-                <span className="flex justify-center items-center rounded-full ml-auto">
+                <span className="flex justify-center w-5 text-sm h-5 bg-[#f2675c] text-white items-center rounded-full ml-auto">
                   {chatUnreadTotal > 99 ? "99+" : chatUnreadTotal}
                 </span>
               )}

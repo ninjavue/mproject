@@ -22,7 +22,7 @@ function applyFaviconAndTitle(total) {
       return el;
     })();
   const originalHref =
-    link.getAttribute("data-original-href") || link.href || "/vite.svg";
+    link.getAttribute("data-original-href") || link.href || "/logo.png";
   if (!link.getAttribute("data-original-href")) {
     link.setAttribute("data-original-href", originalHref);
   }
@@ -78,6 +78,7 @@ function applyFaviconAndTitle(total) {
 let defaultTitleRef = DEFAULT_TITLE;
 
 /**
+ * ChatUnread
  * Barcha sahifalarda (chat sahifasi ochiq bo‘lmasa ham) kelayotgan xabarlar
  * bo‘yicha o‘qilmaganlar sonini localStorage, header/tab va favicon uchun yangilaydi.
  * Main layout ichida render qilinadi — favicon va tab sarlavhasi har qaysi sahifada ko‘rinadi.
@@ -135,7 +136,7 @@ export function ChatUnreadListener() {
       const link = document.querySelector('link[rel="icon"]');
       if (link) {
         link.href =
-          link.getAttribute("data-original-href") || "/vite.svg";
+          link.getAttribute("data-original-href") || "/logo.png";
       }
       window.removeEventListener("chatUnreadTotal", onChatUnread);
     };
