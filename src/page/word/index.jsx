@@ -161,7 +161,8 @@ const parseVulnByLevel = payloads => {
 		medium = [],
 		low = []
 	;(payloads || []).forEach(p => {
-		const candidate = p?.[13] ?? p?.[12] ?? p?.[11] ?? (p?.a1 != null ? [p] : [])
+		const candidate =
+			p?.[13] ?? p?.[12] ?? p?.[11] ?? (p?.a1 != null ? [p] : [])
 		const list = Array.isArray(candidate)
 			? candidate.flat().filter(Boolean)
 			: candidate
@@ -174,7 +175,10 @@ const parseVulnByLevel = payloads => {
 			const countValue = Number(v?.a2 ?? v?.count)
 			const item = {
 				a1: lev,
-				a2: Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 1,
+				a2:
+					Number.isFinite(countValue) && countValue > 0
+						? Math.floor(countValue)
+						: 1,
 				a3: v?.a3 ?? v?.name,
 				a4: v?.a4,
 			}
@@ -226,6 +230,8 @@ const Word = () => {
 	const [pages3, setPages3] = useState([])
 	const editingRef = useRef(false)
 	const savedSelectionRef = useRef(null)
+	const activeEditableRef = useRef(null)
+	const activeFormatBlockRef = useRef(null)
 	const [toolbarBlock, setToolbarBlock] = useState('p')
 	const [toolbarFontName, setToolbarFontName] = useState('Arial')
 	const [toolbarFontSize, setToolbarFontSize] = useState(14)
@@ -274,45 +280,169 @@ const Word = () => {
 		return chunks
 	}, [])
 
-	const isRangeInEditableArea = useCallback(range => {
-		if (!range) return false
-		const container =
-			range.commonAncestorContainer?.nodeType === Node.TEXT_NODE
-				? range.commonAncestorContainer.parentElement
-				: range.commonAncestorContainer
-		if (!container || typeof container.closest !== 'function') return false
-		const editableRoot = container.closest(
-			'.page-content.editable, .editable-table td',
-		)
-		if (!editableRoot) return false
-		return editableRoot.getAttribute('contenteditable') !== 'false'
+	const getEditableRootFromNode = useCallback(node => {
+		if (!node) return null
+		const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
+		if (!element || typeof element.closest !== 'function') return null
+		const editableRoot = element.closest('.page-content.editable, .editable-table td')
+		if (!editableRoot) return null
+		if (editableRoot.getAttribute('contenteditable') === 'false') return null
+		return editableRoot
+	}, [])
+
+	const getEditableRootFromRange = useCallback(
+		range => {
+			if (!range) return null
+			return (
+				getEditableRootFromNode(range.startContainer) ||
+				getEditableRootFromNode(range.commonAncestorContainer)
+			)
+		},
+		[getEditableRootFromNode],
+	)
+
+	const isRangeInEditableArea = useCallback(
+		range => {
+			const editableRoot = getEditableRootFromRange(range)
+			if (!editableRoot) return false
+			return editableRoot.getAttribute('contenteditable') !== 'false'
+		},
+		[getEditableRootFromRange],
+	)
+
+	const findFormatBlockForRange = useCallback(range => {
+		if (!range) return null
+		let node =
+			range.startContainer?.nodeType === Node.TEXT_NODE
+				? range.startContainer.parentElement
+				: range.startContainer
+		if (!(node instanceof Element)) return null
+
+		while (node) {
+			if (
+				node.matches?.('p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span')
+			) {
+				const blockedContainer =
+					node.classList?.contains('page-content') ||
+					node.classList?.contains('editable')
+				if (!blockedContainer) return node
+			}
+			node = node.parentElement
+		}
+		return null
 	}, [])
 
 	const captureSelectionRange = useCallback(() => {
 		if (!editingRef.current) return
 		const selection = window.getSelection()
 		if (!selection || selection.rangeCount === 0) return
-		const range = selection.getRangeAt(0)
+		let range = null
+		try {
+			range = selection.getRangeAt(0)
+		} catch {
+			return
+		}
+		const editableRoot = getEditableRootFromRange(range)
+		if (!editableRoot) return
+		activeEditableRef.current = editableRoot
+		const formatBlock = findFormatBlockForRange(range)
+		if (formatBlock) activeFormatBlockRef.current = formatBlock
 		if (!isRangeInEditableArea(range)) return
 		savedSelectionRef.current = range.cloneRange()
-	}, [isRangeInEditableArea])
+	}, [findFormatBlockForRange, getEditableRootFromRange, isRangeInEditableArea])
+
+	const focusEditableRoot = useCallback(editableRoot => {
+		if (!editableRoot || !editableRoot.isConnected) return false
+		if (editableRoot.getAttribute('contenteditable') === 'false') return false
+		if (typeof editableRoot.focus === 'function') {
+			try {
+				editableRoot.focus({ preventScroll: true })
+			} catch {
+				editableRoot.focus()
+			}
+		}
+		activeEditableRef.current = editableRoot
+		return true
+	}, [])
+
+	const findEditableFallback = useCallback(() => {
+		const active = activeEditableRef.current
+		if (
+			active &&
+			active.isConnected &&
+			active.getAttribute('contenteditable') !== 'false'
+		) {
+			return active
+		}
+		const firstEditable = document.querySelector(
+			'.editable-table td[contenteditable="true"], .page-content.editable[contenteditable="true"], .editable[contenteditable="true"]',
+		)
+		return firstEditable || null
+	}, [])
 
 	const restoreSelectionRange = useCallback(() => {
-		const savedRange = savedSelectionRef.current
-		if (!savedRange || !editingRef.current) return false
-		if (!isRangeInEditableArea(savedRange)) return false
-
+		if (!editingRef.current) return false
 		const selection = window.getSelection()
 		if (!selection) return false
 
-		selection.removeAllRanges()
+		const savedRange = savedSelectionRef.current
+		if (savedRange && isRangeInEditableArea(savedRange)) {
+			const editableRoot = getEditableRootFromRange(savedRange)
+			if (editableRoot && typeof editableRoot.focus === 'function') {
+				editableRoot.focus({ preventScroll: true })
+				activeEditableRef.current = editableRoot
+			}
+			selection.removeAllRanges()
+			try {
+				selection.addRange(savedRange)
+				return true
+			} catch {
+				// fallback below
+			}
+		}
+
+		const fallbackEditable = findEditableFallback()
+		if (!fallbackEditable) return false
+		if (!focusEditableRoot(fallbackEditable)) return false
+
 		try {
-			selection.addRange(savedRange)
+			const fallbackRange = document.createRange()
+			fallbackRange.selectNodeContents(fallbackEditable)
+			fallbackRange.collapse(false)
+			selection.removeAllRanges()
+			selection.addRange(fallbackRange)
+			savedSelectionRef.current = fallbackRange.cloneRange()
+			return true
 		} catch {
 			return false
 		}
-		return true
-	}, [isRangeInEditableArea])
+	}, [
+		findEditableFallback,
+		focusEditableRoot,
+		getEditableRootFromRange,
+		isRangeInEditableArea,
+	])
+
+	const ensureEditorSelection = useCallback(() => {
+		if (!editingRef.current) return false
+		if (restoreSelectionRange()) return true
+		const editableRoot = findEditableFallback()
+		if (!editableRoot) return false
+		if (!focusEditableRoot(editableRoot)) return false
+		const selection = window.getSelection()
+		if (!selection) return false
+		try {
+			const range = document.createRange()
+			range.selectNodeContents(editableRoot)
+			range.collapse(false)
+			selection.removeAllRanges()
+			selection.addRange(range)
+			savedSelectionRef.current = range.cloneRange()
+			return true
+		} catch {
+			return false
+		}
+	}, [findEditableFallback, focusEditableRoot, restoreSelectionRange])
 
 	const readCommandState = useCallback(command => {
 		try {
@@ -322,9 +452,8 @@ const Word = () => {
 		}
 	}, [])
 
-	const syncToolbarState = useCallback(() => {
-		if (!editingRef.current) return
-		setToolbarState({
+	const getToolbarSnapshot = useCallback(
+		() => ({
 			bold: readCommandState('bold'),
 			italic: readCommandState('italic'),
 			underline: readCommandState('underline'),
@@ -335,13 +464,164 @@ const Word = () => {
 			alignJustify: readCommandState('justifyFull'),
 			unorderedList: readCommandState('insertUnorderedList'),
 			orderedList: readCommandState('insertOrderedList'),
-		})
-	}, [readCommandState])
+		}),
+		[readCommandState],
+	)
+
+	const syncToolbarState = useCallback(
+		(options = {}) => {
+			const force = Boolean(options?.force)
+			if (!editingRef.current && !force) return
+			const next = getToolbarSnapshot()
+			setToolbarState(prev => {
+				const same = Object.keys(next).every(key => prev[key] === next[key])
+				return same ? prev : { ...prev, ...next }
+			})
+		},
+		[getToolbarSnapshot],
+	)
+
+	const resolveActiveFormatBlock = useCallback(
+		range => {
+			let block = findFormatBlockForRange(range)
+			if (block?.isConnected) return block
+			const cachedBlock = activeFormatBlockRef.current
+			if (cachedBlock?.isConnected) return cachedBlock
+			const editableRoot =
+				getEditableRootFromRange(range) ||
+				activeEditableRef.current ||
+				findEditableFallback()
+			if (!(editableRoot instanceof HTMLElement)) return null
+			block = editableRoot.querySelector(
+				'p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span',
+			)
+			return block || editableRoot
+		},
+		[findEditableFallback, findFormatBlockForRange, getEditableRootFromRange],
+	)
+
+	const applyBlockStyleFallback = useCallback(
+		(range, command, value = null) => {
+			const block = resolveActiveFormatBlock(range)
+			if (!block) return false
+			activeFormatBlockRef.current = block
+			const computed = window.getComputedStyle(block)
+			const decorationParts = new Set(
+				(computed.textDecorationLine || '')
+					.split(' ')
+					.map(part => part.trim())
+					.filter(Boolean),
+			)
+			const toggleDecoration = key => {
+				if (decorationParts.has(key)) decorationParts.delete(key)
+				else decorationParts.add(key)
+				const next =
+					Array.from(decorationParts).filter(Boolean).join(' ') || 'none'
+				block.style.textDecorationLine = next
+				return true
+			}
+			const weightValue = Number.parseInt(computed.fontWeight || '400', 10)
+			switch (command) {
+				case 'justifyLeft':
+					block.style.textAlign = 'left'
+					return true
+				case 'justifyCenter':
+					block.style.textAlign = 'center'
+					return true
+				case 'justifyRight':
+					block.style.textAlign = 'right'
+					return true
+				case 'justifyFull':
+					block.style.textAlign = 'justify'
+					return true
+				case 'italic':
+					block.style.fontStyle =
+						computed.fontStyle === 'italic' ? 'normal' : 'italic'
+					return true
+				case 'bold':
+					block.style.fontWeight =
+						Number.isFinite(weightValue) && weightValue >= 600 ? '400' : '700'
+					return true
+				case 'underline':
+					return toggleDecoration('underline')
+				case 'strikeThrough':
+					return toggleDecoration('line-through')
+				case 'foreColor':
+					if (!value) return false
+					block.style.color = String(value)
+					return true
+				case 'hiliteColor':
+				case 'backColor':
+					if (!value) return false
+					block.style.backgroundColor = String(value)
+					return true
+				case 'fontName':
+					if (!value) return false
+					block.style.fontFamily = String(value)
+					return true
+				case 'fontSize': {
+					if (value == null || value === '') return false
+					const fontSizeMap = {
+						1: 10,
+						2: 11,
+						3: 12,
+						4: 14,
+						5: 16,
+						6: 18,
+						7: 20,
+						8: 24,
+						9: 30,
+						10: 36,
+					}
+					const parsed = Number.parseInt(String(value), 10)
+					const px = fontSizeMap[parsed] || parsed
+					if (!Number.isFinite(px) || px <= 0) return false
+					block.style.fontSize = `${Math.max(8, Math.min(96, px))}px`
+					return true
+				}
+				default:
+					return false
+			}
+		},
+		[resolveActiveFormatBlock],
+	)
 
 	const runEditorCommand = useCallback(
 		(command, value = null) => {
 			if (!editingRef.current) return false
-			restoreSelectionRange()
+			let activeRange = null
+			const liveSelection = window.getSelection()
+			if (liveSelection && liveSelection.rangeCount > 0) {
+				try {
+					const liveRange = liveSelection.getRangeAt(0)
+					if (isRangeInEditableArea(liveRange)) {
+						activeRange = liveRange
+						savedSelectionRef.current = liveRange.cloneRange()
+						const editableRoot = getEditableRootFromRange(liveRange)
+						if (editableRoot) activeEditableRef.current = editableRoot
+					}
+				} catch {
+					activeRange = null
+				}
+			}
+
+			if (!activeRange) {
+				const activeEditable = findEditableFallback()
+				if (activeEditable) focusEditableRoot(activeEditable)
+			}
+
+			const hasSelection = activeRange ? true : ensureEditorSelection()
+			if (!hasSelection) return false
+			if (!activeRange) {
+				const restoredSelection = window.getSelection()
+				if (restoredSelection && restoredSelection.rangeCount > 0) {
+					try {
+						activeRange = restoredSelection.getRangeAt(0)
+					} catch {
+						activeRange = null
+					}
+				}
+			}
 
 			try {
 				document.execCommand('styleWithCSS', false, true)
@@ -363,20 +643,55 @@ const Word = () => {
 				}
 			}
 
+			if (activeRange) {
+				const forceFallbackCommands = new Set([
+					'justifyLeft',
+					'justifyCenter',
+					'justifyRight',
+					'justifyFull',
+					'italic',
+					'bold',
+					'underline',
+					'strikeThrough',
+					'foreColor',
+					'hiliteColor',
+					'backColor',
+					'fontName',
+					'fontSize',
+				])
+				if (forceFallbackCommands.has(command) || !applied) {
+					const fallbackApplied = applyBlockStyleFallback(
+						activeRange,
+						command,
+						value,
+					)
+					applied = applied || fallbackApplied
+				}
+			}
+
 			captureSelectionRange()
-			syncToolbarState()
+			syncToolbarState({ force: true })
 			return applied
 		},
-		[captureSelectionRange, restoreSelectionRange, syncToolbarState],
+		[
+			applyBlockStyleFallback,
+			captureSelectionRange,
+			ensureEditorSelection,
+			findEditableFallback,
+			focusEditableRoot,
+			getEditableRootFromRange,
+			isRangeInEditableArea,
+			syncToolbarState,
+		],
 	)
 
 	const handleInsertLink = useCallback(() => {
 		if (!editingRef.current) return
-		restoreSelectionRange()
+		ensureEditorSelection()
 		const linkValue = window.prompt('Havolani kiriting (https://...)')
 		if (!linkValue) return
 		runEditorCommand('createLink', linkValue.trim())
-	}, [restoreSelectionRange, runEditorCommand])
+	}, [ensureEditorSelection, runEditorCommand])
 
 	const handleBlockChange = useCallback(
 		event => {
@@ -406,24 +721,56 @@ const Word = () => {
 	)
 	useEffect(() => {
 		editingRef.current = editing
-		if (!editing) savedSelectionRef.current = null
+		if (!editing) {
+			savedSelectionRef.current = null
+			activeEditableRef.current = null
+			activeFormatBlockRef.current = null
+		}
 	}, [editing])
 
 	useEffect(() => {
 		if (!editing) return
+		const syncActiveEditable = () => {
+			const selection = window.getSelection()
+			if (!selection || selection.rangeCount === 0) return
+			let range = null
+			try {
+				range = selection.getRangeAt(0)
+			} catch {
+				return
+			}
+			const editableRoot = getEditableRootFromRange(range)
+			if (editableRoot) activeEditableRef.current = editableRoot
+			const block = findFormatBlockForRange(range)
+			if (block) activeFormatBlockRef.current = block
+		}
 		const syncSelection = () => {
 			captureSelectionRange()
+			syncActiveEditable()
 			syncToolbarState()
+		}
+		const onFocusIn = event => {
+			const editableRoot = getEditableRootFromNode(event.target)
+			if (editableRoot) activeEditableRef.current = editableRoot
 		}
 		document.addEventListener('selectionchange', syncSelection)
 		document.addEventListener('mouseup', syncSelection)
 		document.addEventListener('keyup', syncSelection)
+		document.addEventListener('focusin', onFocusIn)
 		return () => {
 			document.removeEventListener('selectionchange', syncSelection)
 			document.removeEventListener('mouseup', syncSelection)
 			document.removeEventListener('keyup', syncSelection)
+			document.removeEventListener('focusin', onFocusIn)
 		}
-	}, [captureSelectionRange, editing, syncToolbarState])
+	}, [
+		captureSelectionRange,
+		editing,
+		findFormatBlockForRange,
+		getEditableRootFromNode,
+		getEditableRootFromRange,
+		syncToolbarState,
+	])
 	const createNewA4Page = () => {
 		// Get the container where pages are stored
 		const wordContainer = document.querySelector('.word-container')
@@ -764,7 +1111,9 @@ const Word = () => {
 						selection &&
 						selection.rangeCount > 0 &&
 						editableRoot &&
-						editableRoot.contains(selection.getRangeAt(0).commonAncestorContainer)
+						editableRoot.contains(
+							selection.getRangeAt(0).commonAncestorContainer,
+						)
 					) {
 						const range = selection.getRangeAt(0)
 						range.insertNode(wrapper)
@@ -885,8 +1234,8 @@ const Word = () => {
 					})
 
 					if (!imageFiles.length) {
-						const fallbackFiles = Array.from(clipboard?.files || []).filter(file =>
-							file?.type?.startsWith('image/'),
+						const fallbackFiles = Array.from(clipboard?.files || []).filter(
+							file => file?.type?.startsWith('image/'),
 						)
 						imageFiles.push(...fallbackFiles)
 					}
@@ -904,7 +1253,9 @@ const Word = () => {
 							selection &&
 							selection.rangeCount > 0 &&
 							targetCell &&
-							targetCell.contains(selection.getRangeAt(0).commonAncestorContainer)
+							targetCell.contains(
+								selection.getRangeAt(0).commonAncestorContainer,
+							)
 						) {
 							const range = selection.getRangeAt(0)
 							range.insertNode(imgElement)
@@ -1029,33 +1380,16 @@ const Word = () => {
 
 				switch (key) {
 					case 'e':
-						document.execCommand('justifyCenter')
+						runEditorCommand('justifyCenter')
 						break
 					case 'l':
-						document.execCommand('justifyLeft')
+						runEditorCommand('justifyLeft')
 						break
 					case 'r':
-						document.execCommand('justifyRight')
+						runEditorCommand('justifyRight')
 						break
 					case 'j':
-						// Apply justify alignment using both execCommand and CSS for better compatibility
-						document.execCommand('justifyFull')
-						// Also apply CSS text-align for better cross-browser support
-						const selection = window.getSelection()
-						if (selection.rangeCount > 0) {
-							const range = selection.getRangeAt(0)
-							const container = range.commonAncestorContainer
-							const block =
-								container.nodeType === Node.TEXT_NODE
-									? container.parentElement?.closest(
-											'p, div, li, h1, h2, h3, h4, h5, h6',
-										)
-									: container.closest('p, div, li, h1, h2, h3, h4, h5, h6')
-
-							if (block) {
-								block.style.textAlign = 'justify'
-							}
-						}
+						runEditorCommand('justifyFull')
 						break
 				}
 			}
@@ -1139,7 +1473,7 @@ const Word = () => {
 
 		document.addEventListener('keydown', handleKeyDown)
 		return () => document.removeEventListener('keydown', handleKeyDown)
-	}, [editing])
+	}, [editing, runEditorCommand])
 
 	const paginateHtml = html => {
 		const measure = document.createElement('div')
@@ -1315,8 +1649,7 @@ const Word = () => {
 							if (!(level >= 1 && level <= 3) || !v?.a3) return null
 							return {
 								a1: level,
-								a2:
-									Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+								a2: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
 								a3: v.a3,
 								a4: v?.a4,
 							}
@@ -1325,11 +1658,7 @@ const Word = () => {
 				}
 
 				const normalizeTitleKey = value =>
-					(value || '')
-						.toString()
-						.trim()
-						.replace(/\s+/g, ' ')
-						.toLowerCase()
+					(value || '').toString().trim().replace(/\s+/g, ' ').toLowerCase()
 
 				const parseLevelFromText = value => {
 					const text = (value || '').toString().toLowerCase()
@@ -1399,7 +1728,9 @@ const Word = () => {
 				setVulnAndroid(
 					buildPlatformVulnList(groupedVulnBlocks.android || [], poolByTitle),
 				)
-				setVulnIOS(buildPlatformVulnList(groupedVulnBlocks.ios || [], poolByTitle))
+				setVulnIOS(
+					buildPlatformVulnList(groupedVulnBlocks.ios || [], poolByTitle),
+				)
 				setVulnUm(
 					buildPlatformVulnList(groupedVulnBlocks.umumiy || [], poolByTitle),
 				)
@@ -1540,7 +1871,7 @@ const Word = () => {
 	const handleSaveDocFromModal = docVuln => {
 		if (!docVuln?.vuln || !Array.isArray(docVuln.vuln?.[1])) return
 		if (!docVuln?.platform) {
-			toast.error("Platformani tanlang")
+			toast.error('Platformani tanlang')
 			return
 		}
 		setPlatform(docVuln.platform)
@@ -2025,9 +2356,11 @@ const Word = () => {
 			</button>
 
 			<div className='word-container dark:text-[#333] relative ' ref={printRef}>
-				<div className='sticky top-20 z-50 mb-3 print-btns right-9'>
+				<div className='sticky w-full top-20 z-50 mb-3 print-btns right-9'>
 					<div className='flex justify-end w-full'>
-						<div className='flex w-auto flex-wrap items-center gap-2 rounded-2xl border border-slate-300 p-2 shadow-sm backdrop-blur'>
+						<div
+							className={`flex ${editing ? 'w-full' : 'w-auto'} flex-wrap items-center gap-2 rounded-2xl border border-slate-300 p-2 shadow-sm backdrop-blur ${!editing && 'w-fit justify-center'}`}
+						>
 							<EditorToolbar
 								editing={editing}
 								onBack={() => window.history.back()}
@@ -2066,7 +2399,7 @@ const Word = () => {
 										width='1.2em'
 										height='1.2em'
 									></iconify-icon>
-									<span> Hisobot </span>
+									<span> Chop etish </span>
 								</button>
 
 								<div

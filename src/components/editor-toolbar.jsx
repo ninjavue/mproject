@@ -6,6 +6,7 @@ import {
 	AlignLeft,
 	AlignRight,
 	Bold,
+	FilePlus2,
 	Highlighter,
 	Italic,
 	Link2,
@@ -15,6 +16,7 @@ import {
 	Palette,
 	Plus,
 	Strikethrough,
+	Trash2,
 	Type,
 	Underline,
 	Unlink,
@@ -39,10 +41,12 @@ const ToolbarIconButton = ({
 		type='button'
 		title={title}
 		onMouseDown={event => {
-			// Keep selection active while toolbar buttons are clicked.
+			event.preventDefault()
+			onClick?.(event)
+		}}
+		onClick={event => {
 			event.preventDefault()
 		}}
-		onClick={onClick}
 		className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border text-slate-700 transition ${
 			active
 				? 'border-sky-300 bg-sky-50 text-sky-700'
@@ -58,6 +62,8 @@ const EditorToolbar = ({
 	onBack,
 	onCommand,
 	onInsertLink,
+	onInsertPage,
+	onDeletePage,
 	zoom,
 	onZoomChange,
 	zoomOptions = [],
@@ -92,6 +98,22 @@ const EditorToolbar = ({
 					<ToolbarIconButton title='Redo' onClick={() => onCommand?.('redo')}>
 						<RiArrowGoForwardLine size={17} />
 					</ToolbarIconButton>
+					{typeof onInsertPage === 'function' && (
+						<ToolbarIconButton
+							title='Yangi sahifa'
+							onClick={() => onInsertPage?.()}
+						>
+							<FilePlus2 size={17} />
+						</ToolbarIconButton>
+					)}
+					{typeof onDeletePage === 'function' && (
+						<ToolbarIconButton
+							title="Qo'shilgan sahifani o'chirish"
+							onClick={() => onDeletePage?.()}
+						>
+							<Trash2 size={17} />
+						</ToolbarIconButton>
+					)}
 				</ToolbarGroup>
 			)}
 

@@ -23,7 +23,7 @@
 /* Regular */
 @font-face {
 	font-family: 'CenturyGothic';
-	src: url('/public/assets/fonts/CenturyGothicPaneuropeanRegular.ttf')
+	src: url('/assets/fonts/CenturyGothicPaneuropeanRegular.ttf')
 		format('truetype');
 	font-weight: 400;
 	font-style: normal;
@@ -32,8 +32,7 @@
 /* Bold */
 @font-face {
 	font-family: 'CenturyGothic';
-	src: url('/public/assets/fonts/CenturyGothicPaneuropeanBold.ttf')
-		format('truetype');
+	src: url('/assets/fonts/CenturyGothicPaneuropeanBold.ttf') format('truetype');
 	font-weight: 700;
 	font-style: normal;
 }
@@ -41,7 +40,7 @@
 /* Italic */
 @font-face {
 	font-family: 'CenturyGothic';
-	src: url('/public/assets/fonts/CenturyGothicPaneuropeanItalic.ttf')
+	src: url('/assets/fonts/CenturyGothicPaneuropeanItalic.ttf')
 		format('truetype');
 	font-weight: 400;
 	font-style: italic;
@@ -50,7 +49,7 @@
 /* Bold Italic */
 @font-face {
 	font-family: 'CenturyGothic';
-	src: url('/public/assets/fonts/CenturyGothicPaneuropeanBoldItalic.ttf')
+	src: url('/assets/fonts/CenturyGothicPaneuropeanBoldItalic.ttf')
 		format('truetype');
 	font-weight: 700;
 	font-style: italic;
@@ -75,7 +74,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-	background: blue;
+	background: rgb(17, 17, 214);
 	border-radius: 6px;
 }
 
@@ -95,7 +94,7 @@
 	position: relative;
 	overflow: hidden !important;
 	display: block;
-	background-image: url('/public/assets/word/2.png');
+	background-image: url('/assets/word/2.png');
 	background-repeat: no-repeat;
 	background-position: center;
 	background-size: cover;
@@ -377,25 +376,25 @@ button {
 }
 
 .a4.first-a4 {
-	background-image: url('/public/assets/word/1.png');
+	background-image: url('/assets/word/1.png');
 	background-position: center center;
 	background-size: contain;
 }
 
 .a4.last-a4 {
-	background-image: url('/public/assets/word/4.png');
+	background-image: url('/assets/word/4.png');
 	background-position: center center;
 	background-size: contain;
 }
 
 .a4.mundarija1 {
-	background-image: url('/public/assets/word/5.jpg');
+	background-image: url('/assets/word/5.jpg');
 	background-position: center center;
 	background-size: contain;
 }
 
 .a4.mundarija2 {
-	background-image: url('/public/assets/word/6.jpg');
+	background-image: url('/assets/word/6.jpg');
 	background-position: center center;
 	background-size: contain;
 }
@@ -654,12 +653,28 @@ table.depart-table {
 }
 
 @media print {
+	html,
 	body {
-		margin: 0;
+		margin: 0 !important;
+		padding: 0 !important;
+		background: #fff !important;
 	}
 
 	button {
 		display: none;
+	}
+
+	.word-container,
+	.word-pages {
+		margin: 0 !important;
+		padding: 0 !important;
+	}
+
+	.a4 {
+		margin: 0 auto !important;
+		box-shadow: none !important;
+		width: 210mm !important;
+		height: 297mm !important;
 	}
 }
 
@@ -670,6 +685,11 @@ table.depart-table {
 
 		page-break-inside: avoid;
 		break-inside: avoid;
+	}
+
+	.word-pages .a4:last-child {
+		page-break-after: auto !important;
+		break-after: auto !important;
 	}
 }
 
@@ -774,7 +794,7 @@ table.depart-table {
 }
 
 .chat-message-list {
-	background-image: url('/public/assets/etp/tb.png');
+	background-image: url('/assets/etp/tb.png');
 	background-repeat: no-repeat;
 	background-position: center center;
 	background-size: cover;
@@ -787,7 +807,7 @@ table.depart-table {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background-image: url('/public/assets/etp/tbs.svg');
+	background-image: url('/assets/etp/tbs.svg');
 	opacity: 0.2;
 	width: 100%;
 	height: 100%;
@@ -953,7 +973,10 @@ object #save {
 }
 
 .a4.first-a4.system {
-	background-image: url('/public/assets/system/ax.png');
+	background-image: url('/assets/system/ax.png');
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100% 100%;
 }
 
 .system .page-content {
@@ -975,11 +998,17 @@ object #save {
 }
 
 .system-m1.a4.mundarija1 {
-	background-image: url('/public/assets/system/ax-mundarija2.png');
+	background-image: url('/assets/system/ax-mundarija2.png');
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100% 100%;
 }
 
 .system-m2.a4.mundarija2 {
-	background-image: url('/public/assets/system/ax-mundarija.png');
+	background-image: url('/assets/system/ax-mundarija.png');
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100% 100%;
 }
 
 .system-m1 .mundarija-content {
@@ -1057,15 +1086,20 @@ object #save {
 
 .system-two-col {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 24px;
+	grid-template-columns: 1fr;
 }
 
 .system-two-col-flow {
-	column-count: 1;
-	column-gap: 24px;
-	column-fill: auto;
-	height: 100%;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-height: 100%;
+	height: auto;
+}
+
+.system-two-col-flow > * {
+	width: 100%;
+	min-width: 0;
 }
 
 .system-two-col-flow .system-bar-title,
@@ -1304,7 +1338,11 @@ object #save {
 }
 
 .a4.system-b {
-	background-image: url('/public/assets/system/ax-back.png');
+	background-image: url('/assets/system/ax-back.png');
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100% 100%;
+	background-color: #043a8c;
 }
 
 background-item.is-visible:not(.backwards) {
@@ -1342,7 +1380,7 @@ background-item.is-visible:not(.backwards) {
 	min-height: 89vh;
 	background-image:
 		linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
-		url('/public/assets/images/main-bg.jpg');
+		url('/assets/images/main-bg.jpg');
 	background-size: 100px 100px;
 	background-position: top left;
 	background-repeat: repeat;
@@ -1399,7 +1437,7 @@ background-item.is-visible:not(.backwards) {
 	position: relative;
 	background-image:
 		linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)),
-		url('/public/assets/images/main-bg.jpg');
+		url('/assets/images/main-bg.jpg');
 	background-size: 100px 100px;
 	background-position: top left;
 	background-repeat: repeat;
@@ -1410,6 +1448,22 @@ background-item.is-visible:not(.backwards) {
 	min-height: var(--system-page-content-height);
 	max-height: var(--system-page-content-height);
 	margin-top: var(--system-page-content-offset-top);
+	overflow-x: hidden !important;
+}
+
+.word-container .a4.system-c .page-content.new-content .system-two-col {
+	display: block !important;
+	grid-template-columns: 1fr !important;
+	gap: 0 !important;
+}
+
+.word-container
+	.a4.system-c
+	.page-content.new-content
+	.system-two-col
+	> .system-col {
+	width: 100% !important;
+	min-width: 0 !important;
 }
 
 .loaderSpinner {

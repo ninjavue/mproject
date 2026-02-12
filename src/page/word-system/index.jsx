@@ -52,6 +52,70 @@ const imageLog = (...args) => console.log(IMAGE_UPLOAD_LOG_TAG, ...args)
 const imageLogError = (...args) => console.error(IMAGE_UPLOAD_LOG_TAG, ...args)
 const IMAGE_PLACEHOLDER_SRC =
 	'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+const CARET_ANCHOR_HTML =
+	'<p class="system-paragraph word-caret-anchor" data-caret-anchor="true"><br /></p>'
+const UUID_RESOURCE_RE =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const inferFileIdFromSrc = srcValue => {
+	const src = (srcValue || '').trim()
+	if (!src) return ''
+	if (
+		src.startsWith('data:') ||
+		src.startsWith('blob:') ||
+		/^https?:\/\//i.test(src) ||
+		src.startsWith('/')
+	) {
+		return ''
+	}
+	if (/^files\//i.test(src)) {
+		return src.replace(/^files\//i, '').trim()
+	}
+	if (UUID_RESOURCE_RE.test(src)) {
+		return src
+	}
+	return ''
+}
+
+const isBrokenFileSrcValue = srcValue => {
+	const src = (srcValue || '').trim()
+	if (!src) return true
+	if (src === IMAGE_PLACEHOLDER_SRC) return true
+	if (
+		src.startsWith('data:') ||
+		src.startsWith('blob:') ||
+		/^https?:\/\//i.test(src) ||
+		src.startsWith('/')
+	) {
+		return false
+	}
+	return Boolean(inferFileIdFromSrc(src))
+}
+
+const isManualPageBreakBlock = html =>
+	typeof html === 'string' && /data-manual-page-break=["']true["']/i.test(html)
+
+const isCaretAnchorBlock = html =>
+	typeof html === 'string' && /data-caret-anchor=["']true["']/i.test(html)
+
+const buildCaretAnchorBlock = () => CARET_ANCHOR_HTML
+
+const flattenPagesToModelBlocks = pages => {
+	const safePages = Array.isArray(pages) ? pages : []
+	if (!safePages.length) return [buildCaretAnchorBlock()]
+	const out = []
+	safePages.forEach(pageBlocks => {
+		const safeBlocks = Array.isArray(pageBlocks)
+			? pageBlocks.filter(Boolean)
+			: [buildCaretAnchorBlock()]
+		if (safeBlocks.length === 0) {
+			out.push(buildCaretAnchorBlock())
+		} else {
+			out.push(...safeBlocks)
+		}
+	})
+	return out
+}
 
 const section1Left = [
 	{
@@ -108,10 +172,6 @@ const section2LeftTerms = [
 		text: 'kompyuter dasturiy komponentlarining zaif tomonlaridan foydalaniladigan zararli kod.',
 	},
 ]
-
-// section2BasisText o'chirildi - contractName komponenti ichida inline ishlatiladi
-const section2BasisTextRemoved = 'unused' /*
-  `“Kiberxavfsizlik markazi” davlat unitar korxonasi va O‘zbekiston Respublikasi Sport vazirligi huzuridagi “Raqamlashtirish va sertifikatlash markazi” MCHJ o‘rtasida tuzilgan 2025-yil 21-noyabrdagi “ERP sport” yagona elektron boshqaruv tizimini kiberxavfsizlik talablariga muvofiqligi yuzasidan ekspertizadan o‘tkazish to‘g‘risidagi ${contractName}-son shartnoma.`; */
 
 const section2ObjectLinks = [
 	'https://5tashabbus.uz',
@@ -196,100 +256,63 @@ const section3TableRows = [
 	'Axborot tizimi va uning ish jarayoni hamda funksional imkoniyatlari, shuningdek axborot tizimi ma’muri tomonidan yo‘l qo‘yilgan xatoliklar mavjudligiga tekshirish',
 ]
 
+const systemSectionsJson = {
+	section1: {
+		title: 'BIRINCHI BO‘LIM.',
+		subtitle: 'UMUMIY MA’LUMOTLAR',
+		leftItems: section1LeftItems,
+		rightItems: section1RightItems,
+	},
+	section2: {
+		title: 'IKKINCHI BO‘LIM.',
+		subtitle: 'EKSPERTIZA NATIJALARI',
+		leftItems: section2LeftItems,
+		processIntro: section2ProcessIntro,
+		processItems: section2ProcessEntries,
+	},
+	section3: {
+		title: 'UCHINCHI BO‘LIM.',
+		subtitle: 'UMUMIY XULOSA',
+		intro: section3Intro,
+		bulletsLeft: section3BulletsLeft,
+		bulletsRight: section3BulletsRight,
+		tableIntro: section3TableIntro,
+	},
+}
+
 const buildSectionTableRowHtml = (row, index) => `
-  <tr>
-    <td>${index + 1}.</td>
-    <td>${row}</td>
-  </tr>
+	<tr>
+		<td>${index + 1}.</td>
+		<td>${row}</td>
+	</tr>
 `
 
-const vulnerabilityTemplates = {
-	integrity: `
-    <div class="a4">
-      <div class="page-content">
-        <div class="exp-title">
-          Ilovada o‘zining yaxlitligini tekshirish mexanizmi joriy etilmaganligi
-        </div>
-        <div class="exp-d">
-          <b>Xavflilik darajasi:</b> Yuqori
-        </div>
-        <div class="text">
-          Ilova o‘z kodlari yaxlitligini tekshirmaydi...
-        </div>
-      </div>
-    </div>
-  `,
-	sql: `
-    <div class="a4">
-      <div class="page-content">
-        <div class="exp-title">SQL Injection</div>
-        <div class="exp-d"><b>Xavflilik darajasi:</b> O‘rta</div>
-      </div>
-    </div>
-  `,
-}
-
 let vulnCounter = 1
-
-const parseVulnByLevel = payloads => {
-	const high = [],
-		medium = [],
-		low = []
-	;(payloads || []).forEach(p => {
-		const candidate =
-			p?.[13] ?? p?.[12] ?? p?.[11] ?? (p?.a1 != null ? [p] : [])
-		const list = Array.isArray(candidate)
-			? candidate.flat().filter(Boolean)
-			: candidate
-				? [candidate]
-				: []
-		list.forEach(v => {
-			if (!v) return
-			const lev = Number(v?.a1 ?? v?.level)
-			if (![1, 2, 3].includes(lev)) return
-			const countValue = Number(v?.a2 ?? v?.count)
-			const item = {
-				a1: lev,
-				a2:
-					Number.isFinite(countValue) && countValue > 0
-						? Math.floor(countValue)
-						: 1,
-				a3: v?.a3 ?? v?.name,
-				a4: v?.a4,
-			}
-			if (!item.a3) return
-			if (lev === 1) high.push(item)
-			else if (lev === 2) medium.push(item)
-			else if (lev === 3) low.push(item)
-		})
-	})
-	return { high, medium, low }
-}
 
 const buildTocItemHtml = item => {
 	if (item.type === 'section') {
 		return `
-      <div class="content-title"><span>${item.page}</span></div>
-      <div class="mundarija-section">${item.section}</div>
-      <div class="mundarija-head">${item.head}</div>
-    `
+			<div class="content-title"><span>${item.page}</span></div>
+			<div class="mundarija-section">${item.section}</div>
+			<div class="mundarija-head">${item.head}</div>
+		`
 	}
 
 	if (item.type === 'subheader') {
 		return `
-      <div class="mundarija-row system-mundarija-row">
-        <div class="row-title large"><b>${item.title}</b></div>
-        <div class="row-num text-nowrap">${item.page || ''}</div>
-      </div>
-    `
+			<div class="mundarija-row system-mundarija-row">
+				<div class="row-title large"><b>${item.title}</b></div>
+				<div class="row-num text-nowrap">${item.page || ''}</div>
+			</div>
+		`
 	}
 
 	return `
-    <div class="mundarija-row system-mundarija-row">
-      <div class="row-title ${item.large ? 'large' : ''}">${item.title}</div>
-      <div class="row-num text-nowrap">${item.page || ''}</div>
-    </div>
-  `
+		<div class="mundarija-row system-mundarija-row">
+			<div class="row-title ${item.large ? 'large' : ''}">${item.title}</div>
+			<div class="row-num text-nowrap">${item.page || ''}</div>
+		</div>
+	`
 }
 
 const paginateTocItems = items => {
@@ -315,7 +338,7 @@ const paginateTocItems = items => {
 		measureContent.appendChild(wrapper)
 
 		if (measureContent.scrollHeight > TOC_MAX_HEIGHT) {
-			measureContent.removeChild(wrapper)
+			safeRemoveChild(measureContent, wrapper)
 			if (currentPage.length) pages.push(currentPage)
 			currentPage = [itemHtml]
 			measureContent.innerHTML = itemHtml
@@ -325,7 +348,7 @@ const paginateTocItems = items => {
 	})
 
 	if (currentPage.length) pages.push(currentPage)
-	document.body.removeChild(measure)
+	safeDetachNode(measure)
 	return pages
 }
 
@@ -358,7 +381,7 @@ const paginateSectionTableRows = rowsHtml => {
 		tbody.appendChild(row)
 
 		if (table.scrollHeight > SECTION_TABLE_MAX_HEIGHT) {
-			tbody.removeChild(row)
+			safeRemoveChild(tbody, row)
 			if (currentPage.length) pages.push(currentPage)
 			currentPage = [rowHtml]
 			tbody.innerHTML = rowHtml
@@ -368,7 +391,7 @@ const paginateSectionTableRows = rowsHtml => {
 	})
 
 	if (currentPage.length) pages.push(currentPage)
-	document.body.removeChild(measure)
+	safeDetachNode(measure)
 	return pages
 }
 
@@ -391,6 +414,219 @@ const chunkSystemAccountsRows = (
 	}
 
 	return pages.length ? pages : [[]]
+}
+
+const areHtmlBlocksEqual = (left = [], right = []) => {
+	if (!Array.isArray(left) || !Array.isArray(right)) return false
+	if (left.length !== right.length) return false
+	for (let i = 0; i < left.length; i++) {
+		if (left[i] !== right[i]) return false
+	}
+	return true
+}
+
+const isMeaningfulHtmlBlock = html => {
+	if (typeof html !== 'string') return false
+	const raw = html.trim()
+	if (!raw) return false
+
+	try {
+		const doc = new DOMParser().parseFromString(raw, 'text/html')
+		const body = doc.body
+		if (!body) return false
+
+		if (
+			body.querySelector(
+				'img,table,svg,canvas,video,audio,iframe,object,embed,hr,input,textarea,select,button',
+			)
+		) {
+			return true
+		}
+
+		const text = (body.textContent || '')
+			.replace(/\u00a0/g, ' ')
+			.replace(/[\u200B-\u200D\uFEFF]/g, '')
+			.trim()
+		return text.length > 0
+	} catch {
+		return /[^\s]/.test(raw)
+	}
+}
+
+const explodeHtmlBlock = html => {
+	if (typeof html !== 'string') return []
+	const raw = html.trim()
+	if (!raw) return []
+
+	try {
+		const container = document.createElement('div')
+		container.innerHTML = raw
+		const nodes = Array.from(container.childNodes)
+		if (!nodes.length) return [raw]
+
+		const out = []
+		nodes.forEach(node => {
+			if (node.nodeType === Node.TEXT_NODE) {
+				const text = (node.textContent || '').trim()
+				if (text) out.push(`<p>${text}</p>`)
+				return
+			}
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				out.push(node.outerHTML)
+			}
+		})
+
+		return out.length ? out : [raw]
+	} catch {
+		return [raw]
+	}
+}
+
+const safeDetachNode = node => {
+	if (!node) return
+	try {
+		if (typeof node.remove === 'function') {
+			node.remove()
+			return
+		}
+	} catch {}
+	try {
+		if (node.parentNode) {
+			node.parentNode.removeChild(node)
+		}
+	} catch {}
+}
+
+const safeRemoveChild = (parent, child) => {
+	if (!parent || !child) return
+	try {
+		if (child.parentNode === parent) {
+			parent.removeChild(child)
+			return
+		}
+	} catch {}
+	try {
+		if (typeof child.remove === 'function') {
+			child.remove()
+		}
+	} catch {}
+}
+
+const safeInsertBefore = (parent, node, beforeNode = null) => {
+	if (!parent || !node) return false
+	try {
+		if (beforeNode && beforeNode.parentNode === parent) {
+			parent.insertBefore(node, beforeNode)
+			return true
+		}
+		parent.appendChild(node)
+		return true
+	} catch {
+		try {
+			parent.appendChild(node)
+			return true
+		} catch {
+			return false
+		}
+	}
+}
+
+const safePrepend = (parent, node) => {
+	if (!parent || !node) return false
+	const ref = parent.firstChild
+	return safeInsertBefore(parent, node, ref)
+}
+
+const normalizeMeaningfulText = value =>
+	(value || '')
+		.replace(/\u00a0/g, ' ')
+		.replace(/[\u200B-\u200D\uFEFF]/g, '')
+		.trim()
+
+const hasMeaningfulDomContent = root => {
+	if (!root) return false
+	if (
+		root.querySelector?.(
+			'img,table,svg,canvas,video,audio,iframe,object,embed,input,textarea,select,button,hr',
+		)
+	) {
+		return true
+	}
+	const text = normalizeMeaningfulText(root.textContent || '')
+	return text.length > 0
+}
+
+const installInsertBeforeFailsafe = () => {
+	if (typeof window === 'undefined' || typeof Node === 'undefined') return
+	const proto = Node?.prototype
+	if (!proto || typeof proto.insertBefore !== 'function') return
+	if (proto.__wordInsertBeforeFailsafeInstalled) return
+
+	const originalInsertBefore = proto.insertBefore
+	Object.defineProperty(proto, '__wordInsertBeforeFailsafeInstalled', {
+		value: true,
+		configurable: true,
+		enumerable: false,
+		writable: false,
+	})
+
+	proto.insertBefore = function patchedInsertBefore(newNode, referenceNode) {
+		try {
+			if (referenceNode != null && referenceNode.parentNode !== this) {
+				return this.appendChild(newNode)
+			}
+			return originalInsertBefore.call(this, newNode, referenceNode)
+		} catch (error) {
+			if (error?.name === 'NotFoundError') {
+				try {
+					return this.appendChild(newNode)
+				} catch {}
+			}
+			throw error
+		}
+	}
+}
+
+const installRemoveChildFailsafe = () => {
+	if (typeof window === 'undefined' || typeof Node === 'undefined') return
+	const proto = Node?.prototype
+	if (!proto || typeof proto.removeChild !== 'function') return
+	if (proto.__wordRemoveChildFailsafeInstalled) return
+
+	const originalRemoveChild = proto.removeChild
+	Object.defineProperty(proto, '__wordRemoveChildFailsafeInstalled', {
+		value: true,
+		configurable: true,
+		enumerable: false,
+		writable: false,
+	})
+
+	proto.removeChild = function patchedRemoveChild(childNode) {
+		try {
+			if (!childNode) {
+				return originalRemoveChild.call(this, childNode)
+			}
+			if (childNode.parentNode !== this) {
+				if (childNode.parentNode) {
+					try {
+						return childNode.parentNode.removeChild(childNode)
+					} catch {}
+				}
+				return childNode
+			}
+			return originalRemoveChild.call(this, childNode)
+		} catch (error) {
+			if (error?.name === 'NotFoundError') {
+				try {
+					if (childNode?.parentNode) {
+						return childNode.parentNode.removeChild(childNode)
+					}
+				} catch {}
+				return childNode
+			}
+			throw error
+		}
+	}
 }
 
 const extractResourceHost = (value = '') => {
@@ -432,47 +668,6 @@ const riskRowClass = level =>
 			? 'risk-medium'
 			: 'risk-low'
 
-const chunkRiskRows = (rows, firstPageSize = 8, nextPageSize = 28) => {
-	const safeRows = Array.isArray(rows) ? rows : []
-	if (safeRows.length === 0) return []
-
-	const pages = []
-	let i = 0
-	let size = firstPageSize
-
-	while (i < safeRows.length) {
-		const page = []
-		const cap = size
-
-		while (i < safeRows.length && page.length < cap) {
-			const row = safeRows[i]
-
-			// agar sahifa resource header bilan emas, vuln qatoridan boshlansa headerni takrorlab qo'yamiz
-			if (page.length === 0 && row?.type === 'vuln' && row?.resourceLabel) {
-				page.push({
-					type: 'resource',
-					label: row.resourceLabel,
-					repeated: true,
-				})
-			}
-
-			page.push(row)
-			i++
-		}
-
-		// resource header sahifa oxirida qolib ketmasin
-		if (page.length && page[page.length - 1]?.type === 'resource') {
-			page.pop()
-			i = Math.max(0, i - 1)
-		}
-
-		if (page.length) pages.push(page)
-		size = nextPageSize
-	}
-
-	return pages
-}
-
 const takeRiskRows = (rows, startIndex, cap) => {
 	const safeRows = Array.isArray(rows) ? rows : []
 	let i = Math.max(0, startIndex || 0)
@@ -503,8 +698,10 @@ const RISK_TABLE_MIN_WIDTH_PX = 480
 const RISK_TABLE_DEFAULT_WIDTH_PX = 620
 const RISK_FIRST_PAGE_BASE_MAX_HEIGHT_PX = 430
 const RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX = 560
-const RISK_TABLE_BOTTOM_SAFE_GAP_PX = 8
-const RISK_TABLE_BOTTOM_SAFE_GAP_EDITING_PX = 14
+const RISK_TABLE_BOTTOM_SAFE_GAP_PX = 22
+const RISK_TABLE_BOTTOM_SAFE_GAP_EDITING_PX = 30
+const RISK_TABLE_LAYOUT_TOLERANCE_PX = 22
+const RISK_TABLE_LAYOUT_TOLERANCE_EDITING_PX = 32
 const RISK_MEASURE_TABLE_FONT_SIZE_PX = 17
 const RISK_MEASURE_DELETE_BUTTON_SIZE_PX = 32
 
@@ -523,11 +720,11 @@ const buildRiskMeasureRow = (row, withDeleteColumn = false) => {
 
 	tr.className = riskRowClass(row?.level)
 	tr.innerHTML = `
-    <td class="risk-level">${riskLevelText(row?.level)}</td>
-    <td class="risk-name">${row?.name ?? ''}</td>
-    <td class="risk-count">${row?.count ?? ''}</td>
-    ${deleteCell}
-  `
+		<td class="risk-level">${riskLevelText(row?.level)}</td>
+		<td class="risk-name">${row?.name ?? ''}</td>
+		<td class="risk-count">${row?.count ?? ''}</td>
+		${deleteCell}
+	`
 	return tr
 }
 
@@ -539,94 +736,144 @@ const takeRiskRowsByHeight = (
 	withDeleteColumn = false,
 ) => {
 	const safeRows = Array.isArray(rows) ? rows : []
-	let i = Math.max(0, startIndex || 0)
+	const startFrom = Math.max(0, startIndex || 0)
+	let i = startFrom
 	const out = []
 	const safeTableWidth = Number.isFinite(tableWidthPx)
 		? tableWidthPx
 		: RISK_TABLE_DEFAULT_WIDTH_PX
+	const layoutTolerance = withDeleteColumn
+		? RISK_TABLE_LAYOUT_TOLERANCE_EDITING_PX
+		: RISK_TABLE_LAYOUT_TOLERANCE_PX
+	const safeMaxHeight = Math.max(180, Math.floor(maxHeightPx - layoutTolerance))
+	let measureRoot = null
 
-	// hidden measure container
-	const measure = document.createElement('div')
-	measure.style.width = `${Math.max(RISK_TABLE_MIN_WIDTH_PX, Math.floor(safeTableWidth))}px`
-	measure.style.position = 'absolute'
-	measure.style.visibility = 'hidden'
-	measure.style.top = '-9999px'
-	measure.style.left = '-9999px'
-	measure.style.pointerEvents = 'none'
-
-	const table = document.createElement('table')
-	table.className = 'system-risk-table'
-	table.style.fontSize = `${RISK_MEASURE_TABLE_FONT_SIZE_PX}px`
-	table.innerHTML = `
-    <thead>
-      <tr>
-        <th>Xavflilik darajasi</th>
-        <th>Aniqlangan zaiflik</th>
-        <th>Soni</th>
-        ${withDeleteColumn ? '<th class="risk-delete-head"></th>' : ''}
-      </tr>
-    </thead>
-    <tbody></tbody>
-  `
-
-	measure.appendChild(table)
-	document.body.appendChild(measure)
-
-	const tbody = table.querySelector('tbody')
-	const tryAppend = row => {
-		const tr = buildRiskMeasureRow(row, withDeleteColumn)
-		tbody.appendChild(tr)
-		const ok = table.scrollHeight <= maxHeightPx
-		if (!ok) tbody.removeChild(tr)
-		return ok
+	const fallbackByCount = () => {
+		const approxHeaderHeight = withDeleteColumn ? 120 : 104
+		const approxRowHeight = withDeleteColumn ? 76 : 64
+		const available = Math.max(120, safeMaxHeight - approxHeaderHeight)
+		const cap = Math.max(1, Math.floor(available / approxRowHeight))
+		return takeRiskRows(safeRows, startFrom, cap)
 	}
 
-	while (i < safeRows.length) {
-		let consumedIndex = false
-		let row = safeRows[i]
+	try {
+		// hidden measure container: real stylesga yaqin bo'lishi uchun real tree klasslarini saqlaymiz
+		measureRoot = document.createElement('div')
+		measureRoot.className = 'word-container'
+		measureRoot.style.position = 'absolute'
+		measureRoot.style.visibility = 'hidden'
+		measureRoot.style.top = '-9999px'
+		measureRoot.style.left = '-9999px'
+		measureRoot.style.pointerEvents = 'none'
+		measureRoot.style.width = '0'
+		measureRoot.style.height = '0'
+		measureRoot.style.overflow = 'hidden'
 
-		// agar sahifa/ustun resource header bilan emas, vuln qatoridan boshlansa headerni takrorlaymiz
-		if (out.length === 0 && row?.type === 'vuln' && row?.resourceLabel) {
-			const injected = {
-				type: 'resource',
-				label: row.resourceLabel,
-				repeated: true,
-			}
-			if (tryAppend(injected)) {
-				out.push(injected)
-			}
-			// injected row index iste'mol qilinmaydi
-			continue
+		const measurePage = document.createElement('div')
+		measurePage.className = 'a4 system-c'
+		measurePage.style.width = `${Math.max(RISK_TABLE_MIN_WIDTH_PX, Math.floor(safeTableWidth))}px`
+		measurePage.style.minHeight = '0'
+		measurePage.style.height = 'auto'
+		measurePage.style.padding = '0'
+		measurePage.style.margin = '0'
+		measurePage.style.background = 'none'
+		measurePage.style.boxShadow = 'none'
+		measurePage.style.overflow = 'visible'
+
+		const measureContent = document.createElement('div')
+		measureContent.className = 'page-content editable'
+		measureContent.style.width = '100%'
+		measureContent.style.height = 'auto'
+		measureContent.style.minHeight = '0'
+		measureContent.style.maxHeight = 'none'
+		measureContent.style.margin = '0'
+		measureContent.style.overflow = 'visible'
+
+		const table = document.createElement('table')
+		table.className = 'system-risk-table'
+		table.style.fontSize = `${RISK_MEASURE_TABLE_FONT_SIZE_PX}px`
+		table.innerHTML = `
+			<thead>
+				<tr>
+					<th>Xavflilik darajasi</th>
+					<th>Aniqlangan zaiflik</th>
+					<th>Soni</th>
+					${withDeleteColumn ? '<th class="risk-delete-head"></th>' : ''}
+				</tr>
+			</thead>
+			<tbody></tbody>
+		`
+
+		measureContent.appendChild(table)
+		measurePage.appendChild(measureContent)
+		measureRoot.appendChild(measurePage)
+		document.body.appendChild(measureRoot)
+
+		const tbody = table.querySelector('tbody')
+		const tryAppend = row => {
+			const tr = buildRiskMeasureRow(row, withDeleteColumn)
+			tbody.appendChild(tr)
+			const ok = table.scrollHeight <= safeMaxHeight
+			if (!ok) safeRemoveChild(tbody, tr)
+			return ok
 		}
 
-		// normal row
-		consumedIndex = true
-		const canFit = tryAppend(row)
-		if (!canFit) {
-			// hech bo'lmasa bitta row o'tishi kerak (aks holda infinite loop bo'lishi mumkin)
-			if (out.length === 0) {
-				// majburan qo'shamiz
-				const tr = buildRiskMeasureRow(row, withDeleteColumn)
-				tbody.appendChild(tr)
-				out.push(row)
-				i += 1
+		while (i < safeRows.length) {
+			let consumedIndex = false
+			let row = safeRows[i]
+
+			// agar sahifa/ustun resource header bilan emas, vuln qatoridan boshlansa headerni takrorlaymiz
+			if (out.length === 0 && row?.type === 'vuln' && row?.resourceLabel) {
+				const injected = {
+					type: 'resource',
+					label: row.resourceLabel,
+					repeated: true,
+				}
+				if (tryAppend(injected)) {
+					out.push(injected)
+				}
+				// injected row index iste'mol qilinmaydi
+				continue
 			}
-			break
+
+			// normal row
+			consumedIndex = true
+			const canFit = tryAppend(row)
+			if (!canFit) {
+				// hech bo'lmasa bitta row o'tishi kerak (aks holda infinite loop bo'lishi mumkin)
+				if (out.length === 0) {
+					// majburan qo'shamiz
+					const tr = buildRiskMeasureRow(row, withDeleteColumn)
+					tbody.appendChild(tr)
+					out.push(row)
+					i += 1
+				}
+				break
+			}
+
+			out.push(row)
+			if (consumedIndex) i += 1
 		}
 
-		out.push(row)
-		if (consumedIndex) i += 1
-	}
+		// resource header oxirida qolib ketmasin
+		if (out.length && out[out.length - 1]?.type === 'resource') {
+			const last = out[out.length - 1]
+			out.pop()
+			if (!last.repeated) i = Math.max(0, i - 1)
+		}
 
-	// resource header oxirida qolib ketmasin
-	if (out.length && out[out.length - 1]?.type === 'resource') {
-		const last = out[out.length - 1]
-		out.pop()
-		if (!last.repeated) i = Math.max(0, i - 1)
+		return { page: out, nextIndex: i }
+	} catch (error) {
+		if (error?.name !== 'NotFoundError') {
+			console.error(
+				'[word-system:risk-layout] takeRiskRowsByHeight fallback',
+				error,
+			)
+		}
+		return fallbackByCount()
+	} finally {
+		safeDetachNode(measureRoot)
 	}
-
-	document.body.removeChild(measure)
-	return { page: out, nextIndex: i }
 }
 
 const chunkRiskPagesByHeight = (
@@ -710,13 +957,19 @@ const computeRiskLevelRowspanMeta = rows => {
 }
 
 const SystemWord = () => {
-	const [pages, setPages] = useState([])
 	const [editing, setEditing] = useState(false)
-	const [loading, setLoading] = useState(false)
-	const pageRefs = useRef([])
+	const loading = false
 	const editingRef = useRef(false)
 	const savedSelectionRef = useRef(null)
 	const activeEditableRef = useRef(null)
+	const activeFormatBlockRef = useRef(null)
+	const selectedA4PageRef = useRef(null)
+	const syncNewContentFromDomRef = useRef(null)
+	const newVulnSnapshotRef = useRef([])
+	const overflowLockRef = useRef(false)
+	const overflowQueueRef = useRef(false)
+	const isSavingRef = useRef(false)
+	const modelPaginationRef = useRef(true)
 	// const [isModalOpen, setIsModalOpen] = useState(false);
 	const [expertize, setExpertize] = useState([])
 	const [appName, setAppName] = useState('')
@@ -724,26 +977,15 @@ const SystemWord = () => {
 	const [orgTypeName, setOrgTypeName] = useState('')
 	const [contractName, setContractName] = useState('')
 	const [modalOpen, setModalOpen] = useState(false)
-	const [selectedItem, setSelectedItem] = useState(null)
 	const [htmlContent, setHtmlContent] = useState([])
-	const [vulnerabilities, setVulnerabilities] = useState([])
 	const [highVuln, setHighVuln] = useState([])
 	const [mediumVuln, setMediumVuln] = useState([])
 	const [lowVuln, setLowVuln] = useState([])
-	const [vuln, setVuln] = useState([])
 	const [contractDate, setContractDate] = useState('')
-	const [allVuln, setAllVuln] = useState([])
+	const [, setAllVuln] = useState([])
 	const [newVuln, setNewVuln] = useState([])
-	const [pages1, setPages1] = useState([])
 	const [tableData, setTableData] = useState({})
-	const [rows, setRows] = useState([])
-	const [apkFileName, setApkFileName] = useState('')
-	const [ipaFileName, setIpaFileName] = useState('')
-	const [vulnAndroid, setVulnAndroid] = useState([])
-	const [vulnIOS, setVulnIOS] = useState([])
-	const [vulnUm, setVulnUm] = useState([])
-	const [platform, setPlatform] = useState('umumiy')
-	const [pages2, setPages2] = useState([])
+	const [removedStaticPageIds, setRemovedStaticPageIds] = useState({})
 	const [pages3, setPages3] = useState([])
 	const [tocPages, setTocPages] = useState([])
 	const [sectionTablePages, setSectionTablePages] = useState([])
@@ -771,20 +1013,28 @@ const SystemWord = () => {
 		unorderedList: false,
 		orderedList: false,
 	})
-	const [editorStats, setEditorStats] = useState({ words: 0, characters: 0 })
-	const [lastSavedAt, setLastSavedAt] = useState(null)
+	const editorStatsRef = useRef({ words: 0, characters: 0 })
 	const [workers, setWorkers] = useState()
+	const [domRenderRevision, setDomRenderRevision] = useState(0)
 	const [riskMeasureConfig, setRiskMeasureConfig] = useState({
 		tableWidthPx: RISK_TABLE_DEFAULT_WIDTH_PX,
 		firstPageMaxHeightPx: RISK_FIRST_PAGE_BASE_MAX_HEIGHT_PX,
 		contPageMaxHeightPx: RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX,
 	})
+	const imageResizeSessionRef = useRef(null)
 	const NO_RESOURCE_KEY = '__no_resource__'
 	const shortcutActionsRef = useRef({
 		print: null,
 		save: null,
 		openModal: null,
+		insertPage: null,
+		deletePage: null,
 	})
+
+	useEffect(() => {
+		installInsertBeforeFailsafe()
+		installRemoveChildFailsafe()
+	}, [])
 
 	const normalizeCellValue = v => (v ?? '').toString().trim()
 
@@ -809,11 +1059,14 @@ const SystemWord = () => {
 		[getEditableRootFromNode],
 	)
 
-	const isRangeInEditableArea = useCallback(range => {
-		const editableRoot = getEditableRootFromRange(range)
-		if (!editableRoot) return false
-		return editableRoot.getAttribute('contenteditable') !== 'false'
-	}, [getEditableRootFromRange])
+	const isRangeInEditableArea = useCallback(
+		range => {
+			const editableRoot = getEditableRootFromRange(range)
+			if (!editableRoot) return false
+			return editableRoot.getAttribute('contenteditable') !== 'false'
+		},
+		[getEditableRootFromRange],
+	)
 
 	const captureSelectionRange = useCallback(() => {
 		if (!editingRef.current) return
@@ -895,15 +1148,27 @@ const SystemWord = () => {
 		return firstEditable || null
 	}, [])
 
+	const focusEditableRoot = useCallback(editableRoot => {
+		if (!editableRoot || !editableRoot.isConnected) return false
+		if (editableRoot.getAttribute('contenteditable') === 'false') return false
+		if (typeof editableRoot.focus === 'function') {
+			try {
+				editableRoot.focus({ preventScroll: true })
+			} catch {
+				editableRoot.focus()
+			}
+		}
+		activeEditableRef.current = editableRoot
+		return true
+	}, [])
+
 	const ensureEditorSelection = useCallback(() => {
 		if (!editingRef.current) return false
 		if (restoreSelectionRange()) return true
 
 		const editableRoot = findEditableFallback()
 		if (!editableRoot) return false
-		if (typeof editableRoot.focus === 'function') {
-			editableRoot.focus({ preventScroll: true })
-		}
+		if (!focusEditableRoot(editableRoot)) return false
 
 		const selection = window.getSelection()
 		if (!selection) return false
@@ -914,14 +1179,198 @@ const SystemWord = () => {
 			selection.removeAllRanges()
 			selection.addRange(range)
 			savedSelectionRef.current = range.cloneRange()
-			activeEditableRef.current = editableRoot
 			return true
 		} catch {
 			return false
 		}
-	}, [findEditableFallback, restoreSelectionRange])
+	}, [findEditableFallback, focusEditableRoot, restoreSelectionRange])
 
-	const updateEditorStats = useCallback(() => {
+	const findFormatBlockForRange = useCallback(range => {
+		if (!range) return null
+		let node =
+			range.startContainer?.nodeType === Node.TEXT_NODE
+				? range.startContainer.parentElement
+				: range.startContainer
+		if (!(node instanceof Element)) return null
+
+		while (node) {
+			if (
+				node.matches?.('p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span')
+			) {
+				const blockedContainer =
+					node.classList?.contains('system-two-col-flow') ||
+					node.classList?.contains('page-content') ||
+					node.classList?.contains('editable') ||
+					node.classList?.contains('new-content')
+				if (!blockedContainer) {
+					return node
+				}
+			}
+			node = node.parentElement
+		}
+
+		return null
+	}, [])
+
+	const resolveActiveFormatBlock = useCallback(
+		range => {
+			let block = findFormatBlockForRange(range)
+			if (block?.isConnected) return block
+
+			const cachedBlock = activeFormatBlockRef.current
+			if (cachedBlock?.isConnected) return cachedBlock
+
+			const editableRoot =
+				getEditableRootFromRange(range) ||
+				activeEditableRef.current ||
+				findEditableFallback()
+			if (!(editableRoot instanceof HTMLElement)) return null
+
+			block = editableRoot.querySelector(
+				'p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span',
+			)
+			return block || editableRoot
+		},
+		[findEditableFallback, findFormatBlockForRange, getEditableRootFromRange],
+	)
+
+	const applyBlockStyleFallback = useCallback(
+		(range, command, value = null) => {
+			const block = resolveActiveFormatBlock(range)
+			if (!block) return false
+			activeFormatBlockRef.current = block
+
+			const computed = window.getComputedStyle(block)
+			const decorationParts = new Set(
+				(computed.textDecorationLine || '')
+					.split(' ')
+					.map(part => part.trim())
+					.filter(Boolean),
+			)
+
+			const toggleDecoration = key => {
+				if (decorationParts.has(key)) {
+					decorationParts.delete(key)
+				} else {
+					decorationParts.add(key)
+				}
+				const next =
+					Array.from(decorationParts).filter(Boolean).join(' ') || 'none'
+				block.style.textDecorationLine = next
+				return true
+			}
+
+			const weightValue = Number.parseInt(computed.fontWeight || '400', 10)
+
+			switch (command) {
+				case 'justifyLeft':
+					block.style.textAlign = 'left'
+					return true
+				case 'justifyCenter':
+					block.style.textAlign = 'center'
+					return true
+				case 'justifyRight':
+					block.style.textAlign = 'right'
+					return true
+				case 'justifyFull':
+					block.style.textAlign = 'justify'
+					return true
+				case 'italic':
+					block.style.fontStyle =
+						computed.fontStyle === 'italic' ? 'normal' : 'italic'
+					return true
+				case 'bold':
+					block.style.fontWeight =
+						Number.isFinite(weightValue) && weightValue >= 600 ? '400' : '700'
+					return true
+				case 'underline':
+					return toggleDecoration('underline')
+				case 'strikeThrough':
+					return toggleDecoration('line-through')
+				case 'foreColor':
+					if (!value) return false
+					block.style.color = String(value)
+					return true
+				case 'hiliteColor':
+				case 'backColor':
+					if (!value) return false
+					block.style.backgroundColor = String(value)
+					return true
+				case 'fontName':
+					if (!value) return false
+					block.style.fontFamily = String(value)
+					return true
+				case 'fontSize': {
+					if (value == null || value === '') return false
+					const fontSizeMap = {
+						1: 10,
+						2: 11,
+						3: 12,
+						4: 14,
+						5: 16,
+						6: 18,
+						7: 20,
+						8: 24,
+						9: 30,
+						10: 36,
+					}
+					const parsed = Number.parseInt(String(value), 10)
+					const px = fontSizeMap[parsed] || parsed
+					if (!Number.isFinite(px) || px <= 0) return false
+					block.style.fontSize = `${Math.max(8, Math.min(96, px))}px`
+					return true
+				}
+				default:
+					return false
+			}
+		},
+		[resolveActiveFormatBlock],
+	)
+
+	const ensureNewContentCaretAnchor = useCallback(
+		(pageContent, options = {}) => {
+			if (!pageContent || !pageContent.classList?.contains('new-content')) {
+				return false
+			}
+			const flow =
+				pageContent.querySelector('.system-two-col-flow') || pageContent
+			if (!flow) return false
+
+			if (!hasMeaningfulDomContent(flow)) {
+				let anchor = flow.querySelector(
+					'.word-caret-anchor[data-caret-anchor="true"]',
+				)
+				if (!anchor) {
+					anchor = document.createElement('p')
+					anchor.className = 'system-paragraph word-caret-anchor'
+					anchor.setAttribute('data-caret-anchor', 'true')
+					anchor.innerHTML = '<br />'
+					flow.appendChild(anchor)
+				}
+
+				focusEditableRoot(pageContent)
+				const selection = window.getSelection()
+				if (!selection) return true
+				try {
+					const range = document.createRange()
+					range.selectNodeContents(anchor)
+					range.collapse(options?.collapseToStart !== false)
+					selection.removeAllRanges()
+					selection.addRange(range)
+					savedSelectionRef.current = range.cloneRange()
+					activeEditableRef.current = pageContent
+				} catch {}
+				return true
+			}
+
+			return false
+		},
+		[focusEditableRoot],
+	)
+
+	const updateEditorStats = useCallback((options = {}) => {
+		const force = Boolean(options?.force)
+		if (editingRef.current && !force) return
 		const allPageContents = Array.from(
 			document.querySelectorAll('.page-content'),
 		)
@@ -934,11 +1383,7 @@ const SystemWord = () => {
 
 		const words = text ? text.split(' ').length : 0
 		const characters = text.length
-		setEditorStats(prev =>
-			prev.words === words && prev.characters === characters
-				? prev
-				: { words, characters },
-		)
+		editorStatsRef.current = { words, characters }
 	}, [])
 
 	const readCommandState = useCallback(command => {
@@ -965,20 +1410,60 @@ const SystemWord = () => {
 		[readCommandState],
 	)
 
-	const syncToolbarState = useCallback(() => {
-		const next = getToolbarSnapshot()
-		setToolbarState(prev => {
-			const same = Object.keys(next).every(key => prev[key] === next[key])
-			return same ? prev : { ...prev, ...next }
-		})
-	}, [getToolbarSnapshot])
+	const syncToolbarState = useCallback(
+		(options = {}) => {
+			const force = Boolean(options?.force)
+			if (!editingRef.current && !force) return
+			const next = getToolbarSnapshot()
+			setToolbarState(prev => {
+				const same = Object.keys(next).every(key => prev[key] === next[key])
+				return same ? prev : { ...prev, ...next }
+			})
+		},
+		[getToolbarSnapshot],
+	)
 
 	const runEditorCommand = useCallback(
 		(command, value = null) => {
 			if (!editingRef.current) return false
 
-			const hasSelection = ensureEditorSelection()
+			let activeRange = null
+			const liveSelection = window.getSelection()
+			if (liveSelection && liveSelection.rangeCount > 0) {
+				try {
+					const liveRange = liveSelection.getRangeAt(0)
+					if (isRangeInEditableArea(liveRange)) {
+						activeRange = liveRange
+						savedSelectionRef.current = liveRange.cloneRange()
+						const editableRoot = getEditableRootFromRange(liveRange)
+						if (editableRoot) {
+							activeEditableRef.current = editableRoot
+						}
+					}
+				} catch {
+					activeRange = null
+				}
+			}
+
+			if (!activeRange) {
+				const activeEditable = findEditableFallback()
+				if (activeEditable) {
+					focusEditableRoot(activeEditable)
+				}
+			}
+
+			const hasSelection = activeRange ? true : ensureEditorSelection()
 			if (!hasSelection) return false
+			if (!activeRange) {
+				const restoredSelection = window.getSelection()
+				if (restoredSelection && restoredSelection.rangeCount > 0) {
+					try {
+						activeRange = restoredSelection.getRangeAt(0)
+					} catch {
+						activeRange = null
+					}
+				}
+			}
 			try {
 				document.execCommand('styleWithCSS', false, true)
 			} catch {
@@ -1000,14 +1485,45 @@ const SystemWord = () => {
 				}
 			}
 
+			if (activeRange) {
+				const forceFallbackCommands = new Set([
+					'justifyLeft',
+					'justifyCenter',
+					'justifyRight',
+					'justifyFull',
+					'italic',
+					'bold',
+					'underline',
+					'strikeThrough',
+					'foreColor',
+					'hiliteColor',
+					'backColor',
+					'fontName',
+					'fontSize',
+				])
+				if (forceFallbackCommands.has(command) || !commandApplied) {
+					const fallbackApplied = applyBlockStyleFallback(
+						activeRange,
+						command,
+						value,
+					)
+					commandApplied = commandApplied || fallbackApplied
+				}
+			}
+
 			captureSelectionRange()
-			syncToolbarState()
-			updateEditorStats()
+			syncToolbarState({ force: true })
+			updateEditorStats({ force: true })
 			return commandApplied
 		},
 		[
 			captureSelectionRange,
+			applyBlockStyleFallback,
 			ensureEditorSelection,
+			findEditableFallback,
+			focusEditableRoot,
+			getEditableRootFromRange,
+			isRangeInEditableArea,
 			syncToolbarState,
 			updateEditorStats,
 		],
@@ -1029,15 +1545,17 @@ const SystemWord = () => {
 		if (!editing) {
 			savedSelectionRef.current = null
 			activeEditableRef.current = null
+			activeFormatBlockRef.current = null
+			selectedA4PageRef.current = null
 		}
 	}, [editing])
 
 	useEffect(() => {
 		const raf = window.requestAnimationFrame(() => {
-			updateEditorStats()
+			updateEditorStats({ force: !editing })
 		})
 		return () => window.cancelAnimationFrame(raf)
-	}, [pages, pages1, pages2, pages3, htmlContent, editing, updateEditorStats])
+	}, [pages3, htmlContent, editing, updateEditorStats])
 
 	useEffect(() => {
 		if (!editing) return
@@ -1054,6 +1572,10 @@ const SystemWord = () => {
 			const editableRoot = getEditableRootFromRange(range)
 			if (editableRoot) {
 				activeEditableRef.current = editableRoot
+			}
+			const block = findFormatBlockForRange(range)
+			if (block) {
+				activeFormatBlockRef.current = block
 			}
 		}
 
@@ -1075,22 +1597,65 @@ const SystemWord = () => {
 			const editableRoot = getEditableRootFromNode(event.target)
 			if (editableRoot) {
 				activeEditableRef.current = editableRoot
+				ensureNewContentCaretAnchor(editableRoot, {
+					collapseToStart: false,
+				})
 			}
+		}
+		const onNewContentMouseDownCapture = event => {
+			const target = event.target
+			if (!(target instanceof Element)) return
+			const newContentPage = target.closest(
+				'.page-content.editable.new-content',
+			)
+			if (!newContentPage) return
+
+			const flow =
+				newContentPage.querySelector('.system-two-col-flow') || newContentPage
+			if (hasMeaningfulDomContent(flow)) return
+
+			event.preventDefault()
+			ensureNewContentCaretAnchor(newContentPage, { collapseToStart: false })
+		}
+		const onToolbarMouseDownCapture = event => {
+			const target = event.target
+			if (!(target instanceof Element)) return
+			if (!target.closest('.print-btns')) return
+			captureSelectionRange()
+		}
+		const onAnyPageMouseDownCapture = event => {
+			const target = event.target
+			if (!(target instanceof Element)) return
+			const pageEl = target.closest('.word-pages .a4')
+			if (!pageEl) return
+			selectedA4PageRef.current = pageEl
 		}
 
 		document.addEventListener('selectionchange', onSelectionChange)
 		document.addEventListener('mouseup', onMouseUp)
 		document.addEventListener('keyup', onKeyUp)
 		document.addEventListener('focusin', onFocusIn)
+		document.addEventListener('mousedown', onNewContentMouseDownCapture, true)
+		document.addEventListener('mousedown', onToolbarMouseDownCapture, true)
+		document.addEventListener('mousedown', onAnyPageMouseDownCapture, true)
 		return () => {
 			document.removeEventListener('selectionchange', onSelectionChange)
 			document.removeEventListener('mouseup', onMouseUp)
 			document.removeEventListener('keyup', onKeyUp)
 			document.removeEventListener('focusin', onFocusIn)
+			document.removeEventListener(
+				'mousedown',
+				onNewContentMouseDownCapture,
+				true,
+			)
+			document.removeEventListener('mousedown', onToolbarMouseDownCapture, true)
+			document.removeEventListener('mousedown', onAnyPageMouseDownCapture, true)
 		}
 	}, [
 		captureSelectionRange,
 		editing,
+		ensureNewContentCaretAnchor,
+		findFormatBlockForRange,
 		getEditableRootFromNode,
 		getEditableRootFromRange,
 		syncToolbarState,
@@ -1364,18 +1929,10 @@ const SystemWord = () => {
 		)
 	}
 
-	const pdfRef = useRef()
 	const { stRef } = useZirhStref()
 
 	const printRef = useRef(null)
 	const { id } = useParams()
-
-	const androidVulns = useMemo(
-		() => parseVulnByLevel(vulnAndroid),
-		[vulnAndroid],
-	)
-	const iosVulns = useMemo(() => parseVulnByLevel(vulnIOS), [vulnIOS])
-	const umVulns = useMemo(() => parseVulnByLevel(vulnUm), [vulnUm])
 
 	const handlePrint = useReactToPrint({
 		contentRef: printRef,
@@ -1405,6 +1962,7 @@ const SystemWord = () => {
 		if (!pageEl) return null
 		const pageContent = pageEl.querySelector('.page-content')
 		if (!pageContent) return null
+		const contentBottomSafeGap = 30
 
 		const pageStyle = window.getComputedStyle(pageEl)
 		const pageHeight = pageEl.clientHeight
@@ -1422,11 +1980,11 @@ const SystemWord = () => {
 
 		let bottomBoundary = pageHeight - paddingBottom
 		if (bottomImg) {
-			const bottomImageTop = bottomImg.offsetTop - 10
+			const bottomImageTop = bottomImg.offsetTop - contentBottomSafeGap
 			if (bottomImageTop < bottomBoundary) bottomBoundary = bottomImageTop
 		}
 		if (pageNumber) {
-			const pageNumberTop = pageNumber.offsetTop - 8
+			const pageNumberTop = pageNumber.offsetTop - contentBottomSafeGap
 			if (pageNumberTop < bottomBoundary) bottomBoundary = pageNumberTop
 		}
 
@@ -1457,11 +2015,17 @@ const SystemWord = () => {
 	}, [resolveSystemPageMetrics])
 
 	const refreshRiskMeasureConfig = useCallback(() => {
+		// Editing vaqtida React re-renderni minimal ushlaymiz.
+		// Aks holda contentEditable DOM bilan React reconciler urilib ketadi.
+		if (editingRef.current) return
 		const tables = Array.from(document.querySelectorAll('.system-risk-table'))
 		if (!tables.length) return
 		const safeBottomGap = editing
 			? RISK_TABLE_BOTTOM_SAFE_GAP_EDITING_PX
 			: RISK_TABLE_BOTTOM_SAFE_GAP_PX
+		const layoutTolerance = editing
+			? RISK_TABLE_LAYOUT_TOLERANCE_EDITING_PX
+			: RISK_TABLE_LAYOUT_TOLERANCE_PX
 
 		const pickByLabel = marker =>
 			tables.find(table => {
@@ -1484,7 +2048,11 @@ const SystemWord = () => {
 				Number.isFinite(pageMaxHeight) && pageMaxHeight > 0
 					? pageMaxHeight
 					: pageContent.clientHeight
-			const available = contentHeight - table.offsetTop - safeBottomGap
+			const tableRect = table.getBoundingClientRect()
+			const contentRect = pageContent.getBoundingClientRect()
+			const usedBefore = Math.max(0, tableRect.top - contentRect.top)
+			const available =
+				contentHeight - usedBefore - safeBottomGap - layoutTolerance
 			return Math.max(220, Math.floor(available))
 		}
 
@@ -1507,6 +2075,7 @@ const SystemWord = () => {
 		)
 
 		setRiskMeasureConfig(prev => {
+			if (editingRef.current) return prev
 			if (
 				prev.tableWidthPx === tableWidthPx &&
 				prev.firstPageMaxHeightPx === firstPageMaxHeightPx &&
@@ -1533,16 +2102,84 @@ const SystemWord = () => {
 		})
 	}, [applySystemPageContentMetrics, refreshRiskMeasureConfig])
 
-	const createNewA4Page = () => {
+	const renumberSystemPageFooters = useCallback(() => {
+		const pagesWithFooter = Array.from(
+			document.querySelectorAll('.word-pages .a4'),
+		).filter(page => page.querySelector('.page-number'))
+		if (!pagesWithFooter.length) return
+
+		let startNumber = 1
+
+		for (let i = 0; i < pagesWithFooter.length; i++) {
+			const labelEl =
+				pagesWithFooter[i].querySelector('.page-number span') ||
+				pagesWithFooter[i].querySelector('.page-number')
+			const text = (labelEl?.textContent || '').trim()
+			const match = text.match(/(\d+)\s*$/)
+			if (!match) continue
+			const parsed = Number.parseInt(match[1], 10)
+			if (!Number.isFinite(parsed)) continue
+			startNumber = Math.max(1, parsed - i)
+			break
+		}
+
+		pagesWithFooter.forEach((page, idx) => {
+			const pageNum = startNumber + idx
+			const labelEl =
+				page.querySelector('.page-number span') ||
+				page.querySelector('.page-number')
+			if (labelEl) {
+				labelEl.textContent = `${appName} | ${pageNum}`
+			}
+
+			const topImg = page.querySelector('.system-top-img')
+			const bottomImg = page.querySelector('.system-bottom-img')
+			if (!topImg || !bottomImg) return
+			const isEven = pageNum % 2 === 0
+			topImg.src = isEven
+				? '/assets/system/ax-tops.png'
+				: '/assets/system/ax-top.png'
+			bottomImg.src = isEven
+				? '/assets/system/ax-bottoms.jpg'
+				: '/assets/system/ax-bottom.jpg'
+		})
+	}, [appName])
+
+	useEffect(() => {
+		if (!document?.fonts?.ready) return
+		let cancelled = false
+		document.fonts.ready.then(() => {
+			if (cancelled) return
+			queueRiskLayoutRefresh()
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [queueRiskLayoutRefresh])
+
+	const createNewA4Page = (
+		withNewContentStructure = false,
+		insertBeforePage = null,
+	) => {
 		const wordContainer =
 			document.querySelector('.word-pages') ||
 			document.querySelector('.word-container')
-		if (!wordContainer) return
+		if (!wordContainer) return null
 
-		const pageNumber = wordContainer.querySelectorAll('.a4').length + 1
+		const existingPages = Array.from(wordContainer.querySelectorAll('.a4'))
+		let pageNumber = existingPages.length + 1
+		const shouldInsertBefore =
+			insertBeforePage && insertBeforePage.parentNode === wordContainer
+		if (shouldInsertBefore) {
+			const insertIndex = existingPages.indexOf(insertBeforePage)
+			if (insertIndex >= 0) {
+				pageNumber = insertIndex + 1
+			}
+		}
 
 		const newPage = document.createElement('div')
-		newPage.className = 'a4 system-c'
+		newPage.className = 'a4 system-c auto-generated-page'
+		newPage.dataset.autoGenerated = 'true'
 		const useEvenSkin = pageNumber % 2 === 0
 		const topSrc = useEvenSkin
 			? '/assets/system/ax-tops.png'
@@ -1564,8 +2201,15 @@ const SystemWord = () => {
 		newPage.appendChild(bottomImage)
 
 		const pageContent = document.createElement('div')
-		pageContent.className = 'page-content editable'
+		pageContent.className = withNewContentStructure
+			? 'page-content editable new-content'
+			: 'page-content editable'
 		newPage.appendChild(pageContent)
+		if (withNewContentStructure) {
+			const flow = document.createElement('div')
+			flow.className = 'system-two-col-flow'
+			pageContent.appendChild(flow)
+		}
 
 		const pageNumber_div = document.createElement('div')
 		pageNumber_div.className =
@@ -1574,8 +2218,13 @@ const SystemWord = () => {
 		pageNumber_div.innerHTML = `<span class="text-white max-w-[60%] mt-[20px]">${appName} | ${pageNumber}</span>`
 		newPage.appendChild(pageNumber_div)
 
-		wordContainer.appendChild(newPage)
+		if (shouldInsertBefore) {
+			safeInsertBefore(wordContainer, newPage, insertBeforePage)
+		} else {
+			wordContainer.appendChild(newPage)
+		}
 		applySystemPageContentMetrics()
+		renumberSystemPageFooters()
 
 		const editables = document.querySelectorAll('.editable')
 		editables.forEach(el => {
@@ -1589,147 +2238,358 @@ const SystemWord = () => {
 		return newPage
 	}
 	const handlePageOverflow = () => {
-		applySystemPageContentMetrics()
-		let a4Pages = document.querySelectorAll('.a4')
-		const readPageMaxHeight = pageContent => {
-			if (!pageContent) return 850
-			const dataHeight = Number(pageContent.dataset.pageMaxHeight || 0)
-			if (Number.isFinite(dataHeight) && dataHeight > 0) return dataHeight
-			const measured = pageContent.clientHeight
-			if (Number.isFinite(measured) && measured > 0) return measured
-			const fallback = Number.parseFloat(
-				window.getComputedStyle(pageContent).maxHeight,
-			)
-			return Number.isFinite(fallback) && fallback > 0 ? fallback : 850
+		if (isSavingRef.current) return
+		if (modelPaginationRef.current) {
+			syncNewContentFromDomRef.current?.({ force: true })
+			applySystemPageContentMetrics()
+			renumberSystemPageFooters()
+			return
 		}
-
-		for (let iteration = 0; iteration < 10; iteration++) {
-			a4Pages = document.querySelectorAll('.a4')
-			let hasChanges = false
-
-			for (let pageIndex = 0; pageIndex < a4Pages.length; pageIndex++) {
-				const pageEl = a4Pages[pageIndex]
-				const pageContent = pageEl.querySelector('.page-content')
-				if (!pageContent || !pageContent.classList.contains('editable'))
-					continue
-
-				const actualHeight = pageContent.scrollHeight
-				const maxHeight = readPageMaxHeight(pageContent)
-
-				if (actualHeight > maxHeight) {
-					const children = Array.from(pageContent.children)
-					let currentHeight = 0
-					let splitAtIndex = -1
-
-					for (let i = 0; i < children.length; i++) {
-						const childHeight = children[i].offsetHeight || 0
-						if (currentHeight + childHeight > maxHeight) {
-							splitAtIndex = i
-							break
-						}
-						currentHeight += childHeight
-					}
-
-					if (splitAtIndex > 0 && splitAtIndex < children.length) {
-						hasChanges = true
-						const toMove = Array.from(children).slice(splitAtIndex)
-
-						let nextPageEl = a4Pages[pageIndex + 1]
-						if (!nextPageEl) {
-							nextPageEl = createNewA4Page()
-							a4Pages = document.querySelectorAll('.a4')
-						}
-
-						const nextPageContent = nextPageEl.querySelector('.page-content')
-						if (nextPageContent) {
-							for (let i = toMove.length - 1; i >= 0; i--) {
-								const el = toMove[i]
-								if (el && el.parentNode === pageContent) {
-									nextPageContent.insertBefore(
-										el.cloneNode(true),
-										nextPageContent.firstChild,
-									)
-									if (el.parentNode === pageContent) {
-										el.remove()
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			a4Pages = document.querySelectorAll('.a4')
-			for (let pageIndex = 0; pageIndex < a4Pages.length - 1; pageIndex++) {
-				const currentPageEl = a4Pages[pageIndex]
-				const currentPageContent = currentPageEl.querySelector('.page-content')
-				if (
-					!currentPageContent ||
-					!currentPageContent.classList.contains('editable')
+		if (overflowLockRef.current) {
+			overflowQueueRef.current = true
+			return
+		}
+		overflowLockRef.current = true
+		try {
+			applySystemPageContentMetrics()
+			let didMutateLayout = false
+			const readPageMaxHeight = pageContent => {
+				if (!pageContent) return 850
+				const dataHeight = Number(pageContent.dataset.pageMaxHeight || 0)
+				if (Number.isFinite(dataHeight) && dataHeight > 0) return dataHeight
+				const measured = pageContent.clientHeight
+				if (Number.isFinite(measured) && measured > 0) return measured
+				const fallback = Number.parseFloat(
+					window.getComputedStyle(pageContent).maxHeight,
 				)
-					continue
-
-				const currentHeight = currentPageContent.scrollHeight
-				const currentMaxHeight = readPageMaxHeight(currentPageContent)
-				const availableSpace = currentMaxHeight - currentHeight
-
-				if (availableSpace > 20) {
-					const nextPageEl = a4Pages[pageIndex + 1]
-					const nextPageContent = nextPageEl.querySelector('.page-content')
-					if (
-						!nextPageContent ||
-						!nextPageContent.classList.contains('editable')
+				return Number.isFinite(fallback) && fallback > 0 ? fallback : 850
+			}
+			const isElementMeaningful = el => {
+				if (!el) return false
+				const tag = (el.tagName || '').toLowerCase()
+				if (tag === 'br') return false
+				if (
+					el.querySelector?.(
+						'img,table,svg,canvas,video,audio,iframe,object,embed,input,textarea,select,button,hr',
 					)
-						continue
+				) {
+					return true
+				}
+				const txt = (el.textContent || '').replace(/\u00a0/g, ' ').trim()
+				return txt.length > 0
+			}
+			const pageHasMeaningfulContent = pageContent => {
+				if (!pageContent) return false
+				const target =
+					pageContent.querySelector('.system-two-col-flow') || pageContent
+				if (!target) return false
 
-					const nextPageChildren = Array.from(nextPageContent.children)
-					if (nextPageChildren.length === 0) continue
+				const hasElementContent = Array.from(target.children).some(child =>
+					isElementMeaningful(child),
+				)
+				if (hasElementContent) return true
 
-					let contentToMove = []
-					let contentHeight = 0
+				return Array.from(target.childNodes).some(
+					node =>
+						node?.nodeType === Node.TEXT_NODE &&
+						(node.textContent || '').replace(/\u00a0/g, ' ').trim().length > 0,
+				)
+			}
+			const ensureNewContentFlow = pageContent => {
+				if (!pageContent) return null
+				let flow = pageContent.querySelector('.system-two-col-flow')
+				if (!flow) {
+					flow = document.createElement('div')
+					flow.className = 'system-two-col-flow'
+					pageContent.appendChild(flow)
+				}
 
-					for (let i = 0; i < nextPageChildren.length; i++) {
-						const child = nextPageChildren[i]
-						if (!child || !child.parentNode) continue
+				// Browser ba'zan .new-content ichiga flow dan tashqariga node qo'shib yuboradi.
+				// Ularni oqim konteyneriga qaytarib joylaymiz.
+				Array.from(pageContent.childNodes).forEach(node => {
+					if (node === flow) return
+					flow.appendChild(node)
+				})
+				return flow
+			}
+			const getNewContentEntries = () =>
+				Array.from(
+					document.querySelectorAll(
+						'.word-pages .a4 .page-content.editable.new-content',
+					),
+				)
+					.map(pageContent => {
+						const flow = ensureNewContentFlow(pageContent)
+						return flow ? { pageContent, flow } : null
+					})
+					.filter(Boolean)
 
-						const childHeight = child.offsetHeight || 0
-						if (childHeight === 0) continue
-						const spaceWithMargin = availableSpace - 10
-						if (contentHeight + childHeight <= spaceWithMargin) {
-							contentToMove.push(child)
-							contentHeight += childHeight
-						} else {
-							if (i === 0) {
-								break
-							}
-							break
-						}
+			const cleanupAutoGeneratedPages = () => {
+				if (editingRef.current) return false
+				let removed = false
+				const autoPages = Array.from(
+					document.querySelectorAll(
+						'.a4.auto-generated-page[data-auto-generated="true"]',
+					),
+				)
+				autoPages.forEach(pageEl => {
+					if (pageEl.dataset.manualInserted === 'true') return
+					const pageContent = pageEl.querySelector('.page-content')
+					if (
+						!pageContent ||
+						!pageContent.classList.contains('editable') ||
+						!pageContent.classList.contains('new-content')
+					) {
+						safeDetachNode(pageEl)
+						removed = true
+						return
 					}
+					if (!pageHasMeaningfulContent(pageContent)) {
+						safeDetachNode(pageEl)
+						removed = true
+					}
+				})
+				return removed
+			}
+			const splitSingleTextBlock = (
+				blockEl,
+				pageContent,
+				maxHeight,
+				nextTarget,
+			) => {
+				if (!blockEl || !pageContent || !nextTarget) return false
+				const tag = (blockEl.tagName || '').toLowerCase()
+				const supported = [
+					'p',
+					'div',
+					'li',
+					'blockquote',
+					'h1',
+					'h2',
+					'h3',
+					'h4',
+					'h5',
+					'h6',
+				]
+				if (!supported.includes(tag)) return false
+				if (blockEl.querySelector('img,table,ul,ol,video,audio,iframe,canvas'))
+					return false
+				if (blockEl.children.length > 0) return false
 
-					if (contentToMove.length > 0) {
-						hasChanges = true
-						for (let i = contentToMove.length - 1; i >= 0; i--) {
-							const el = contentToMove[i]
-							if (el && el.parentNode === nextPageContent) {
-								const cloned = el.cloneNode(true)
-								currentPageContent.appendChild(cloned)
-								if (el.parentNode === nextPageContent) {
-									el.remove()
-								}
-							}
-						}
+				const originalText = blockEl.textContent || ''
+				if (originalText.trim().length < 2) return false
 
-						void currentPageContent.offsetHeight
-						void nextPageContent.offsetHeight
+				let low = 1
+				let high = originalText.length - 1
+				let best = 0
+
+				while (low <= high) {
+					const mid = Math.floor((low + high) / 2)
+					blockEl.textContent = originalText.slice(0, mid)
+					if (pageContent.scrollHeight <= maxHeight) {
+						best = mid
+						low = mid + 1
+					} else {
+						high = mid - 1
 					}
 				}
+
+				if (best <= 0 || best >= originalText.length) {
+					blockEl.textContent = originalText
+					return false
+				}
+
+				let splitIndex = best
+				const wsIndex = originalText.lastIndexOf(' ', best)
+				if (wsIndex > Math.floor(best * 0.5)) {
+					splitIndex = wsIndex
+				}
+
+				const leftText = originalText.slice(0, splitIndex).trimEnd()
+				const rightText = originalText.slice(splitIndex).trimStart()
+				if (!leftText || !rightText) {
+					blockEl.textContent = originalText
+					return false
+				}
+
+				blockEl.textContent = leftText
+				const remainder = blockEl.cloneNode(true)
+				remainder.textContent = rightText
+				safePrepend(nextTarget, remainder)
+				return true
+			}
+			const moveTailFromGenericContainer = (sourceEl, nextTarget) => {
+				if (!sourceEl || !nextTarget) return false
+				if (!(sourceEl instanceof Element)) return false
+				if (sourceEl.closest('.system-two-col,.system-risk-columns'))
+					return false
+				if (
+					sourceEl.classList.contains('system-two-col') ||
+					sourceEl.classList.contains('system-risk-columns') ||
+					sourceEl.classList.contains('system-col')
+				) {
+					return false
+				}
+				const tag = (sourceEl.tagName || '').toLowerCase()
+				if (['table', 'tbody', 'thead', 'tr'].includes(tag)) return false
+				const last = sourceEl.lastElementChild
+				if (!last) return false
+				if (
+					(tag === 'ul' || tag === 'ol') &&
+					(last.tagName || '').toLowerCase() === 'li'
+				) {
+					const listTail = sourceEl.cloneNode(false)
+					listTail.appendChild(last)
+					safePrepend(nextTarget, listTail)
+					return true
+				}
+				safePrepend(nextTarget, last)
+				return true
 			}
 
-			if (!hasChanges) {
-				break
+			let pass = 0
+			while (pass < 8) {
+				let changedInPass = false
+				let entries = getNewContentEntries()
+				if (!entries.length) break
+
+				for (let pageIndex = 0; pageIndex < entries.length; pageIndex++) {
+					const { pageContent, flow } = entries[pageIndex]
+					if (!pageContent || !flow) continue
+					const maxHeight = readPageMaxHeight(pageContent)
+
+					let guard = 0
+					while (pageContent.scrollHeight > maxHeight + 1 && guard < 120) {
+						const children = Array.from(flow.children)
+						if (!children.length) break
+						const overflowChild = children[children.length - 1]
+						if (!overflowChild) break
+
+						entries = getNewContentEntries()
+						const currentIdx = entries.findIndex(
+							item => item.pageContent === pageContent,
+						)
+						let nextEntry =
+							currentIdx >= 0 ? (entries[currentIdx + 1] ?? null) : null
+
+						if (!nextEntry) {
+							const currentPageEl = pageContent.closest('.a4')
+							const directNext = currentPageEl?.nextElementSibling || null
+							const inserted = createNewA4Page(true, directNext)
+							if (!inserted) break
+							didMutateLayout = true
+							applySystemPageContentMetrics()
+							entries = getNewContentEntries()
+							const idxAfterInsert = entries.findIndex(
+								item => item.pageContent === pageContent,
+							)
+							nextEntry =
+								idxAfterInsert >= 0
+									? (entries[idxAfterInsert + 1] ?? null)
+									: null
+							if (!nextEntry) break
+						}
+
+						const nextFlow = nextEntry.flow
+						if (!nextFlow) break
+
+						const splitDone = splitSingleTextBlock(
+							overflowChild,
+							pageContent,
+							maxHeight,
+							nextFlow,
+						)
+						if (splitDone) {
+							changedInPass = true
+							didMutateLayout = true
+							guard += 1
+							continue
+						}
+
+						const nestedMoveDone = moveTailFromGenericContainer(
+							overflowChild,
+							nextFlow,
+						)
+						if (nestedMoveDone) {
+							changedInPass = true
+							didMutateLayout = true
+							guard += 1
+							continue
+						}
+
+						const blockHeight =
+							overflowChild.getBoundingClientRect().height ||
+							overflowChild.offsetHeight ||
+							0
+						const onlyOneBlock = children.length === 1
+						const nextIsEmpty = !nextFlow.firstElementChild
+						const unbreakableAndTooTall =
+							onlyOneBlock &&
+							nextIsEmpty &&
+							blockHeight > 0 &&
+							blockHeight > maxHeight - 6
+						if (unbreakableAndTooTall) {
+							break
+						}
+
+						safePrepend(nextFlow, overflowChild)
+						changedInPass = true
+						didMutateLayout = true
+						guard += 1
+					}
+				}
+
+				entries = getNewContentEntries()
+				for (let pageIndex = 0; pageIndex < entries.length - 1; pageIndex++) {
+					const current = entries[pageIndex]
+					const next = entries[pageIndex + 1]
+					const maxHeight = readPageMaxHeight(current.pageContent)
+					let liftGuard = 0
+
+					while (next.flow.firstElementChild && liftGuard < 80) {
+						const candidate = next.flow.firstElementChild
+						current.flow.appendChild(candidate)
+						if (current.pageContent.scrollHeight <= maxHeight + 1) {
+							changedInPass = true
+							didMutateLayout = true
+							liftGuard += 1
+							continue
+						}
+						safeRemoveChild(current.flow, candidate)
+						safePrepend(next.flow, candidate)
+						break
+					}
+				}
+
+				if (!changedInPass) break
+				pass += 1
+			}
+			// Overflow bo‘lganda .new-content DOM o‘zgaradi — state ni sinxronlash (re-render da yo‘qolmaslik uchun)
+			const removedAutoPages = cleanupAutoGeneratedPages()
+			if (removedAutoPages) {
+				didMutateLayout = true
+			}
+			// Editing vaqtida React re-renderini qo'zg'amaslik uchun state sync qilmaymiz.
+			// Save paytida kontent DOM dan to'g'ridan-to'g'ri olinadi.
+			if (didMutateLayout && !editingRef.current) {
+				syncNewContentFromDomRef.current?.()
+			}
+			applySystemPageContentMetrics()
+			renumberSystemPageFooters()
+		} catch (error) {
+			if (error?.name !== 'NotFoundError') {
+				console.error('[word-system:overflow] layout error', error)
+			}
+			overflowQueueRef.current = true
+		} finally {
+			overflowLockRef.current = false
+			if (overflowQueueRef.current && !isSavingRef.current) {
+				overflowQueueRef.current = false
+				requestAnimationFrame(() => {
+					handlePageOverflow()
+				})
 			}
 		}
-		applySystemPageContentMetrics()
 	}
 
 	useEffect(() => {
@@ -1759,14 +2619,28 @@ const SystemWord = () => {
 		refreshRiskMeasureConfig,
 		editing,
 		zoom,
-		pages1,
-		pages2,
 		pages3,
 		sectionTablePages,
 		systemAccountsRows,
 		highVuln,
 		mediumVuln,
 		lowVuln,
+	])
+
+	useEffect(() => {
+		const raf = window.requestAnimationFrame(() => {
+			renumberSystemPageFooters()
+		})
+		return () => {
+			window.cancelAnimationFrame(raf)
+		}
+	}, [
+		renumberSystemPageFooters,
+		appName,
+		editing,
+		zoom,
+		pages3,
+		domRenderRevision,
 	])
 
 	const handleImageResize = () => {
@@ -1789,72 +2663,25 @@ const SystemWord = () => {
 		refreshRiskMeasureConfig()
 		const editables = document.querySelectorAll('.editable')
 
-		const attachImageResizeHandler = () => {
-			// IMPORTANT: handler editing holatiga bog'liq bo'lmasin (closure muammosi).
-			// Shuning uchun har safar barcha rasmlarga handlerni yangilaymiz.
-			const images = document.querySelectorAll('.page-content img')
-
+		const syncImageEditingStyles = () => {
+			const images = document.querySelectorAll(
+				'.page-content img, .editable-table td img',
+			)
 			images.forEach(img => {
-				let startX, startY, startWidth, startHeight
-
-				const onPointerMove = e => {
-					if (!editingRef.current) return
-					e.preventDefault()
-					e.stopPropagation()
-
-					const deltaX = e.clientX - startX
-					const newWidth = Math.max(100, Math.min(800, startWidth + deltaX))
-					const aspectRatio = startHeight / startWidth
-					const newHeight = newWidth * aspectRatio
-
-					img.style.width = `${newWidth}px`
-					img.style.height = `${newHeight}px`
-					img.style.maxWidth = 'none'
-				}
-
-				const onPointerUp = e => {
-					document.removeEventListener('pointermove', onPointerMove)
-					document.removeEventListener('pointerup', onPointerUp)
-					handlePageOverflow?.() // agar funksiya mavjud bo‘lsa
-				}
-
-				const onPointerDown = e => {
-					if (!editingRef.current || e.button !== 0) return
-					e.preventDefault()
-					e.stopPropagation()
-
-					// HAR DOIM HOZIRGI O‘LCHAMNI OLAMIZ
-					startX = e.clientX
-					startY = e.clientY
-					const rect = img.getBoundingClientRect()
-					startWidth = rect.width
-					startHeight = rect.height
-
-					document.addEventListener('pointermove', onPointerMove, {
-						passive: false,
-					})
-					document.addEventListener('pointerup', onPointerUp, {
-						passive: false,
-					})
-				}
-
-				// Eski handler bo‘lsa – olib tashlaymiz (xavfsizlik)
-				img.removeEventListener('pointerdown', img._resizeHandler)
-				img._resizeHandler = onPointerDown
-				img.addEventListener('pointerdown', onPointerDown, { passive: false })
-
-				// Vizual holatni yangilash
-				img.style.cursor = editingRef.current ? 'ew-resize' : 'default'
+				img.dataset.resizable = 'true'
+				img.style.cursor = editingRef.current ? 'nwse-resize' : 'default'
 				img.style.border = editingRef.current ? '1px dashed #aaa' : 'none'
 				img.style.userSelect = 'none'
+				img.style.touchAction = editingRef.current ? 'none' : 'auto'
 			})
 		}
 
-		attachImageResizeHandler()
+		syncImageEditingStyles()
 		if (editing) {
-			attachImageResizeHandler()
+			syncImageEditingStyles()
 		}
 		let overflowFrame = null
+		let modelSyncTimer = null
 		const resolveEditableOverflowState = target => {
 			const pageContent =
 				target && typeof target.closest === 'function'
@@ -1879,18 +2706,33 @@ const SystemWord = () => {
 		}
 		const scheduleOverflow = (force = false) => {
 			if (!force) return
+			if (isSavingRef.current) return
 			if (overflowFrame !== null) return
 			overflowFrame = requestAnimationFrame(() => {
 				overflowFrame = null
 				handlePageOverflow()
 			})
 		}
+		const scheduleModelSync = () => {
+			if (modelSyncTimer !== null) {
+				window.clearTimeout(modelSyncTimer)
+			}
+			modelSyncTimer = window.setTimeout(() => {
+				modelSyncTimer = null
+				syncNewContentFromDomRef.current?.({ force: true })
+			}, 320)
+		}
 
 		const handleInput = e => {
 			handleImageResize()
-			attachImageResizeHandler()
+			syncImageEditingStyles()
 			updateEditorStats()
 			const inputType = e?.inputType || ''
+			const targetEditable = e?.currentTarget
+			const isNewContentEditable = Boolean(
+				targetEditable instanceof HTMLElement &&
+				targetEditable.classList.contains('new-content'),
+			)
 			const isStructureMutation =
 				inputType === 'insertParagraph' ||
 				inputType === 'insertLineBreak' ||
@@ -1898,16 +2740,55 @@ const SystemWord = () => {
 			const { isOverflowing, hasLargeFreeSpace } = resolveEditableOverflowState(
 				e?.currentTarget,
 			)
-			scheduleOverflow(isStructureMutation || isOverflowing || hasLargeFreeSpace)
+			const shouldRebalance =
+				inputType.startsWith('delete') && hasLargeFreeSpace
+			const isTypingInput =
+				inputType === 'insertText' || inputType === 'insertCompositionText'
+			const isCaretSensitiveEdit =
+				isTypingInput ||
+				inputType === 'insertParagraph' ||
+				inputType === 'insertLineBreak' ||
+				inputType.startsWith('delete') ||
+				inputType === 'insertReplacementText'
+
+			// Model pagination yoqilganida har bir Enter/Delete da state sync qilish caretni
+			// qayta render sababli abzas boshiga olib ketadi. Bu holatda DOM ni saqlab,
+			// sync ni blur/save/explicit action paytiga qoldiramiz.
+			if (modelPaginationRef.current && isNewContentEditable && isCaretSensitiveEdit) {
+				return
+			}
+
+			const shouldSyncForOverflow = isOverflowing && !isTypingInput
+			const shouldSyncModel =
+				isStructureMutation ||
+				shouldSyncForOverflow ||
+				shouldRebalance ||
+				inputType.startsWith('insertFromPaste') ||
+				inputType.startsWith('insertFromDrop') ||
+				inputType === 'historyUndo' ||
+				inputType === 'historyRedo'
+			if (shouldSyncModel) {
+				if (isNewContentEditable) {
+					scheduleModelSync()
+				}
+			}
+			scheduleOverflow(isNewContentEditable && shouldSyncModel)
 		}
 
-		const extractImageDataUrlFromHtml = html => {
+		const handleBlur = e => {
+			const target = e?.currentTarget
+			if (!(target instanceof HTMLElement)) return
+			if (!target.classList.contains('new-content')) return
+			syncNewContentFromDomRef.current?.({ force: true })
+		}
+
+		const extractImageSrcFromHtml = html => {
 			if (!html || typeof html !== 'string') return ''
 			try {
 				const doc = new DOMParser().parseFromString(html, 'text/html')
 				const img = doc.querySelector('img[src]')
 				const src = (img?.getAttribute('src') || '').trim()
-				return src.startsWith('data:image/') ? src : ''
+				return src
 			} catch {
 				return ''
 			}
@@ -1956,7 +2837,7 @@ const SystemWord = () => {
 						imgElement.style.height = imgElement.height + 'px'
 					}
 
-					imgElement.style.cursor = 'ew-resize'
+					imgElement.style.cursor = 'nwse-resize'
 					imgElement.style.display = 'inline-block'
 					imgElement.style.border = '1px solid #ddd'
 					imgElement.style.margin = '10px auto'
@@ -1965,42 +2846,38 @@ const SystemWord = () => {
 
 					setTimeout(() => {
 						const selection = window.getSelection()
-						const wrapper = document.createElement('p')
+						const wrapper = document.createElement('span')
+						wrapper.style.display = 'block'
 						wrapper.style.textAlign = 'center'
+						wrapper.style.margin = '10px 0'
 						wrapper.appendChild(imgElement)
-						if (
+						const targetInsertContainer =
+							editableRoot?.querySelector?.('.system-two-col-flow') ||
+							editableRoot
+						const canUseSelectionRange = Boolean(
 							selection &&
 							selection.rangeCount > 0 &&
 							editableRoot &&
 							editableRoot.contains(
 								selection.getRangeAt(0).commonAncestorContainer,
-							)
-						) {
+							),
+						)
+						if (canUseSelectionRange) {
 							const range = selection.getRangeAt(0)
 							range.insertNode(wrapper)
 							range.setStartAfter(wrapper)
 							range.collapse(true)
 							selection.removeAllRanges()
 							selection.addRange(range)
-						} else if (editableRoot) {
-							editableRoot.appendChild(wrapper)
+						} else if (targetInsertContainer) {
+							targetInsertContainer.appendChild(wrapper)
 						}
-
 						if (clipboardFile) {
-							if (imgElement.dataset.uploadStarted === 'true') return
-							imgElement.dataset.uploadStarted = 'true'
-
-							imgElement.style.opacity = '0.7'
-							imgElement.dataset.uploading = 'true'
 							Promise.resolve()
 								.then(() => handlePasteImage(clipboardFile, imgElement))
 								.catch(err =>
 									imageLogError('insertPastedImage upload failed', err),
 								)
-								.finally(() => {
-									imgElement.style.opacity = '1'
-									delete imgElement.dataset.uploading
-								})
 						}
 
 						editables.forEach(el => {
@@ -2009,79 +2886,12 @@ const SystemWord = () => {
 
 						setTimeout(() => {
 							if (imgElement && imgElement.parentNode) {
-								if (imgElement.dataset.resizable) {
-									imgElement.style.cursor = editing ? 'ew-resize' : 'default'
-									imgElement.style.border = editing ? '1px solid #ddd' : 'none'
-								} else {
-									imgElement.dataset.resizable = 'true'
-									imgElement.style.cursor = editing ? 'ew-resize' : 'default'
-									imgElement.style.display = 'inline-block'
-									imgElement.style.userSelect = 'none'
-									imgElement.style.border = editing ? '1px solid #ddd' : 'none'
-									imgElement.style.margin = '10px auto'
-
-									let startX, startY, startWidth, startHeight
-
-									const onPointerMove = e => {
-										if (!editing) return
-										e.preventDefault()
-										e.stopPropagation()
-
-										const deltaX = e.clientX - startX
-										const newWidth = Math.max(
-											100,
-											Math.min(800, startWidth + deltaX),
-										)
-										const aspectRatio = startHeight / startWidth
-										const newHeight = newWidth * aspectRatio
-
-										imgElement.style.width = `${newWidth}px`
-										imgElement.style.height = `${newHeight}px`
-										imgElement.style.display = 'inline-block'
-										imgElement.style.maxWidth = '100%'
-									}
-
-									const onPointerUp = e => {
-										e.preventDefault()
-										e.stopPropagation()
-										document.removeEventListener('pointermove', onPointerMove)
-										document.removeEventListener('pointerup', onPointerUp)
-
-										editables.forEach(el => {
-											void el.offsetHeight
-										})
-
-										handlePageOverflow()
-									}
-
-									imgElement.addEventListener(
-										'pointerdown',
-										e => {
-											if (!editing) return
-
-											e.preventDefault()
-											e.stopPropagation()
-
-											startX = e.clientX
-											startY = e.clientY
-											startWidth =
-												imgElement.offsetWidth ||
-												parseInt(imgElement.style.width) ||
-												imgElement.width
-											startHeight =
-												imgElement.offsetHeight ||
-												parseInt(imgElement.style.height) ||
-												imgElement.height
-
-											document.addEventListener('pointermove', onPointerMove)
-											document.addEventListener('pointerup', onPointerUp)
-										},
-										{ once: false, passive: false },
-									)
-								}
+								imgElement.style.cursor = editing ? 'nwse-resize' : 'default'
+								imgElement.style.border = editing ? '1px solid #ddd' : 'none'
+								imgElement.style.margin = '10px auto'
 							}
 
-							attachImageResizeHandler()
+							syncImageEditingStyles()
 							handlePageOverflow()
 						}, 300)
 					}, 50)
@@ -2132,6 +2942,17 @@ const SystemWord = () => {
 
 			if (imageFiles.length) {
 				e.preventDefault()
+				// Joyni darhol saqlaymiz — keyin selection yo‘qoladi
+				const targetEditable = e.currentTarget
+				const targetInsertContainer =
+					targetEditable?.querySelector?.('.system-two-col-flow') ||
+					targetEditable
+				const selection = window.getSelection()
+				const savedRange =
+					selection && selection.rangeCount > 0
+						? selection.getRangeAt(0).cloneRange()
+						: null
+
 				imageLog(
 					'handlePaste image files found',
 					imageFiles.map(file => ({
@@ -2140,22 +2961,116 @@ const SystemWord = () => {
 						size: file?.size,
 					})),
 				)
+				// word/index.jsx dagi kabi: FileReader → img.onload → setTimeout 50 insert → setTimeout 300 resize + overflow
 				imageFiles.forEach(file => {
-					insertPastedImage(file, e.currentTarget)
+					const reader = new FileReader()
+					reader.onload = event => {
+						const imgElement = document.createElement('img')
+						imgElement.src = event.target.result
+						imgElement.onload = () => {
+							const maxWidth = 500
+							if (imgElement.width > maxWidth) {
+								const aspectRatio = imgElement.height / imgElement.width
+								imgElement.style.width = maxWidth + 'px'
+								imgElement.style.height = maxWidth * aspectRatio + 'px'
+							} else {
+								imgElement.style.width = imgElement.width + 'px'
+								imgElement.style.height = imgElement.height + 'px'
+							}
+							imgElement.style.cursor = 'nwse-resize'
+							imgElement.style.display = 'inline-block'
+							imgElement.style.border = '1px solid #ddd'
+							imgElement.style.margin = '10px auto'
+							imgElement.style.userSelect = 'none'
+							imgElement.className = 'resizable-image'
+
+							setTimeout(() => {
+								const wrapper = document.createElement('span')
+								wrapper.style.display = 'block'
+								wrapper.style.textAlign = 'center'
+								wrapper.style.margin = '10px 0'
+								wrapper.appendChild(imgElement)
+								// Saqlangan joyga kiritamiz (setTimeout dan keyin selection yo‘qoladi)
+								try {
+									const canUseSavedRange = Boolean(
+										savedRange &&
+										savedRange.startContainer?.isConnected &&
+										targetEditable &&
+										targetEditable.contains(savedRange.commonAncestorContainer),
+									)
+									if (canUseSavedRange) {
+										savedRange.insertNode(wrapper)
+										savedRange.setStartAfter(wrapper)
+										savedRange.collapse(true)
+										if (selection) {
+											selection.removeAllRanges()
+											selection.addRange(savedRange)
+										}
+									} else {
+										if (targetInsertContainer?.isConnected) {
+											targetInsertContainer.appendChild(wrapper)
+										} else {
+											document
+												.querySelector(
+													'.page-content.editable.new-content .system-two-col-flow, .page-content.editable',
+												)
+												?.appendChild(wrapper)
+										}
+									}
+								} catch {
+									if (targetInsertContainer?.isConnected) {
+										targetInsertContainer.appendChild(wrapper)
+									} else {
+										document
+											.querySelector(
+												'.page-content.editable.new-content .system-two-col-flow, .page-content.editable',
+											)
+											?.appendChild(wrapper)
+									}
+								}
+								editables.forEach(el => {
+									void el.offsetHeight
+								})
+								setTimeout(() => {
+									if (imgElement && imgElement.parentNode) {
+										imgElement.style.cursor = editingRef.current
+											? 'nwse-resize'
+											: 'default'
+										imgElement.style.border = editingRef.current
+											? '1px solid #ddd'
+											: 'none'
+										imgElement.style.margin = '10px auto'
+									}
+									syncImageEditingStyles()
+									handlePageOverflow()
+									if (file && imgElement) {
+										Promise.resolve()
+											.then(() => handlePasteImage(file, imgElement))
+											.catch(err =>
+												imageLogError('handlePaste upload failed', err),
+											)
+									}
+								}, 300)
+							}, 50)
+						}
+					}
+					reader.readAsDataURL(file)
 				})
 				return
 			}
 
 			const htmlPayload = clipboard?.getData?.('text/html') || ''
-			const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
-			if (htmlDataUrl) {
+			const htmlImageSrc = extractImageSrcFromHtml(htmlPayload)
+			if (htmlImageSrc) {
 				e.preventDefault()
 				imageLog('handlePaste html image payload detected')
 				let fileFromHtml = null
-				try {
-					fileFromHtml = await dataUrlToImageFile(htmlDataUrl)
-				} catch {}
-				insertPastedImage(fileFromHtml, e.currentTarget, htmlDataUrl)
+				if (htmlImageSrc.startsWith('data:image/')) {
+					try {
+						fileFromHtml = await dataUrlToImageFile(htmlImageSrc)
+					} catch {}
+				}
+				insertPastedImage(fileFromHtml, e.currentTarget, htmlImageSrc)
 				return
 			}
 			imageLog('handlePaste no image payload detected')
@@ -2171,14 +3086,19 @@ const SystemWord = () => {
 			el.style.boxShadow = editing
 				? 'inset 0 0 0 1px rgba(79, 70, 229, 0.22)'
 				: 'none'
+			if (el.classList.contains('new-content')) {
+				el.style.overflowY = editing ? 'auto' : 'hidden'
+			}
 
 			if (editing) {
 				el.addEventListener('input', handleInput)
 				el.addEventListener('paste', handlePaste)
-				attachImageResizeHandler()
+				el.addEventListener('blur', handleBlur)
+				syncImageEditingStyles()
 			} else {
 				el.removeEventListener('input', handleInput)
 				el.removeEventListener('paste', handlePaste)
+				el.removeEventListener('blur', handleBlur)
 			}
 		})
 
@@ -2250,7 +3170,6 @@ const SystemWord = () => {
 						} else if (targetCell) {
 							targetCell.appendChild(imgElement)
 						}
-
 						if (file) {
 							Promise.resolve()
 								.then(() => handlePasteImage(file, imgElement))
@@ -2290,15 +3209,17 @@ const SystemWord = () => {
 					}
 
 					const htmlPayload = clipboard?.getData?.('text/html') || ''
-					const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
-					if (htmlDataUrl) {
+					const htmlImageSrc = extractImageSrcFromHtml(htmlPayload)
+					if (htmlImageSrc) {
 						e.preventDefault()
 						imageLog('handleTableCellPaste html image payload detected')
 						let fileFromHtml = null
-						try {
-							fileFromHtml = await dataUrlToImageFile(htmlDataUrl)
-						} catch {}
-						insertImageToCell(fileFromHtml, htmlDataUrl)
+						if (htmlImageSrc.startsWith('data:image/')) {
+							try {
+								fileFromHtml = await dataUrlToImageFile(htmlImageSrc)
+							} catch {}
+						}
+						insertImageToCell(fileFromHtml, htmlImageSrc)
 						return
 					}
 					imageLog('handleTableCellPaste no image payload detected')
@@ -2323,11 +3244,16 @@ const SystemWord = () => {
 			editables.forEach(el => {
 				el.removeEventListener('input', handleInput)
 				el.removeEventListener('paste', handlePaste)
+				el.removeEventListener('blur', handleBlur)
 				el.style.boxShadow = 'none'
 			})
 			if (overflowFrame !== null) {
 				cancelAnimationFrame(overflowFrame)
 				overflowFrame = null
+			}
+			if (modelSyncTimer !== null) {
+				window.clearTimeout(modelSyncTimer)
+				modelSyncTimer = null
 			}
 			const allCells = document.querySelectorAll('.editable-table td')
 			allCells.forEach(cell => {
@@ -2339,14 +3265,12 @@ const SystemWord = () => {
 		}
 	}, [
 		editing,
-		pages1,
 		updateEditorStats,
 		applySystemPageContentMetrics,
 		refreshRiskMeasureConfig,
 	])
 
 	useEffect(() => {
-		const allPageContent = document.querySelectorAll('.page-content')
 		const strongElements = document.querySelectorAll('.page-content strong')
 
 		strongElements.forEach(el => {
@@ -2376,11 +3300,7 @@ const SystemWord = () => {
 				}
 			}
 		})
-
-		allPageContent.forEach(page => {
-			// console.log(page.offsetHeight);
-		})
-	}, [pages])
+	}, [pages3, domRenderRevision])
 
 	useEffect(() => {
 		const handleKeyDown = e => {
@@ -2422,6 +3342,38 @@ const SystemWord = () => {
 				return
 			}
 			activeEditableRef.current = activeEditable
+
+			const tryRemoveEmptyDynamicPage = () => {
+				if (e.key !== 'Backspace') return false
+				if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return false
+				if (!selection || selection.rangeCount === 0) return false
+
+				let range = null
+				try {
+					range = selection.getRangeAt(0)
+				} catch {
+					range = null
+				}
+				if (!range || !range.collapsed) return false
+
+				const currentPageContent =
+					activeEditable.closest?.('.page-content') || null
+				if (!currentPageContent) return false
+				if (!currentPageContent.classList.contains('editable')) return false
+				if (!currentPageContent.classList.contains('new-content')) return false
+
+				const currentFlow =
+					currentPageContent.querySelector('.system-two-col-flow') ||
+					currentPageContent
+				if (hasMeaningfulDomContent(currentFlow)) return false
+
+				e.preventDefault()
+				return Boolean(shortcutActionsRef.current.deletePage?.())
+			}
+
+			if (tryRemoveEmptyDynamicPage()) {
+				return
+			}
 
 			if (e.ctrlKey) {
 				const key = e.key.toLowerCase()
@@ -2499,14 +3451,6 @@ const SystemWord = () => {
 				}
 			}
 
-			// Handle Enter key for page overflow
-			if (e.key === 'Enter') {
-				setTimeout(() => {
-					handlePageOverflow()
-				}, 10)
-				return
-			}
-
 			if (e.key === 'Tab') {
 				e.preventDefault()
 				if (!selection || !selection.rangeCount) return
@@ -2519,63 +3463,24 @@ const SystemWord = () => {
 				range.collapse(true)
 				selection.removeAllRanges()
 				selection.addRange(range)
-				setTimeout(() => {
-					handlePageOverflow()
-				}, 10)
+				if (!modelPaginationRef.current) {
+					setTimeout(() => {
+						handlePageOverflow()
+					}, 10)
+				}
 			}
 		}
 
 		document.addEventListener('keydown', handleKeyDown)
 		return () => document.removeEventListener('keydown', handleKeyDown)
-	}, [editing, getEditableRootFromRange, runEditorCommand])
-
-	const paginateHtml = html => {
-		const measure = document.createElement('div')
-		measure.style.width = '794px'
-		measure.style.padding = '40px'
-		measure.style.position = 'absolute'
-		measure.style.visibility = 'hidden'
-		measure.style.fontSize = '14px'
-		measure.style.lineHeight = '1.6'
-		document.body.appendChild(measure)
-
-		const wrapper = document.createElement('div')
-		wrapper.innerHTML = html
-
-		const blocks = Array.from(wrapper.childNodes)
-		const pagesResult = []
-		let currentPage = document.createElement('div')
-
-		blocks.forEach(block => {
-			currentPage.appendChild(block.cloneNode(true))
-			measure.innerHTML = currentPage.innerHTML
-
-			if (measure.scrollHeight > 950) {
-				const lastChild = currentPage.lastChild
-				if (lastChild) {
-					currentPage.removeChild(lastChild)
-
-					pagesResult.push(currentPage.innerHTML)
-
-					currentPage = document.createElement('div')
-					currentPage.appendChild(lastChild.cloneNode(true))
-				}
-			}
-		})
-
-		if (currentPage.innerHTML.trim()) {
-			pagesResult.push(currentPage.innerHTML)
-		}
-
-		document.body.removeChild(measure)
-		setPages(pagesResult)
-	}
-
-	const saveAllPages = () => {
-		const updated = pageRefs.current.map(el => el?.innerHTML || '')
-		setPages(updated)
-		setEditing(false)
-	}
+	}, [
+		editing,
+		getEditableRootFromRange,
+		runEditorCommand,
+		applySystemPageContentMetrics,
+		renumberSystemPageFooters,
+		queueRiskLayoutRefresh,
+	])
 
 	const getExpertById = async () => {
 		try {
@@ -2591,6 +3496,7 @@ const SystemWord = () => {
 				setAppName(res[1]?.[1][3])
 				setExpertize(res[1]?.[1])
 				setWorkers(res[1][7])
+				setRemovedStaticPageIds({})
 				const raw = res[1]?.[13]
 				const rawFiles = res[1]?.[15]
 
@@ -2616,17 +3522,6 @@ const SystemWord = () => {
 
 				setUploadedFilesMeta(normalizeFilesMeta(rawFiles))
 
-				const apkName = res[1]?.[8][0]
-				const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i)
-				const apkName1 = match ? match[0] : null
-				setApkFileName(apkName1)
-
-				const ipaMatch = apkName.match(/[a-zA-Z0-9\.\-_]+\.ipa/i)
-				const ipaFile = ipaMatch ? ipaMatch[0] : null
-				setIpaFileName(ipaFile)
-
-				// console.log("Topilgan fayl:", apkName1);
-
 				// Field 8 ning 0-indexidan table ma'lumotlarini va qolganini paged sifatida olish
 				const field8Data = res[1]?.[8] || []
 				let vulnData = field8Data
@@ -2650,12 +3545,18 @@ const SystemWord = () => {
 							if (Array.isArray(dataFromField8.riskTable)) {
 								fallbackRiskTable = dataFromField8.riskTable
 							}
+							if (
+								dataFromField8.removedStaticPageIds &&
+								typeof dataFromField8.removedStaticPageIds === 'object'
+							) {
+								setRemovedStaticPageIds(dataFromField8.removedStaticPageIds)
+							}
 						} else {
 							// Eski format: faqat tables
 							setTableData(dataFromField8)
 						}
 						vulnData = field8Data.slice(1) // Table ma'lumotlaridan keyingi qolganlarni ol
-					} catch (err) {
+					} catch {
 						vulnData = field8Data // Agar parse qilsa xatolik bo'lsa, dastlabkisini ishla
 					}
 				}
@@ -2665,7 +3566,10 @@ const SystemWord = () => {
 				const flatVulnData = Array.isArray(vulnData)
 					? vulnData
 							.flat()
-							.filter(item => !item.includes('page-number'))
+							.filter(
+								item =>
+									typeof item === 'string' && !item.includes('page-number'),
+							)
 							.map(item => {
 								// exp-title ichidagi raqamni dinamik o'zgartirish
 								if (item.includes('exp-title')) {
@@ -2674,9 +3578,16 @@ const SystemWord = () => {
 								return item
 							})
 					: []
-				const sanitizedVulnData = flatVulnData.map(item =>
-					sanitizePersistedImageHtml(item),
-				)
+				const sanitizedVulnData = flatVulnData
+					.map(item => sanitizePersistedImageHtml(item))
+					.map(item => normalizeNewContentBlockHtml(item))
+					.flatMap(item => explodeHtmlBlock(item))
+					.filter(
+						item =>
+							typeof item === 'string' &&
+							item.trim().length > 0 &&
+							!isManualPageBreakBlock(item),
+					)
 				setNewVuln(sanitizedVulnData)
 
 				const normalizeVulnField = (rf, expectedLevel = null) => {
@@ -2819,17 +3730,6 @@ const SystemWord = () => {
 		}
 	}, [tableData, editing])
 
-	const renderPage = (html, index) => (
-		<div
-			key={index}
-			className='page-container editable'
-			contentEditable={editing}
-			suppressContentEditableWarning
-			dangerouslySetInnerHTML={{ __html: html }}
-			ref={el => (pageRefs.current[index] = el)}
-		/>
-	)
-
 	const formatDate = dateString => {
 		if (!dateString) return '—'
 
@@ -2885,36 +3785,18 @@ const SystemWord = () => {
 		return ` ${year}-yil ${day} ${monthName}`
 	}
 
-	const openModal = item => {
-		setSelectedItem(item)
+	const openModal = () => {
 		setModalOpen(true)
 	}
 
 	const closeModal = () => {
 		setModalOpen(false)
-		setSelectedItem(null)
-	}
-
-	const addVulnerabilityToPages = docVulnHtml => {
-		setVulnerabilities(prev => [...prev, docVulnHtml])
 	}
 
 	const handleSaveDocFromModal = docVuln => {
 		if (!docVuln?.vuln || !Array.isArray(docVuln.vuln?.[1])) return
 		generateVulnHtml(docVuln.vuln)
-		const html = vulnerabilityTemplates[docVuln.type]
-		// console.log("HTML:", html);
-
-		addVulnerabilityToPages(html)
 		handleSubmit(docVuln)
-	}
-
-	const insertAfterIndex = (array, index, newItem) => {
-		if (index < 0 || index >= array.length) {
-			return [...array, newItem]
-		}
-
-		return [...array.slice(0, index + 1), newItem, ...array.slice(index + 1)]
 	}
 
 	const stripHtml = (html = '') => {
@@ -2935,11 +3817,16 @@ const SystemWord = () => {
 			imgs.forEach(img => {
 				const fileIdRaw =
 					img.getAttribute('data-file-id') || img.dataset?.fileId || ''
-				const fileId = String(fileIdRaw || '').trim()
+				const currentSrc = (img.getAttribute('src') || '').trim()
+				const inferredFileId = inferFileIdFromSrc(currentSrc)
+				const fileId = String(fileIdRaw || inferredFileId || '').trim()
 				const src = (img.getAttribute('src') || '').trim()
 
 				if (fileId) {
 					img.setAttribute('data-file-id', fileId)
+					if (isBrokenFileSrcValue(src)) {
+						img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+					}
 					img.removeAttribute('data-src-resolved')
 					img.removeAttribute('data-upload-progress')
 					img.removeAttribute('data-uploading')
@@ -2953,6 +3840,67 @@ const SystemWord = () => {
 			return doc.body.innerHTML
 		} catch (error) {
 			imageLogError('sanitizePersistedImageHtml error', error)
+			return html
+		}
+	}
+
+	const normalizeNewContentBlockHtml = html => {
+		if (!html || typeof html !== 'string') return html
+		try {
+			const parser = new DOMParser()
+			const doc = parser.parseFromString(html, 'text/html')
+			const body = doc.body
+			if (!body) return html
+
+			// Legacy ikki ustun bloklarni bir ustun oqimga o'tkazamiz (matnni o'zgartirmasdan).
+			const twoColBlocks = Array.from(body.querySelectorAll('.system-two-col'))
+			twoColBlocks.forEach(block => {
+				const linear = doc.createElement('div')
+				linear.className = 'system-two-col-linear'
+				const cols = Array.from(block.children).filter(child =>
+					child.classList?.contains('system-col'),
+				)
+
+				if (cols.length > 0) {
+					cols.forEach(col => {
+						Array.from(col.childNodes).forEach(node => {
+							linear.appendChild(node.cloneNode(true))
+						})
+					})
+				} else {
+					Array.from(block.childNodes).forEach(node => {
+						linear.appendChild(node.cloneNode(true))
+					})
+				}
+
+				block.replaceWith(linear)
+			})
+
+			// Oldingi column inline stylelar qoldiq bo'lsa olib tashlaymiz.
+			Array.from(body.querySelectorAll('[style]')).forEach(el => {
+				const raw = el.getAttribute('style') || ''
+				let cleaned = raw
+					.replace(/(?:^|;)\s*columns\s*:[^;]*/gi, '')
+					.replace(/(?:^|;)\s*column-count\s*:[^;]*/gi, '')
+					.replace(/(?:^|;)\s*column-gap\s*:[^;]*/gi, '')
+					.replace(/(?:^|;)\s*column-fill\s*:[^;]*/gi, '')
+					.replace(/(?:^|;)\s*column-rule\s*:[^;]*/gi, '')
+					.replace(/(?:^|;)\s*column-width\s*:[^;]*/gi, '')
+
+				cleaned = cleaned
+					.replace(/;;+/g, ';')
+					.replace(/^\s*;\s*|\s*;\s*$/g, '')
+					.trim()
+				if (!cleaned) {
+					el.removeAttribute('style')
+				} else {
+					el.setAttribute('style', cleaned)
+				}
+			})
+
+			return body.innerHTML
+		} catch (error) {
+			imageLogError('normalizeNewContentBlockHtml error', error)
 			return html
 		}
 	}
@@ -3047,6 +3995,17 @@ const SystemWord = () => {
 		return { riskFirstPageRows: first.page, riskContinuationPages: cont }
 	}, [riskRows, riskMeasureConfig, editing])
 
+	const detailPages = useMemo(() => {
+		const safePages = Array.isArray(pages3) ? pages3 : []
+		if (!safePages.length) return [[buildCaretAnchorBlock()]]
+		return safePages.map(page => {
+			const safePage = (Array.isArray(page) ? page : []).filter(
+				item => typeof item === 'string' && item.trim().length > 0,
+			)
+			return safePage.length ? safePage : [buildCaretAnchorBlock()]
+		})
+	}, [pages3])
+
 	const pageNumberPlan = useMemo(() => {
 		const firstPageNumber = 5
 		const section1Page = firstPageNumber
@@ -3064,7 +4023,7 @@ const SystemWord = () => {
 		const section2SummaryPage = additionalInfoPage + 1 + accountsExtraCount
 		const riskContinuationCount = (riskContinuationPages || []).length
 		const detailStartPage = section2SummaryPage + 1 + riskContinuationCount
-		const detailPagesCount = (pages3 || []).length
+		const detailPagesCount = detailPages.length
 		const section3Page = detailStartPage + detailPagesCount
 
 		return {
@@ -3081,7 +4040,12 @@ const SystemWord = () => {
 			detailPagesCount,
 			section3Page,
 		}
-	}, [sectionTablePages, systemAccountsPages, riskContinuationPages, pages3])
+	}, [
+		sectionTablePages,
+		systemAccountsPages,
+		riskContinuationPages,
+		detailPages,
+	])
 
 	const tocVulnerabilityItems = useMemo(() => {
 		const DETAIL_START_PAGE = pageNumberPlan.detailStartPage
@@ -3098,7 +4062,7 @@ const SystemWord = () => {
 		const seen = new Set()
 		const entries = []
 
-		;(pages3 || []).forEach((pageItems, pageIdx) => {
+		;(detailPages || []).forEach((pageItems, pageIdx) => {
 			;(pageItems || []).forEach(html => {
 				if (!html || typeof html !== 'string') return
 				if (!html.includes('system-subtitle')) return
@@ -3181,7 +4145,7 @@ const SystemWord = () => {
 			items: out,
 			section3Page: String(pageNumberPlan.section3Page),
 		}
-	}, [riskRows, pages3, objectLinks, NO_RESOURCE_KEY, pageNumberPlan])
+	}, [riskRows, detailPages, objectLinks, NO_RESOURCE_KEY, pageNumberPlan])
 
 	const tocItems = useMemo(() => {
 		const base = [
@@ -3587,26 +4551,26 @@ const SystemWord = () => {
 		let newInnerHtml = ''
 		if (newVuln.length == 0) {
 			newInnerHtml = `
-    <div class="system-bar-title">2.2. Ekspertiza natijalari bo‘yicha batafsil izoh</div>
-    <div class="system-subhead system-highlight">2.2.1. “${appName}” axborot tizimi</div>
-    <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
-    <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
-    <p class="system-paragraph">${splitToInlineSpans(result)}</p>
-    <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
-    <p class="system-paragraph">${splitToInlineSpans(desc)}</p>
-    <div class="system-subtitle">Tavsiyalar</div>
-    <p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
-  `
+		<div class="system-bar-title">2.2. Ekspertiza natijalari bo‘yicha batafsil izoh</div>
+		<div class="system-subhead system-highlight">2.2.1. “${appName}” axborot tizimi</div>
+		<div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
+		<p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
+		<p class="system-paragraph">${splitToInlineSpans(result)}</p>
+		<div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
+		<p class="system-paragraph">${splitToInlineSpans(desc)}</p>
+		<div class="system-subtitle">Tavsiyalar</div>
+		<p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
+	`
 		} else {
 			newInnerHtml = `
-    <div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
-    <p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
-    <p class="system-paragraph">${splitToInlineSpans(result)}</p>
-    <div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
-    <p class="system-paragraph">${splitToInlineSpans(desc)}</p>
-    <div class="system-subtitle">Tavsiyalar</div>
-    <p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
-  `
+		<div class="system-subtitle">2.2.1.${vulnCounter}. ${title}</div>
+		<p class="system-paragraph"><b>Xavflilik darajasi:</b> ${levelText}.</p>
+		<p class="system-paragraph">${splitToInlineSpans(result)}</p>
+		<div class="system-subtitle">Ekspluatatsiya oqibatlari</div>
+		<p class="system-paragraph">${splitToInlineSpans(desc)}</p>
+		<div class="system-subtitle">Tavsiyalar</div>
+		<p class="system-paragraph">${splitToInlineSpans(recommendation)}</p>
+	`
 		}
 
 		const parser = new DOMParser()
@@ -3629,13 +4593,6 @@ const SystemWord = () => {
 				pageContent.insertAdjacentHTML('beforeend', newInnerHtml)
 				updated[startIndex] = doc.body.innerHTML
 			}
-
-			// console.log(updated);
-			const a4 = document.querySelectorAll('.page-content')
-			const a4Array = Array.from(updated).map(el => el.innerHTML)
-			// console.log(a4Array);
-
-			// setHtmlContent(updated);
 
 			return updated
 		})
@@ -3683,17 +4640,10 @@ const SystemWord = () => {
 					setLowVuln(prev => [...(prev || []), newItem])
 
 				setAllVuln(prev => [...(prev || []), newItem])
-				setVulnUm(prev => [...(prev || []), newItem])
 			}
-			setPlatform('umumiy')
 			queueRiskLayoutRefresh()
 
-			const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload)
-
-			if (res.status == METHOD.OK) {
-				if (field === 11) {
-				}
-			}
+			await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload)
 		} catch (error) {
 			console.error(error)
 		}
@@ -3707,265 +4657,540 @@ const SystemWord = () => {
 				? [items]
 				: []
 
-		if (!itemsArray.length) return []
+		if (!itemsArray.length) return [[buildCaretAnchorBlock()]]
 
 		const pages = []
 		let currentPage = []
 
-		const tempDiv = document.createElement('div')
-		tempDiv.style.width = '385px'
-		tempDiv.style.position = 'absolute'
-		tempDiv.style.visibility = 'hidden'
-		document.body.appendChild(tempDiv)
+		const sampleContent = document.querySelector(
+			'.word-pages .a4 .page-content.editable.new-content',
+		)
+		const samplePage = sampleContent?.closest('.a4.system-c') || null
+		const samplePageStyle = samplePage
+			? window.getComputedStyle(samplePage)
+			: null
+		const sampleContentStyle = sampleContent
+			? window.getComputedStyle(sampleContent)
+			: null
+		const sampleWidth =
+			sampleContent?.clientWidth ||
+			sampleContent?.getBoundingClientRect?.().width ||
+			650
+		const samplePageWidth =
+			samplePage?.clientWidth ||
+			samplePage?.getBoundingClientRect?.().width ||
+			794
+		const sampleHeightData = Number(sampleContent?.dataset?.pageMaxHeight || 0)
+		const sampleClientHeight = Number(sampleContent?.clientHeight || 0)
+		const rawMaxHeight =
+			(Number.isFinite(sampleHeightData) && sampleHeightData > 0
+				? sampleHeightData
+				: Number.isFinite(sampleClientHeight) && sampleClientHeight > 0
+					? sampleClientHeight
+					: 850) || 850
+		const pageMaxHeight = Math.max(220, Math.floor(rawMaxHeight - 28))
+		const contentOffsetTop = Number.parseFloat(
+			sampleContentStyle?.marginTop || '0',
+		)
 
-		itemsArray.forEach(item => {
-			if (!item) return
+		const measureRoot = document.createElement('div')
+		measureRoot.className = 'word-container'
+		measureRoot.style.position = 'absolute'
+		measureRoot.style.visibility = 'hidden'
+		measureRoot.style.pointerEvents = 'none'
+		measureRoot.style.top = '-9999px'
+		measureRoot.style.left = '-9999px'
+		measureRoot.style.width = `${Math.floor(samplePageWidth)}px`
 
-			const wrapper = document.createElement('p')
-			wrapper.innerHTML = item
-			tempDiv.appendChild(wrapper)
+		const measurePage = document.createElement('div')
+		measurePage.className = 'a4 system-c'
+		measurePage.style.width = `${Math.floor(samplePageWidth)}px`
+		measurePage.style.minHeight = '0'
+		measurePage.style.height = 'auto'
+		measurePage.style.paddingTop = samplePageStyle?.paddingTop || '0'
+		measurePage.style.paddingBottom = samplePageStyle?.paddingBottom || '0'
+		measurePage.style.paddingLeft = samplePageStyle?.paddingLeft || '70px'
+		measurePage.style.paddingRight = samplePageStyle?.paddingRight || '70px'
+		measurePage.style.margin = '0'
+		measurePage.style.background = 'none'
+		measurePage.style.boxShadow = 'none'
+		measurePage.style.overflow = 'visible'
+		measurePage.style.setProperty(
+			'--system-page-content-height',
+			`${Math.floor(rawMaxHeight)}px`,
+		)
+		measurePage.style.setProperty(
+			'--system-page-content-offset-top',
+			`${Number.isFinite(contentOffsetTop) ? contentOffsetTop : 0}px`,
+		)
 
-			if (tempDiv.scrollHeight > 1080) {
-				// console.log(currentPage)
-				if (currentPage.length) pages.push(currentPage)
-				currentPage = [item]
-				tempDiv.innerHTML = item
+		const measureContent = document.createElement('div')
+		measureContent.className = 'page-content editable new-content'
+		measureContent.style.width = `${Math.floor(sampleWidth)}px`
+		measureContent.style.minHeight = '0'
+		measureContent.style.height = 'auto'
+		measureContent.style.maxHeight = 'none'
+		measureContent.style.overflow = 'visible'
+		measureContent.style.margin = '0'
+		measureContent.style.marginTop = `${
+			Number.isFinite(contentOffsetTop) ? contentOffsetTop : 0
+		}px`
+
+		const measureFlow = document.createElement('div')
+		measureFlow.className = 'system-two-col-flow'
+		measureContent.appendChild(measureFlow)
+		measurePage.appendChild(measureContent)
+		measureRoot.appendChild(measurePage)
+		document.body.appendChild(measureRoot)
+
+		const appendMeasureBlock = html => {
+			const wrapper = document.createElement('div')
+			wrapper.innerHTML = html
+			measureFlow.appendChild(wrapper)
+			return wrapper
+		}
+
+		const splitByWrapperChildrenForPagination = html => {
+			if (!html || typeof html !== 'string') return [html]
+			if (isCaretAnchorBlock(html)) return [html]
+			try {
+				const container = document.createElement('div')
+				container.innerHTML = html
+				const root = container.firstElementChild
+				if (!root || container.children.length !== 1) return [html]
+				const tag = (root.tagName || '').toLowerCase()
+				const canUnwrap = tag === 'div' || tag === 'section' || tag === 'article'
+				if (!canUnwrap) return [html]
+				if (root.attributes.length > 0) return [html]
+				const children = Array.from(root.childNodes)
+				if (children.length < 2) return [html]
+				const out = children
+					.map(node => {
+						if (node.nodeType === Node.TEXT_NODE) {
+							const txt = (node.textContent || '').trim()
+							return txt ? `<p>${txt}</p>` : ''
+						}
+						if (node.nodeType === Node.ELEMENT_NODE) return node.outerHTML || ''
+						return ''
+					})
+					.filter(Boolean)
+				return out.length >= 2 ? out : [html]
+			} catch {
+				return [html]
+			}
+		}
+
+		const splitTextBlockForPagination = html => {
+			if (!html || typeof html !== 'string') return null
+			if (isCaretAnchorBlock(html)) return null
+
+			try {
+				const container = document.createElement('div')
+				container.innerHTML = html
+				const root = container.firstElementChild
+				if (!root || container.children.length !== 1) return null
+
+				const tag = (root.tagName || '').toLowerCase()
+				const supported = ['p', 'div', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+				if (!supported.includes(tag)) return null
+				if (root.children.length > 0) return null
+				if (root.querySelector('img,table,ul,ol,video,audio,iframe,canvas,svg')) return null
+
+				const originalText = root.textContent || ''
+				const normalizedText = originalText.replace(/\s+/g, ' ').trim()
+				if (normalizedText.length < 120) return null
+
+				const buildHtmlFromText = text => {
+					const clone = root.cloneNode(false)
+					clone.textContent = text
+					return clone.outerHTML
+				}
+
+				let low = 1
+				let high = originalText.length - 1
+				let best = 0
+
+				while (low <= high) {
+					const mid = Math.floor((low + high) / 2)
+					const candidateHtml = buildHtmlFromText(originalText.slice(0, mid))
+					const candidateWrapper = appendMeasureBlock(candidateHtml)
+					const fits = measureContent.scrollHeight <= pageMaxHeight
+					safeRemoveChild(measureFlow, candidateWrapper)
+
+					if (fits) {
+						best = mid
+						low = mid + 1
+					} else {
+						high = mid - 1
+					}
+				}
+
+				if (best <= 0 || best >= originalText.length) return null
+				let splitIndex = best
+				const spaceIndex = originalText.lastIndexOf(' ', best)
+				if (spaceIndex > Math.floor(best * 0.45)) splitIndex = spaceIndex
+
+				const leftText = originalText.slice(0, splitIndex).trimEnd()
+				const rightText = originalText.slice(splitIndex).trimStart()
+				if (!leftText || !rightText) return null
+
+				return [buildHtmlFromText(leftText), buildHtmlFromText(rightText)]
+			} catch {
+				return null
+			}
+		}
+
+		const resetMeasureWithBlocks = blocks => {
+			measureFlow.innerHTML = ''
+			blocks.forEach(block => {
+				appendMeasureBlock(block)
+			})
+		}
+
+		const canAppendBlockToPage = (pageBlocks, blockHtml) => {
+			const safeBlocks = Array.isArray(pageBlocks) ? pageBlocks : []
+			resetMeasureWithBlocks(safeBlocks)
+			const candidate = appendMeasureBlock(blockHtml)
+			const fits = measureContent.scrollHeight <= pageMaxHeight
+			safeRemoveChild(measureFlow, candidate)
+			return fits
+		}
+
+		const workQueue = Array.isArray(itemsArray) ? [...itemsArray] : []
+		while (workQueue.length) {
+			const item = workQueue.shift()
+			if (!item) continue
+			if (isManualPageBreakBlock(item)) {
+				// Eski saqlangan manual-page-break markerlar endi oqimni bo'lmaydi.
+				continue
+			}
+
+			const wrapper = appendMeasureBlock(item)
+
+			if (measureContent.scrollHeight > pageMaxHeight) {
+				safeRemoveChild(measureFlow, wrapper)
+				const explodedBlocks = splitByWrapperChildrenForPagination(item)
+				if (explodedBlocks.length > 1) {
+					workQueue.unshift(...explodedBlocks)
+					continue
+				}
+
+				const textSplit = splitTextBlockForPagination(item)
+				if (textSplit && textSplit.length === 2) {
+					const [leftPart, rightPart] = textSplit
+					const leftWrapper = appendMeasureBlock(leftPart)
+					const leftFits = measureContent.scrollHeight <= pageMaxHeight
+					if (leftFits) {
+						currentPage.push(leftPart)
+						pages.push(currentPage)
+						currentPage = [rightPart]
+						resetMeasureWithBlocks(currentPage)
+						continue
+					}
+					safeRemoveChild(measureFlow, leftWrapper)
+				}
+
+				if (currentPage.length) {
+					pages.push(currentPage)
+					currentPage = [item]
+					resetMeasureWithBlocks(currentPage)
+					continue
+				}
+				// Bitta juda baland blok bo'lsa ham yo'qolib qolmasligi uchun alohida sahifaga qo'yamiz.
+				pages.push([item])
+				currentPage = []
+				measureFlow.innerHTML = ''
 			} else {
 				currentPage.push(item)
 			}
-		})
-
-		if (currentPage.length) pages.push(currentPage)
-		document.body.removeChild(tempDiv)
-		return pages
-	}
-
-	useEffect(() => {
-		if (newVuln?.length) {
-			const result = paginateContent(newVuln)
-			setPages3(result)
 		}
-	}, [newVuln])
 
-	const handleInput = pageContent => {
-		if (!pageContent || !pageContent.children) return
+		if (currentPage.length) {
+			pages.push(currentPage)
+		}
 
-		const blocks = Array.from(pageContent.children).map(
-			child => child.outerHTML,
-		)
+		// Ikki sahifa chegarasida katta bo'sh joy qolib ketmasligi uchun
+		// keyingi sahifadagi bosh blokni oldingi sahifaga qaytarib joylaymiz.
+		let rebalanced = true
+		let rebalanceGuard = 0
+		while (rebalanced && rebalanceGuard < 300) {
+			rebalanced = false
+			rebalanceGuard += 1
+			for (let i = 0; i < pages.length - 1; i++) {
+				const prevPage = Array.isArray(pages[i]) ? pages[i] : []
+				const nextPage = Array.isArray(pages[i + 1]) ? pages[i + 1] : []
+				if (!nextPage.length) continue
 
-		const paged = paginateContent(blocks)
-		// console.log("hello")
-		setPages1(paged)
+				const firstCandidate = nextPage[0]
+				if (!firstCandidate || isCaretAnchorBlock(firstCandidate)) continue
+				if (!canAppendBlockToPage(prevPage, firstCandidate)) continue
+
+				prevPage.push(firstCandidate)
+				nextPage.shift()
+				rebalanced = true
+
+				if (
+					nextPage.length === 0 ||
+					(nextPage.length === 1 && isCaretAnchorBlock(nextPage[0]))
+				) {
+					pages.splice(i + 1, 1)
+				}
+			}
+		}
+
+		safeDetachNode(measureRoot)
+		const normalized = pages.map(page => {
+			const safePage = (Array.isArray(page) ? page : []).filter(
+				item => typeof item === 'string' && item.trim().length > 0,
+			)
+			if (!safePage.length) return [buildCaretAnchorBlock()]
+			if (
+				safePage.length > 1 &&
+				safePage.some(block => isCaretAnchorBlock(block))
+			) {
+				return safePage.filter(block => !isCaretAnchorBlock(block))
+			}
+			return safePage
+		})
+		return normalized.length ? normalized : [[buildCaretAnchorBlock()]]
 	}
 
-	const makeImagesResizable = container => {
-		const imgs = container.querySelectorAll('.text img')
-
-		imgs.forEach(img => {
-			// agar allaqachon event qo‘shilgan bo‘lsa, qaytadan qo‘shmaslik
-			if (img.dataset.resizable) return
-			img.dataset.resizable = 'true'
-
-			img.style.userSelect = 'none'
-			img.style.cursor = 'nwse-resize'
-
-			let startX, startY, startWidth, startHeight
-
-			const onPointerMove = e => {
-				const newWidth = startWidth + (e.clientX - startX)
-				const newHeight = startHeight + (e.clientY - startY)
-				img.style.width = `${Math.max(50, newWidth)}px`
-				img.style.height = `${Math.max(50, newHeight)}px`
-			}
-
-			const onPointerUp = () => {
-				document.removeEventListener('pointermove', onPointerMove)
-				document.removeEventListener('pointerup', onPointerUp)
-
-				// resize qilinganidan keyin pagination yangilash
-				const pageContent = img.closest('.page-content')
-				if (pageContent) handleInput({ currentTarget: pageContent })
-			}
-
-			img.addEventListener('pointerdown', e => {
-				e.preventDefault()
-				startX = e.clientX
-				startY = e.clientY
-				startWidth = img.offsetWidth
-				startHeight = img.offsetHeight
-
-				document.addEventListener('pointermove', onPointerMove)
-				document.addEventListener('pointerup', onPointerUp)
-			})
-		})
-	}
-
-	useEffect(() => {
-		const editables = document.querySelectorAll('.page-content')
-
-		editables.forEach(container => {
-			// dastlabki rasm eventlari
-			makeImagesResizable(container)
-
-			const observer = new MutationObserver(() => {
-				makeImagesResizable(container) // yangi rasm qo‘shilganda ham event qo‘shiladi
-			})
-
-			observer.observe(container, {
-				childList: true,
-				subtree: true,
-			})
-
-			return () => observer.disconnect()
-		})
-	}, [pages1, editing, newVuln, htmlContent])
-
-	const saveAllChanges = async () => {
-		const allDocImages = Array.from(
-			document.querySelectorAll('.page-content img'),
+	const collectNewContentBlocksFromDom = () => {
+		const allPages = document.querySelectorAll(
+			'.word-pages .page-content.editable.new-content',
 		)
-		allDocImages.forEach(img => {
-			if (!img?.dataset) return
-			delete img.dataset.srcResolved
-			delete img.dataset.uploadProgress
-			delete img.dataset.uploading
-			delete img.dataset.uploadStarted
-			delete img.dataset.pasteInit
-		})
+		if (!allPages?.length) return []
 
-		const allPages = document.querySelectorAll('.new-content')
-
-		let allBlocks = []
+		const allBlocks = []
 
 		allPages.forEach(page => {
+			const normalizedChildren = []
 			Array.from(page.children).forEach(child => {
-				// Agar child o'zi div bo'lsa va uning ichida yana div'lar bo'lsa,
-				// faqat ichki kontentni olish - bu div'lar takrorlanib qolmasligi uchun
-				if (child.tagName === 'DIV') {
-					// Child'ning ichida yana div'lar borligini tekshirish
-					const hasNestedDivs = child.querySelector('div') !== null
+				if (child.classList?.contains('system-two-col-flow')) {
+					normalizedChildren.push(...Array.from(child.children))
+				} else {
+					normalizedChildren.push(child)
+				}
+			})
 
-					// Muhim class'larni tekshirish (text, exp-title, exp-d, va hokazo)
+			const pageBlocks = []
+			Array.from(normalizedChildren).forEach(child => {
+				if (!child) return
+				if (child.tagName === 'DIV') {
+					const hasNestedDivs = child.querySelector('div') !== null
 					const hasImportantClass =
 						child.classList.contains('text') ||
 						child.classList.contains('exp-title') ||
 						child.classList.contains('exp-d') ||
 						child.classList.contains('title')
-
 					if (hasNestedDivs && !hasImportantClass) {
-						// Agar ichida div'lar bo'lsa va muhim class bo'lmasa, faqat innerHTML olish
-						// Bu wrapper div'ni olib tashlaydi (React tomonidan qo'shilgan wrapper div)
-						allBlocks.push(child.innerHTML)
+						pageBlocks.push(child.innerHTML)
 					} else {
-						// Agar ichida div'lar bo'lmasa yoki muhim class bo'lsa, outerHTML ishlatish
-						allBlocks.push(child.outerHTML)
+						pageBlocks.push(child.outerHTML)
 					}
-				} else {
-					// Boshqa elementlar uchun outerHTML ishlatish
-					allBlocks.push(child.outerHTML)
+				} else if (typeof child.outerHTML === 'string') {
+					pageBlocks.push(child.outerHTML)
 				}
 			})
+
+			const safePageBlocks = pageBlocks.filter(
+				block => typeof block === 'string' && block.trim().length > 0,
+			)
+			if (safePageBlocks.length) {
+				allBlocks.push(...safePageBlocks)
+			} else {
+				allBlocks.push(buildCaretAnchorBlock())
+			}
 		})
 
-		// console.log(allBlocks);
+		return allBlocks
+			.filter(item => !isManualPageBreakBlock(item))
+			.map(item => sanitizePersistedImageHtml(item))
+			.map(item => normalizeNewContentBlockHtml(item))
+			.flatMap(item => explodeHtmlBlock(item))
+			.filter(item => typeof item === 'string' && item.trim().length > 0)
+	}
 
-		// pagination qayta hisoblanadi
-		const sanitizedBlocks = allBlocks.map(item =>
-			sanitizePersistedImageHtml(item),
-		)
-		const paged = paginateContent(sanitizedBlocks)
+	useEffect(() => {
+		const source = Array.isArray(newVuln) ? newVuln : []
+		const snapshot = source
+			.filter(item => !isManualPageBreakBlock(item))
+			.map(item => sanitizePersistedImageHtml(item))
+			.map(item => normalizeNewContentBlockHtml(item))
+			.flatMap(item => explodeHtmlBlock(item))
+			.filter(item => typeof item === 'string' && item.trim().length > 0)
+		if (!areHtmlBlocksEqual(snapshot, source)) {
+			newVulnSnapshotRef.current = snapshot
+			setNewVuln(snapshot)
+			return
+		}
+		newVulnSnapshotRef.current = snapshot
+		if (!snapshot.length) snapshot.push(buildCaretAnchorBlock())
+		const result = paginateContent(snapshot)
+		setPages3(result)
+	}, [newVuln])
 
-		// Table ma'lumotlarini o'qish (rasmlar bilan base64 da)
-		const extractTableData = () => {
-			// Ikkala jadvalni ham topish uchun umumiy klassni ishlatamiz
-			const tables = document.querySelectorAll('table.expert-table')
-			const data = {}
+	// Rasm pastiga matn yozilganda re-render da kontent yo‘qolmasligi uchun:
+	// DOM dagi .new-content ni newVuln ga sinxronlaymiz (keyup da debounce bilan).
+	const syncNewContentFromDom = useCallback((options = {}) => {
+		const force = Boolean(options?.force)
+		if (editingRef.current && !force) return
+		const sanitizedBlocks = collectNewContentBlocksFromDom()
+		if (areHtmlBlocksEqual(sanitizedBlocks, newVulnSnapshotRef.current)) {
+			return
+		}
+		newVulnSnapshotRef.current = sanitizedBlocks
+		setNewVuln(sanitizedBlocks)
+		// pages3 ni ham shu yerda yangilaymiz, re-render da eski pages3 ishlatilmasligi uchun
+		setPages3(paginateContent(sanitizedBlocks))
+	}, [])
 
-			// console.log("Jami topilgan jadvallar:", tables.length);
+	useEffect(() => {
+		syncNewContentFromDomRef.current = syncNewContentFromDom
+	}, [syncNewContentFromDom])
 
-			tables.forEach((table, idx) => {
-				// Agar jadvalda tbody bo'lsa, uning qatorlarini olamiz
-				const rows = table.querySelectorAll('tbody tr')
-				const tableContent = []
+	useEffect(() => {
+		if (!editing) return
 
-				rows.forEach((row, rowIdx) => {
-					const cells = row.querySelectorAll('td')
-					// td ichidagi matnni va rasmlarni saqlaymiz
-					const rowData = Array.from(cells).map(cell => {
-						const cellText = cell.innerText.trim()
-						const images = cell.querySelectorAll('img')
-
-						// Agar katakda rasm bo'lsa, HTML sifatida saqlaymiz (base64 bilan)
-						if (images.length > 0) {
-							return sanitizePersistedImageHtml(cell.innerHTML)
-						}
-
-						return cellText
-					})
-					tableContent.push(rowData)
+		const applyImageInteractionStyles = () => {
+			document
+				.querySelectorAll('.page-content img, .editable-table td img')
+				.forEach(img => {
+					img.dataset.resizable = 'true'
+					img.style.userSelect = 'none'
+					img.style.cursor = editingRef.current ? 'nwse-resize' : 'default'
+					img.style.touchAction = editingRef.current ? 'none' : 'auto'
 				})
-
-				if (tableContent.length > 0) {
-					// Har bir jadvalni o'z indeksi bilan saqlaymiz
-					data[`table_${idx}`] = tableContent
-				}
-			})
-
-			return data
 		}
 
-		const tables = extractTableData()
-
-		// ObjectLinks ni parse qilish
-		const currentLinks = objectLinksText
-			.split('\n')
-			.map(link => link.trim())
-			.filter(link => link.length > 0)
-		setObjectLinks(currentLinks)
-
-		const riskTableToSave = (riskRows || [])
-			.filter(r => r?.type === 'vuln')
-			.map(r => ({
-				a1: r.level,
-				a2: r.count,
-				a3: r.name,
-				a4: r.resourceLabel,
-			}))
-
-		const tablesAndLinksJson = JSON.stringify({
-			tables: tables,
-			objectLinks: currentLinks,
-			systemAccountsRows,
-			riskTable: riskTableToSave,
+		applyImageInteractionStyles()
+		const raf = requestAnimationFrame(applyImageInteractionStyles)
+		const rootNode =
+			document.querySelector('.word-pages') ||
+			document.querySelector('.word-container')
+		const observer = new MutationObserver(() => {
+			applyImageInteractionStyles()
 		})
+		if (rootNode) {
+			observer.observe(rootNode, { childList: true, subtree: true })
+		}
 
-		const apkName = tablesAndLinksJson
-		const match = apkName.match(/[a-zA-Z0-9\.\-_]+\.apk/i)
-		const apkName1 = match ? match[0] : null
-		setApkFileName(apkName1)
+		return () => {
+			cancelAnimationFrame(raf)
+			observer.disconnect()
+		}
+	}, [editing, domRenderRevision])
 
-		const ipaMatch = apkName.match(/[a-zA-Z0-9\.\-_]+\.ipa/i)
-		const ipaFile = ipaMatch ? ipaMatch[0] : null
-		setIpaFileName(ipaFile)
+	const saveAllChanges = async () => {
+		if (isSavingRef.current) return
+		isSavingRef.current = true
+		overflowQueueRef.current = false
+		try {
+			const allDocImages = Array.from(
+				document.querySelectorAll('.page-content img'),
+			)
+			allDocImages.forEach(img => {
+				if (!img?.dataset) return
+				delete img.dataset.srcResolved
+				delete img.dataset.uploadProgress
+				delete img.dataset.uploading
+				delete img.dataset.uploadStarted
+				delete img.dataset.pasteInit
+			})
 
-		const field8Data = [tablesAndLinksJson, ...paged]
+			const sanitizedBlocks = collectNewContentBlocksFromDom()
+			// pagination qayta hisoblanadi
+			const paged = paginateContent(sanitizedBlocks)
 
-		// console.log("Saving field8Data:", field8Data);
+			// Table ma'lumotlarini o'qish (rasmlar bilan base64 da)
+			const extractTableData = () => {
+				// Ikkala jadvalni ham topish uchun umumiy klassni ishlatamiz
+				const tables = document.querySelectorAll('table.expert-table')
+				const data = {}
 
-		const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
-			19: id,
-			8: field8Data,
-		})
-		// console.log(res);
+				// console.log("Jami topilgan jadvallar:", tables.length);
 
-		setPages1(paged)
-		setTableData(tables)
-		setEditing(false) // edit rejimdan chiqadi
-		setLastSavedAt(new Date())
-		updateEditorStats()
+				tables.forEach((table, idx) => {
+					// Agar jadvalda tbody bo'lsa, uning qatorlarini olamiz
+					const rows = table.querySelectorAll('tbody tr')
+					const tableContent = []
 
-		toast.success('Barcha o‘zgarishlar saqlandi')
+					rows.forEach(row => {
+						const cells = row.querySelectorAll('td')
+						// td ichidagi matnni va rasmlarni saqlaymiz
+						const rowData = Array.from(cells).map(cell => {
+							const cellText = cell.innerText.trim()
+							const images = cell.querySelectorAll('img')
+
+							// Agar katakda rasm bo'lsa, HTML sifatida saqlaymiz (base64 bilan)
+							if (images.length > 0) {
+								return sanitizePersistedImageHtml(cell.innerHTML)
+							}
+
+							return cellText
+						})
+						tableContent.push(rowData)
+					})
+
+					if (tableContent.length > 0) {
+						// Har bir jadvalni o'z indeksi bilan saqlaymiz
+						data[`table_${idx}`] = tableContent
+					}
+				})
+
+				return data
+			}
+
+			const tables = extractTableData()
+
+			// ObjectLinks ni parse qilish
+			const currentLinks = objectLinksText
+				.split('\n')
+				.map(link => link.trim())
+				.filter(link => link.length > 0)
+			setObjectLinks(currentLinks)
+
+			const riskTableToSave = (riskRows || [])
+				.filter(r => r?.type === 'vuln')
+				.map(r => ({
+					a1: r.level,
+					a2: r.count,
+					a3: r.name,
+					a4: r.resourceLabel,
+				}))
+
+			const tablesAndLinksJson = JSON.stringify({
+				tables: tables,
+				objectLinks: currentLinks,
+				systemAccountsRows,
+				riskTable: riskTableToSave,
+				removedStaticPageIds,
+			})
+
+			const field8Data = [tablesAndLinksJson, ...paged]
+
+			// console.log("Saving field8Data:", field8Data);
+
+			await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+				19: id,
+				8: field8Data,
+			})
+
+			newVulnSnapshotRef.current = sanitizedBlocks
+			setNewVuln(sanitizedBlocks)
+			setPages3(paged)
+			setTableData(tables)
+			setDomRenderRevision(prev => prev + 1)
+			setEditing(false)
+			updateEditorStats({ force: true })
+
+			toast.success('Barcha o‘zgarishlar saqlandi')
+		} catch (error) {
+			console.error(error)
+			toast.error('Saqlashda xatolik yuz berdi')
+		} finally {
+			isSavingRef.current = false
+		}
 	}
 
 	useEffect(() => {
@@ -3986,6 +5211,14 @@ const SystemWord = () => {
 				imageLogError('handlePasteImage skipped: file is missing')
 				return null
 			}
+			// Bir marta yuklash: bir xil element uchun qayta yuklanmasin
+			if (imgElement?.dataset?.uploadStarted === 'true') {
+				imageLog(
+					'handlePasteImage skipped: upload already started for this image',
+				)
+				return imgElement?.dataset?.fileId || null
+			}
+			if (imgElement) imgElement.dataset.uploadStarted = 'true'
 			imageLog('handlePasteImage start', {
 				fileName: file?.name,
 				fileType: file?.type,
@@ -4016,9 +5249,8 @@ const SystemWord = () => {
 			const imageRes = await uploadFileViaRpc(stRef, uploadFile, id, p => {
 				if (imgElement) imgElement.dataset.uploadProgress = String(p)
 			})
-			imageLog('handlePasteImage upload response', imageRes)
 
-			// console.log(imageRes)
+			imageLog('handlePasteImage upload response', imageRes)
 
 			const fileId = imageRes?.fileId || imageRes?.result?.fileId
 			const responseSizeRaw =
@@ -4043,24 +5275,12 @@ const SystemWord = () => {
 				}
 			}
 
-			if (fileId && imgElement && safeUploadedSize) {
-				const srcUrl = await downloadFileAll(fileId, safeUploadedSize)
-				if (srcUrl) imgElement.src = srcUrl
-				imageLog('handlePasteImage preview source resolved', {
-					fileId,
-					hasSrcUrl: Boolean(srcUrl),
-				})
-			}
+			// Tahrir rejimida blob URL o‘rnatilmaydi — rasm data URL da qoladi, sahifa yuqoriga sakramaydi.
+			// Blob URL sahifa qayta yuklanganda yoki tahrir yopilganda resolveStoredImages da o‘rnatiladi.
 			if (!fileId) {
 				imageLogError('handlePasteImage failed: fileId not found in response')
 				return null
 			}
-
-			setUploadedFilesMeta(prev => ({
-				...(prev || {}),
-				[fileId]: safeUploadedSize,
-				[`files/${String(fileId).replace(/^files\//i, '')}`]: safeUploadedSize,
-			}))
 
 			const saveRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
 				19: id,
@@ -4069,6 +5289,10 @@ const SystemWord = () => {
 					: { 1: fileId },
 			})
 			imageLog('handlePasteImage field15 save response', saveRes)
+
+			// setUploadedFilesMeta chaqirmaymiz — re-render DOM ni qayta chizadi va past qilingan rasm yo‘qoladi.
+			// Rasmda data-file-id va data-file-size bor; resolveStoredImages (tahrir yopilganda) shu orqali blob oladi.
+			// Sahifa qayta yuklanganda meta serverdan (field 15) keladi.
 			return fileId || null
 		} catch (error) {
 			imageLogError('handlePasteImage error', error)
@@ -4155,9 +5379,7 @@ const SystemWord = () => {
 		let cancelled = false
 
 		const run = async () => {
-			const imgs = Array.from(
-				document.querySelectorAll('.page-content img[data-file-id]'),
-			)
+			const imgs = Array.from(document.querySelectorAll('.page-content img'))
 			imageLog('resolveStoredImages start', {
 				imagesCount: imgs.length,
 				metaKeys: Object.keys(meta || {}).length,
@@ -4165,16 +5387,29 @@ const SystemWord = () => {
 			for (const img of imgs) {
 				if (cancelled) return
 				if (!img) continue
-				const currentSrc = (img.getAttribute('src') || '').trim()
-				const skipResolved =
-					img.dataset.srcResolved === 'true' &&
-					currentSrc.length > 0 &&
-					!currentSrc.startsWith('blob:')
-				if (skipResolved) continue
-
-				const dfidRaw =
+				const currentSrcRaw = (img.getAttribute('src') || '').trim()
+				const currentSrc = currentSrcRaw || IMAGE_PLACEHOLDER_SRC
+				let dfidRaw =
 					img.getAttribute('data-file-id') || img.dataset.fileId || ''
+				if (!dfidRaw) {
+					const inferred = inferFileIdFromSrc(currentSrcRaw)
+					if (inferred) {
+						dfidRaw = inferred
+						img.setAttribute('data-file-id', inferred)
+					}
+				}
 				if (!dfidRaw) continue
+
+				if (isBrokenFileSrcValue(currentSrcRaw)) {
+					img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+				}
+
+				const hasResolvedSrc =
+					currentSrc !== IMAGE_PLACEHOLDER_SRC &&
+					!isBrokenFileSrcValue(currentSrc)
+				const skipResolved =
+					img.dataset.srcResolved === 'true' && hasResolvedSrc
+				if (skipResolved) continue
 
 				const dfid = dfidRaw.toString().trim()
 				const fid = dfid.replace(/^files\//i, '')
@@ -4193,6 +5428,7 @@ const SystemWord = () => {
 						metaSize,
 						attrSizeRaw,
 					})
+					img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
 					continue
 				}
 				img.dataset.fileSize = String(Math.floor(size))
@@ -4204,8 +5440,11 @@ const SystemWord = () => {
 						img.src = url
 						img.dataset.srcResolved = 'true'
 						imageLog('resolveStoredImages resolved', { fid, size })
+					} else {
+						img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
 					}
 				} catch (e) {
+					img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
 					imageLogError('resolveStoredImages error', { fid, size, error: e })
 				}
 			}
@@ -4217,13 +5456,6 @@ const SystemWord = () => {
 			cancelled = true
 		}
 	}, [editing, uploadedFilesMeta, pages3])
-
-	const addNewTr = () => {
-		setRows(prev => [
-			...prev,
-			{ id: Date.now(), role: '', login: '', password: '' },
-		])
-	}
 
 	const handleBlockChange = event => {
 		const value = event.target.value
@@ -4242,6 +5474,294 @@ const SystemWord = () => {
 		setToolbarFontSize(value)
 		runEditorCommand('fontSize', TOOLBAR_FONT_SIZE_TO_EXEC[value] ?? '4')
 	}
+
+	useEffect(() => {
+		if (!editing) {
+			imageResizeSessionRef.current = null
+			return
+		}
+
+		const endResize = () => {
+			const session = imageResizeSessionRef.current
+			if (!session) return
+			imageResizeSessionRef.current = null
+			requestAnimationFrame(() => {
+				handlePageOverflow()
+			})
+		}
+
+		const onPointerMove = e => {
+			const session = imageResizeSessionRef.current
+			if (!session || !session.img?.isConnected) return
+			if (!editingRef.current) return
+			e.preventDefault()
+
+			const deltaX = e.clientX - session.startX
+			const deltaY = e.clientY - session.startY
+			const newWidth = Math.max(50, Math.min(800, session.startWidth + deltaX))
+			const newHeight = Math.max(
+				50,
+				Math.min(1200, session.startHeight + deltaY),
+			)
+
+			session.img.style.width = `${newWidth}px`
+			session.img.style.height = `${newHeight}px`
+			session.img.style.maxWidth = 'none'
+		}
+
+		const onPointerUp = () => {
+			endResize()
+		}
+
+		const onPointerDown = e => {
+			if (!editingRef.current || e.button !== 0) return
+			const target = e.target instanceof Element ? e.target : null
+			const img = target?.closest?.('.page-content img, .editable-table td img')
+			if (!img) return
+
+			e.preventDefault()
+			e.stopPropagation()
+
+			const rect = img.getBoundingClientRect()
+			imageResizeSessionRef.current = {
+				img,
+				startX: e.clientX,
+				startY: e.clientY,
+				startWidth: rect.width || img.offsetWidth || img.width || 120,
+				startHeight: rect.height || img.offsetHeight || img.height || 120,
+			}
+
+			img.style.cursor = 'nwse-resize'
+			img.style.userSelect = 'none'
+			img.style.maxWidth = 'none'
+		}
+
+		document.addEventListener('pointerdown', onPointerDown, true)
+		document.addEventListener('pointermove', onPointerMove, { passive: false })
+		document.addEventListener('pointerup', onPointerUp, { passive: true })
+
+		return () => {
+			document.removeEventListener('pointerdown', onPointerDown, true)
+			document.removeEventListener('pointermove', onPointerMove)
+			document.removeEventListener('pointerup', onPointerUp)
+			imageResizeSessionRef.current = null
+		}
+	}, [editing, handlePageOverflow])
+
+	const getActiveA4PageElement = useCallback(() => {
+		const selection = window.getSelection()
+		if (selection && selection.rangeCount > 0) {
+			try {
+				const range = selection.getRangeAt(0)
+				const node =
+					range.commonAncestorContainer?.nodeType === Node.TEXT_NODE
+						? range.commonAncestorContainer.parentElement
+						: range.commonAncestorContainer
+				const pageFromSelection = node?.closest?.('.word-pages .a4') || null
+				if (pageFromSelection) return pageFromSelection
+			} catch {}
+		}
+
+		const pageFromActiveEditable =
+			activeEditableRef.current?.closest?.('.word-pages .a4') || null
+		if (pageFromActiveEditable) return pageFromActiveEditable
+
+		if (selectedA4PageRef.current?.isConnected) return selectedA4PageRef.current
+		return null
+	}, [])
+
+	const getActiveNewContentPageIndex = useCallback(() => {
+		const newContentPages = Array.from(
+			document.querySelectorAll(
+				'.word-pages .page-content.editable.new-content',
+			),
+		)
+		if (!newContentPages.length) return -1
+
+		const activePage = getActiveA4PageElement()
+		if (activePage) {
+			const selectedPageContent = activePage.querySelector(
+				'.page-content.editable.new-content',
+			)
+			if (selectedPageContent) {
+				const selectedIdx = newContentPages.indexOf(selectedPageContent)
+				if (selectedIdx >= 0) return selectedIdx
+			}
+		}
+
+		let currentPageContent = null
+		const selection = window.getSelection()
+		if (selection && selection.rangeCount > 0) {
+			try {
+				const range = selection.getRangeAt(0)
+				const node =
+					range.commonAncestorContainer?.nodeType === Node.TEXT_NODE
+						? range.commonAncestorContainer.parentElement
+						: range.commonAncestorContainer
+				currentPageContent =
+					node?.closest?.('.page-content.editable.new-content') || null
+			} catch {
+				currentPageContent = null
+			}
+		}
+		if (!currentPageContent && activeEditableRef.current) {
+			currentPageContent = activeEditableRef.current.closest(
+				'.page-content.editable.new-content',
+			)
+		}
+		if (!currentPageContent) return newContentPages.length - 1
+		const idx = newContentPages.indexOf(currentPageContent)
+		return idx >= 0 ? idx : newContentPages.length - 1
+	}, [getActiveA4PageElement])
+
+	const applyModelPages = useCallback(
+		(pages, focusPageIndex = null) => {
+			const safePages = Array.isArray(pages) ? pages : []
+			const normalizedPages = safePages.length
+				? safePages.map(page =>
+						Array.isArray(page) && page.length
+							? page
+							: [buildCaretAnchorBlock()],
+					)
+				: [[buildCaretAnchorBlock()]]
+			const nextBlocks = flattenPagesToModelBlocks(normalizedPages)
+			newVulnSnapshotRef.current = nextBlocks
+			setNewVuln(nextBlocks)
+			setPages3(normalizedPages)
+			setDomRenderRevision(prev => prev + 1)
+
+			requestAnimationFrame(() => {
+				applySystemPageContentMetrics()
+				renumberSystemPageFooters()
+				const targetIndex =
+					Number.isInteger(focusPageIndex) && focusPageIndex >= 0
+						? focusPageIndex
+						: normalizedPages.length - 1
+				const newContentPages = Array.from(
+					document.querySelectorAll(
+						'.word-pages .page-content.editable.new-content',
+					),
+				)
+				const targetPage = newContentPages[targetIndex] || null
+				if (targetPage) {
+					ensureNewContentCaretAnchor(targetPage, { collapseToStart: false })
+				}
+			})
+		},
+		[
+			applySystemPageContentMetrics,
+			ensureNewContentCaretAnchor,
+			renumberSystemPageFooters,
+		],
+	)
+
+	const handleInsertPageAfterCursor = useCallback(() => {
+		if (!editingRef.current) return
+		syncNewContentFromDomRef.current?.({ force: true })
+		const currentPages = paginateContent(
+			newVulnSnapshotRef.current?.length ? newVulnSnapshotRef.current : newVuln,
+		)
+		const pages = currentPages.length
+			? [...currentPages]
+			: [[buildCaretAnchorBlock()]]
+		const activeIndex = getActiveNewContentPageIndex()
+		const insertIndex = activeIndex >= 0 ? activeIndex + 1 : pages.length
+		pages.splice(insertIndex, 0, [buildCaretAnchorBlock()])
+		applyModelPages(pages, insertIndex)
+		queueRiskLayoutRefresh()
+	}, [
+		applyModelPages,
+		getActiveNewContentPageIndex,
+		newVuln,
+		queueRiskLayoutRefresh,
+	])
+
+	useEffect(() => {
+		shortcutActionsRef.current.insertPage = handleInsertPageAfterCursor
+	}, [handleInsertPageAfterCursor])
+
+	const handleDeleteInsertedPage = useCallback(() => {
+		if (!editingRef.current) return false
+		const activePage = getActiveA4PageElement()
+		const staticPageId = (activePage?.dataset?.staticPageId || '').trim()
+		if (staticPageId) {
+			const pageContent = activePage.querySelector('.page-content')
+			const isEmptyStaticPage =
+				!pageContent || !hasMeaningfulDomContent(pageContent)
+			if (isEmptyStaticPage) {
+				let removed = false
+				setRemovedStaticPageIds(prev => {
+					if (prev?.[staticPageId]) return prev
+					removed = true
+					return {
+						...(prev || {}),
+						[staticPageId]: true,
+					}
+				})
+				if (removed) {
+					selectedA4PageRef.current = null
+					requestAnimationFrame(() => {
+						applySystemPageContentMetrics()
+						renumberSystemPageFooters()
+						queueRiskLayoutRefresh()
+					})
+					return true
+				}
+			}
+		}
+
+		syncNewContentFromDomRef.current?.({ force: true })
+		const currentPages = paginateContent(
+			newVulnSnapshotRef.current?.length ? newVulnSnapshotRef.current : newVuln,
+		)
+		if (currentPages.length <= 1) return false
+		const pages = [...currentPages]
+		const activeIndex = getActiveNewContentPageIndex()
+		const isPageEmpty = pageBlocks => {
+			const safeBlocks = Array.isArray(pageBlocks) ? pageBlocks : []
+			if (!safeBlocks.length) return true
+			return !safeBlocks.some(block => {
+				if (isCaretAnchorBlock(block)) return false
+				return isMeaningfulHtmlBlock(block)
+			})
+		}
+
+		let pageIndex = -1
+		if (
+			activeIndex >= 0 &&
+			activeIndex < pages.length &&
+			isPageEmpty(pages[activeIndex])
+		) {
+			pageIndex = activeIndex
+		} else {
+			// Cursor bo'sh sahifaga qo'yilmagan bo'lsa ham oxirgi bo'sh sahifani topib o'chiramiz.
+			for (let i = pages.length - 1; i >= 0; i--) {
+				if (isPageEmpty(pages[i])) {
+					pageIndex = i
+					break
+				}
+			}
+		}
+		if (pageIndex < 0) return false
+
+		pages.splice(pageIndex, 1)
+		const focusIndex = Math.max(0, pageIndex - 1)
+		applyModelPages(pages, focusIndex)
+		queueRiskLayoutRefresh()
+		return true
+	}, [
+		applySystemPageContentMetrics,
+		applyModelPages,
+		getActiveA4PageElement,
+		getActiveNewContentPageIndex,
+		newVuln,
+		queueRiskLayoutRefresh,
+		renumberSystemPageFooters,
+	])
+
+	useEffect(() => {
+		shortcutActionsRef.current.deletePage = handleDeleteInsertedPage
+	}, [handleDeleteInsertedPage])
 
 	const renderShortcutBadge = key => (
 		<span className='ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/60 bg-white/20 px-1 text-[10px] font-semibold leading-none text-white'>
@@ -4270,10 +5790,10 @@ const SystemWord = () => {
 
 			const key = (e.key || '').toLowerCase()
 			const code = e.code || ''
-			const isShortcut = (letter, keyCode) =>
-				key === letter || code === keyCode
+			const isShortcut = (letter, keyCode) => key === letter || code === keyCode
 
 			if (isShortcut('p', 'KeyP')) {
+				if (editingRef.current) return
 				e.preventDefault()
 				shortcutActionsRef.current.print?.()
 				return
@@ -4298,6 +5818,12 @@ const SystemWord = () => {
 			if (isShortcut('s', 'KeyS')) {
 				e.preventDefault()
 				shortcutActionsRef.current.save?.()
+				return
+			}
+
+			if (isShortcut('n', 'KeyN')) {
+				e.preventDefault()
+				shortcutActionsRef.current.insertPage?.()
 			}
 		}
 
@@ -4307,7 +5833,7 @@ const SystemWord = () => {
 		}
 	}, [])
 
-	const currentPages = pages3
+	const currentPages = detailPages
 	let renderedPageNumber = pageNumberPlan.section1Page
 	const renderPageNumberLabel = () => {
 		const pageNumber = renderedPageNumber
@@ -4338,13 +5864,15 @@ const SystemWord = () => {
 				>
 					<div className='flex justify-end w-full'>
 						<div
-							className={`flex w-auto flex-wrap items-center gap-2 rounded-2xl border border-slate-300 p-2 shadow-sm backdrop-blur ${!editing && 'w-fit justify-center'}`}
+							className={`flex ${!editing ? 'w-auto' : 'w-full'} flex-wrap items-center gap-2 rounded-2xl border border-slate-300 p-2 shadow-sm backdrop-blur ${!editing && 'w-fit justify-center'}`}
 						>
 							<EditorToolbar
 								editing={editing}
 								onBack={() => window.history.back()}
 								onCommand={runEditorCommand}
 								onInsertLink={handleInsertLink}
+								onInsertPage={handleInsertPageAfterCursor}
+								onDeletePage={handleDeleteInsertedPage}
 								zoom={zoom}
 								onZoomChange={handleZoomChange}
 								zoomOptions={TOOLBAR_ZOOM_OPTIONS}
@@ -4371,18 +5899,20 @@ const SystemWord = () => {
 										{renderShortcutBadge('B')}
 									</button>
 								)}
-								<button
-									onClick={handlePrint}
-									className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-white ${loading ? 'bg-slate-400' : 'bg-[#bb9769] hover:bg-[#a07f5a]'}`}
-								>
-									<iconify-icon
-										icon='pepicons-print:printer'
-										width='1.1em'
-										height='1.1em'
-									></iconify-icon>
-									Chop etish
-									{renderShortcutBadge('P')}
-								</button>
+								{!editing && (
+									<button
+										onClick={handlePrint}
+										className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-white ${loading ? 'bg-slate-400' : 'bg-[#bb9769] hover:bg-[#a07f5a]'}`}
+									>
+										<iconify-icon
+											icon='pepicons-print:printer'
+											width='1.1em'
+											height='1.1em'
+										></iconify-icon>
+										Chop etish
+										{renderShortcutBadge('P')}
+									</button>
+								)}
 								<div
 									className='edit-btn-global'
 									onClick={() => {
@@ -4414,7 +5944,11 @@ const SystemWord = () => {
 						</div>
 					</div>
 				</div>
-				<div className='word-pages' style={{ zoom: `${zoom}%` }}>
+				<div
+					key={`word-pages-${editing ? 'edit' : 'view'}-${domRenderRevision}`}
+					className='word-pages'
+					style={{ zoom: `${zoom}%` }}
+				>
 					<div className='a4 first-a4 system system-first'>
 						<div className='page-content'>
 							<h2
@@ -4476,23 +6010,25 @@ const SystemWord = () => {
 						)}
 						<div className='page-content editable'>
 							<div className='system-section-header'>
-								<div className='system-section-title'>BIRINCHI BO‘LIM.</div>
+								<div className='system-section-title'>
+									{systemSectionsJson.section1.title}
+								</div>
 								<div className='system-section-subtitle'>
-									UMUMIY MA’LUMOTLAR
+									{systemSectionsJson.section1.subtitle}
 								</div>
 							</div>
 							<div className='system-bar-title'>1.1. Atamalar va ta’riflar</div>
 							<div>
 								<div className='system-col'>
-									{section1LeftItems.map(item => (
+									{systemSectionsJson.section1.leftItems.map(item => (
 										<p className='system-paragraph' key={item.term}>
-											<span className='system-term'>{item.term}</span> —{' '}
+											<sepan className='system-term'>{item.term}</sepan> —{' '}
 											{item.text}
 										</p>
 									))}
 								</div>
 								<div className='system-col'>
-									{section1RightItems.map(item => (
+									{systemSectionsJson.section1.rightItems.map(item => (
 										<p className='system-paragraph' key={item.term}>
 											<span className='system-term'>{item.term}</span> —{' '}
 											{item.text}
@@ -4542,7 +6078,7 @@ const SystemWord = () => {
 									<p className='system-paragraph'>
 										{htmlInjectionContinuation}
 									</p>
-									{section2LeftItems.map(item => (
+									{systemSectionsJson.section2.leftItems.map(item => (
 										<p className='system-paragraph' key={item.term}>
 											<span className='system-term'>{item.term}</span> —{' '}
 											{item.text}
@@ -4595,8 +6131,10 @@ const SystemWord = () => {
 									<div className='system-bar-title'>
 										1.4. Ekspertiza o‘tkazish tartibi
 									</div>
-									<p className='system-paragraph'>{section2ProcessIntro}</p>
-									{section2ProcessEntries.map(item => (
+									<p className='system-paragraph'>
+										{systemSectionsJson.section2.processIntro}
+									</p>
+									{systemSectionsJson.section2.processItems.map(item => (
 										<p className='system-paragraph' key={item.term}>
 											<span className='system-term'>{item.term}</span> –{' '}
 											{item.text}
@@ -4644,22 +6182,26 @@ const SystemWord = () => {
 							<div>
 								<div className='system-col'>
 									<p className='system-paragraph'>{whiteBoxContinuation}</p>
-									<p className='system-paragraph'>{section3Intro}</p>
+									<p className='system-paragraph'>
+										{systemSectionsJson.section3.intro}
+									</p>
 									<ul className='system-list'>
-										{section3BulletsLeft.map(item => (
+										{systemSectionsJson.section3.bulletsLeft.map(item => (
 											<li key={item}>{item}</li>
 										))}
 									</ul>
 								</div>
 								<div className='system-col'>
 									<ul className='system-list'>
-										{section3BulletsRight.map(item => (
+										{systemSectionsJson.section3.bulletsRight.map(item => (
 											<li key={item}>{item}</li>
 										))}
 									</ul>
 								</div>
 							</div>
-							<p className='system-paragraph'>{section3TableIntro}</p>
+							<p className='system-paragraph'>
+								{systemSectionsJson.section3.tableIntro}
+							</p>
 							<div className='system-table-label'>1-jadval</div>
 							<table className='system-table'>
 								<thead>
@@ -4899,9 +6441,11 @@ const SystemWord = () => {
 
 						<div className='page-content editable'>
 							<div className='system-section-header'>
-								<div className='system-section-title'>IKKINCHI BO‘LIM.</div>
+								<div className='system-section-title'>
+									{systemSectionsJson.section2.title}
+								</div>
 								<div className='system-section-subtitle'>
-									EKSPERTIZA NATIJALARI
+									{systemSectionsJson.section2.subtitle}
 								</div>
 							</div>
 							<div className='system-bar-title'>
@@ -5148,8 +6692,12 @@ const SystemWord = () => {
 
 						<div className='page-content editable'>
 							<div className='system-section-header'>
-								<div className='system-section-title'>UCHINCHI BO‘LIM.</div>
-								<div className='system-section-subtitle'>UMUMIY XULOSA</div>
+								<div className='system-section-title'>
+									{systemSectionsJson.section3.title}
+								</div>
+								<div className='system-section-subtitle'>
+									{systemSectionsJson.section3.subtitle}
+								</div>
 							</div>
 							<div>
 								<div className='system-col'>
@@ -5205,7 +6753,7 @@ const SystemWord = () => {
 									</ul>
 									<div className='system-note-title'>Ma’lumot o‘rnida:</div>
 									<p className='system-note'>
-										Ekspertiza hisobotі 2025-yil 18-dekabr kunida olingan
+										Ekspertiza hisoboti 2025-yil 18-dekabr kunida olingan
 										yakuniy tahliliy natijalar asosida shakllantirilgan. Shu
 										munosabat bilan, “Kiberxavfsizlik markazi” DUK mazkur
 										muddatdan tashqari vaqtlarda aniqlangan kiberxavfsizlik
@@ -5220,7 +6768,7 @@ const SystemWord = () => {
 						>
 							{renderPageNumberLabel()}
 						</div>
-					</div>
+						</div>
 					<div className='a4 system-c'>
 						{10 % 2 === 0 ? (
 							<>
@@ -5314,7 +6862,8 @@ const SystemWord = () => {
 							{renderPageNumberLabel()}
 						</div>
 					</div>
-					<div className='a4 system-c'>
+					{!removedStaticPageIds.tailEmpty1 && (
+						<div className='a4 system-c' data-static-page-id='tailEmpty1'>
 						{10 % 2 === 0 ? (
 							<>
 								<img
@@ -5349,8 +6898,10 @@ const SystemWord = () => {
 						>
 							{renderPageNumberLabel()}
 						</div>
-					</div>
-					<div className='a4 system-c'>
+						</div>
+					)}
+					{!removedStaticPageIds.tailEmpty2 && (
+						<div className='a4 system-c' data-static-page-id='tailEmpty2'>
 						{10 % 2 === 0 ? (
 							<>
 								<img
@@ -5385,9 +6936,15 @@ const SystemWord = () => {
 						>
 							{renderPageNumberLabel()}
 						</div>
-					</div>
+						</div>
+					)}
 
-					<div className='a4 system-b'></div>
+					{!removedStaticPageIds.systemBackCover && (
+						<div
+							className='a4 system-b'
+							data-static-page-id='systemBackCover'
+						></div>
+					)}
 				</div>
 			</div>
 		</>
