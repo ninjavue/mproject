@@ -21,11 +21,11 @@ const ExpertizeModal = ({
   onSaveDoc,
   resourceOptions = [],
 }) => {
-  const [selectedVuln, setSelectedVuln] = useState("");
+  const [selectedVuln, setSelectedVuln] = useState(null);
   const [zaiflikText, setZaiflikText] = useState("");
   const [oqibatlarText, setOqibatlarText] = useState("");
   const [tavsiyaText, setTavsiyaText] = useState("");
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ count: 1 });
   const [uploadProgress, setUploadProgress] = React.useState(0);
   const [isUploading, setIsUploading] = React.useState(false);
   const { stRef } = useZirhStref();
@@ -37,10 +37,18 @@ const ExpertizeModal = ({
   const [platform, setPlatform] = useState("");
   const [resource, setResource] = useState("");
   const [filteredVuln, setFilteredVuln] = useState([]);
-  const [newDocVuln, setNewDocVuln] = useState({});
+  const [newDocVuln, setNewDocVuln] = useState(null);
 
   useEffect(() => {
     if (!open) return;
+    setSelectedVuln(null);
+    setZaiflikText("");
+    setOqibatlarText("");
+    setTavsiyaText("");
+    setVulnLevel("");
+    setFilteredVuln([]);
+    setNewDocVuln(null);
+    setFormData({ count: 1 });
     if (resource) return;
     if (Array.isArray(resourceOptions) && resourceOptions.length) {
       setResource(resourceOptions[0]);
@@ -50,6 +58,7 @@ const ExpertizeModal = ({
   const handleVulnChange = (selected) => {
     if (!selected) {
       setSelectedVuln(null);
+      setNewDocVuln(null);
       setZaiflikText("");
       setOqibatlarText("");
       setTavsiyaText("");
@@ -59,7 +68,6 @@ const ExpertizeModal = ({
     const selectedId = selected.value;
     setSelectedVuln(selectedId);
 
-    console.log("test uchun")
     const found = filteredVuln.find((v) => v._id === selected.value);
     setNewDocVuln(found);
     // console.log(found);
@@ -132,6 +140,12 @@ const ExpertizeModal = ({
   }, []);
 
   const handleSelectVuln = (selected) => {
+    setSelectedVuln(null);
+    setNewDocVuln(null);
+    setZaiflikText("");
+    setOqibatlarText("");
+    setTavsiyaText("");
+
     if (!selected) {
       setVulnLevel("");
       setFilteredVuln([]);
@@ -143,17 +157,30 @@ const ExpertizeModal = ({
     if (selected.value === "1") setFilteredVuln(highVuln);
     else if (selected.value === "2") setFilteredVuln(middleVuln);
     else if (selected.value === "3") setFilteredVuln(lowVuln);
+    else setFilteredVuln([]);
   };
 
   const handleSaveDoc = () => {
-    if (!newDocVuln) return;
+    if (!newDocVuln || !Array.isArray(newDocVuln[1])) return;
+    const numericCount = Number(formData?.count);
+    const safeCount =
+      Number.isFinite(numericCount) && numericCount > 0
+        ? Math.floor(numericCount)
+        : 1;
+
     onSaveDoc({
       vuln: newDocVuln,
       resource,
       platform: platform,
       vulnLevel: vulnLevel,
-      vulnCount: formData.count || 1,
+      vulnCount: safeCount,
     });
+    setSelectedVuln(null);
+    setNewDocVuln(null);
+    setZaiflikText("");
+    setOqibatlarText("");
+    setTavsiyaText("");
+    setFormData((prev) => ({ ...prev, count: 1 }));
   };
 
   const vulnOptions = filteredVuln.map((v) => ({
@@ -283,11 +310,11 @@ const ExpertizeModal = ({
                 <input
                   type="number"
                   name="count"
-                  value={formData.count}
+                  value={formData.count ?? 1}
                   onChange={handleChange}
                   className="w-full mt-1 px-4 py-2 border rounded-md bg-transparent"
                   placeholder="Soni"
-                  defaultValue="1"
+                  min={1}
                 />
               </div>
             </div>

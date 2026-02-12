@@ -29,6 +29,9 @@ const TOOLBAR_BLOCK_OPTIONS = [
 	{ label: 'Sarlavha 1', value: 'h1' },
 	{ label: 'Sarlavha 2', value: 'h2' },
 	{ label: 'Sarlavha 3', value: 'h3' },
+	{ label: 'Sarlavha 4', value: 'h4' },
+	{ label: 'Sarlavha 5', value: 'h5' },
+	{ label: 'Sarlavha 6', value: 'h6' },
 	{ label: 'Iqtibos', value: 'blockquote' },
 ]
 const TOOLBAR_ZOOM_OPTIONS = [75, 90, 100, 110, 125, 150]
@@ -44,6 +47,11 @@ const TOOLBAR_FONT_SIZE_TO_EXEC = {
 	30: '9',
 	36: '10',
 }
+const IMAGE_UPLOAD_LOG_TAG = '[word-system:image]'
+const imageLog = (...args) => console.log(IMAGE_UPLOAD_LOG_TAG, ...args)
+const imageLogError = (...args) => console.error(IMAGE_UPLOAD_LOG_TAG, ...args)
+const IMAGE_PLACEHOLDER_SRC =
+	'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 
 const section1Left = [
 	{
@@ -228,12 +236,28 @@ const parseVulnByLevel = payloads => {
 		medium = [],
 		low = []
 	;(payloads || []).forEach(p => {
-		const arr = p[13] || p[12] || p[11]
-		const list = Array.isArray(arr) ? arr : arr ? [arr] : []
+		const candidate =
+			p?.[13] ?? p?.[12] ?? p?.[11] ?? (p?.a1 != null ? [p] : [])
+		const list = Array.isArray(candidate)
+			? candidate.flat().filter(Boolean)
+			: candidate
+				? [candidate]
+				: []
 		list.forEach(v => {
-			if (!v || v.a1 == null) return
-			const item = { a1: v.a1, a2: v.a2, a3: v.a3 }
-			const lev = Number(v.a1) || v.a1
+			if (!v) return
+			const lev = Number(v?.a1 ?? v?.level)
+			if (![1, 2, 3].includes(lev)) return
+			const countValue = Number(v?.a2 ?? v?.count)
+			const item = {
+				a1: lev,
+				a2:
+					Number.isFinite(countValue) && countValue > 0
+						? Math.floor(countValue)
+						: 1,
+				a3: v?.a3 ?? v?.name,
+				a4: v?.a4,
+			}
+			if (!item.a3) return
 			if (lev === 1) high.push(item)
 			else if (lev === 2) medium.push(item)
 			else if (lev === 3) low.push(item)
@@ -371,19 +395,31 @@ const chunkSystemAccountsRows = (
 
 const extractResourceHost = (value = '') => {
 	const raw = (value ?? '').toString().trim()
+	const cleaned = raw
+		.replace(/^[\s"]+/g, '')
+		.replace(/[\s"]+$/g, '')
+		.trim()
+	if (!cleaned) return ''
 	if (!raw) return ''
 	try {
 		const url =
-			raw.startsWith('http://') || raw.startsWith('https://')
-				? new URL(raw)
-				: new URL(`https://${raw}`)
-		return (url.hostname || raw).replace(/^www\./i, '')
+			cleaned.startsWith('http://') || cleaned.startsWith('https://')
+				? new URL(cleaned)
+				: new URL(`https://${cleaned}`)
+		return (url.hostname || cleaned).replace(/^www\./i, '').toLowerCase()
 	} catch {
-		return raw
+		return cleaned
 			.replace(/^https?:\/\//i, '')
 			.replace(/^www\./i, '')
 			.replace(/\/+$/, '')
+			.toLowerCase()
 	}
+}
+
+const normalizeResourceLabel = value => {
+	const host = extractResourceHost(value || '')
+	if (!host || host === 'umumiy') return 'Umumiy'
+	return host
 }
 
 const riskLevelText = level =>
@@ -463,22 +499,34 @@ const takeRiskRows = (rows, startIndex, cap) => {
 	return { page, nextIndex: i }
 }
 
-const RISK_COL_WIDTH_PX = 315
-const RISK_COL_MAX_HEIGHT_PX = 560
+const RISK_TABLE_MIN_WIDTH_PX = 480
+const RISK_TABLE_DEFAULT_WIDTH_PX = 620
+const RISK_FIRST_PAGE_BASE_MAX_HEIGHT_PX = 430
+const RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX = 560
+const RISK_TABLE_BOTTOM_SAFE_GAP_PX = 8
+const RISK_TABLE_BOTTOM_SAFE_GAP_EDITING_PX = 14
+const RISK_MEASURE_TABLE_FONT_SIZE_PX = 17
+const RISK_MEASURE_DELETE_BUTTON_SIZE_PX = 32
 
-const buildRiskMeasureRow = row => {
+const buildRiskMeasureRow = (row, withDeleteColumn = false) => {
 	const tr = document.createElement('tr')
+	const colSpan = withDeleteColumn ? 4 : 3
 	if (row?.type === 'resource') {
 		tr.className = 'risk-resource'
-		tr.innerHTML = `<td colSpan="3">“${row.label}” resursi</td>`
+		tr.innerHTML = `<td colSpan="${colSpan}">"${row.label}" resursi</td>`
 		return tr
 	}
+
+	const deleteCell = withDeleteColumn
+		? `<td class="risk-delete"><span style="display:inline-flex;width:${RISK_MEASURE_DELETE_BUTTON_SIZE_PX}px;height:${RISK_MEASURE_DELETE_BUTTON_SIZE_PX}px;border-radius:9999px;"></span></td>`
+		: ''
 
 	tr.className = riskRowClass(row?.level)
 	tr.innerHTML = `
     <td class="risk-level">${riskLevelText(row?.level)}</td>
     <td class="risk-name">${row?.name ?? ''}</td>
     <td class="risk-count">${row?.count ?? ''}</td>
+    ${deleteCell}
   `
 	return tr
 }
@@ -486,15 +534,20 @@ const buildRiskMeasureRow = row => {
 const takeRiskRowsByHeight = (
 	rows,
 	startIndex,
-	maxHeightPx = RISK_COL_MAX_HEIGHT_PX,
+	maxHeightPx = RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX,
+	tableWidthPx = RISK_TABLE_DEFAULT_WIDTH_PX,
+	withDeleteColumn = false,
 ) => {
 	const safeRows = Array.isArray(rows) ? rows : []
 	let i = Math.max(0, startIndex || 0)
 	const out = []
+	const safeTableWidth = Number.isFinite(tableWidthPx)
+		? tableWidthPx
+		: RISK_TABLE_DEFAULT_WIDTH_PX
 
 	// hidden measure container
 	const measure = document.createElement('div')
-	measure.style.width = `${RISK_COL_WIDTH_PX}px`
+	measure.style.width = `${Math.max(RISK_TABLE_MIN_WIDTH_PX, Math.floor(safeTableWidth))}px`
 	measure.style.position = 'absolute'
 	measure.style.visibility = 'hidden'
 	measure.style.top = '-9999px'
@@ -503,12 +556,14 @@ const takeRiskRowsByHeight = (
 
 	const table = document.createElement('table')
 	table.className = 'system-risk-table'
+	table.style.fontSize = `${RISK_MEASURE_TABLE_FONT_SIZE_PX}px`
 	table.innerHTML = `
     <thead>
       <tr>
         <th>Xavflilik darajasi</th>
         <th>Aniqlangan zaiflik</th>
         <th>Soni</th>
+        ${withDeleteColumn ? '<th class="risk-delete-head"></th>' : ''}
       </tr>
     </thead>
     <tbody></tbody>
@@ -519,7 +574,7 @@ const takeRiskRowsByHeight = (
 
 	const tbody = table.querySelector('tbody')
 	const tryAppend = row => {
-		const tr = buildRiskMeasureRow(row)
+		const tr = buildRiskMeasureRow(row, withDeleteColumn)
 		tbody.appendChild(tr)
 		const ok = table.scrollHeight <= maxHeightPx
 		if (!ok) tbody.removeChild(tr)
@@ -551,7 +606,7 @@ const takeRiskRowsByHeight = (
 			// hech bo'lmasa bitta row o'tishi kerak (aks holda infinite loop bo'lishi mumkin)
 			if (out.length === 0) {
 				// majburan qo'shamiz
-				const tr = buildRiskMeasureRow(row)
+				const tr = buildRiskMeasureRow(row, withDeleteColumn)
 				tbody.appendChild(tr)
 				out.push(row)
 				i += 1
@@ -574,25 +629,35 @@ const takeRiskRowsByHeight = (
 	return { page: out, nextIndex: i }
 }
 
-const chunkRiskColumnPages = (
+const chunkRiskPagesByHeight = (
 	rows,
 	startIndex,
-	leftCap = 14,
-	rightCap = 14,
+	maxHeightPx = RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX,
+	tableWidthPx = RISK_TABLE_DEFAULT_WIDTH_PX,
+	withDeleteColumn = false,
 ) => {
 	const safeRows = Array.isArray(rows) ? rows : []
 	let i = Math.max(0, startIndex || 0)
 	const pages = []
+	let guard = 0
 
 	while (i < safeRows.length) {
-		const left = takeRiskRowsByHeight(safeRows, i, RISK_COL_MAX_HEIGHT_PX)
-		i = left.nextIndex
-
-		const right = takeRiskRowsByHeight(safeRows, i, RISK_COL_MAX_HEIGHT_PX)
-		i = right.nextIndex
-
-		if (!left.page.length && !right.page.length) break
-		pages.push({ left: left.page, right: right.page })
+		const page = takeRiskRowsByHeight(
+			safeRows,
+			i,
+			maxHeightPx,
+			tableWidthPx,
+			withDeleteColumn,
+		)
+		if (!page.page.length) break
+		pages.push(page.page)
+		if (page.nextIndex <= i) {
+			i += 1
+		} else {
+			i = page.nextIndex
+		}
+		guard += 1
+		if (guard > 1000) break
 	}
 
 	return pages
@@ -651,6 +716,7 @@ const SystemWord = () => {
 	const pageRefs = useRef([])
 	const editingRef = useRef(false)
 	const savedSelectionRef = useRef(null)
+	const activeEditableRef = useRef(null)
 	// const [isModalOpen, setIsModalOpen] = useState(false);
 	const [expertize, setExpertize] = useState([])
 	const [appName, setAppName] = useState('')
@@ -687,6 +753,8 @@ const SystemWord = () => {
 	)
 	const [systemAccountsRows, setSystemAccountsRows] = useState([])
 	const [uploadedFilesMeta, setUploadedFilesMeta] = useState({})
+	const fileUrlCacheRef = useRef(new Map())
+	const fileDownloadInflightRef = useRef(new Map())
 	const [zoom, setZoom] = useState(100)
 	const [toolbarBlock, setToolbarBlock] = useState('p')
 	const [toolbarFontName, setToolbarFontName] = useState('Arial')
@@ -706,24 +774,46 @@ const SystemWord = () => {
 	const [editorStats, setEditorStats] = useState({ words: 0, characters: 0 })
 	const [lastSavedAt, setLastSavedAt] = useState(null)
 	const [workers, setWorkers] = useState()
+	const [riskMeasureConfig, setRiskMeasureConfig] = useState({
+		tableWidthPx: RISK_TABLE_DEFAULT_WIDTH_PX,
+		firstPageMaxHeightPx: RISK_FIRST_PAGE_BASE_MAX_HEIGHT_PX,
+		contPageMaxHeightPx: RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX,
+	})
+	const NO_RESOURCE_KEY = '__no_resource__'
+	const shortcutActionsRef = useRef({
+		print: null,
+		save: null,
+		openModal: null,
+	})
 
 	const normalizeCellValue = v => (v ?? '').toString().trim()
 
-	const isRangeInEditableArea = useCallback(range => {
-		if (!range) return false
-		const container =
-			range.commonAncestorContainer?.nodeType === Node.TEXT_NODE
-				? range.commonAncestorContainer.parentElement
-				: range.commonAncestorContainer
-		if (!container || typeof container.closest !== 'function') return false
-
-		const editableRoot = container.closest(
-			'.page-content.editable, .editable-table td',
-		)
-		if (!editableRoot) return false
-		if (editableRoot.getAttribute('contenteditable') === 'false') return false
-		return true
+	const getEditableRootFromNode = useCallback(node => {
+		if (!node) return null
+		const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node
+		if (!element || typeof element.closest !== 'function') return null
+		const editableRoot = element.closest('.editable, .editable-table td')
+		if (!editableRoot) return null
+		if (editableRoot.getAttribute('contenteditable') === 'false') return null
+		return editableRoot
 	}, [])
+
+	const getEditableRootFromRange = useCallback(
+		range => {
+			if (!range) return null
+			return (
+				getEditableRootFromNode(range.startContainer) ||
+				getEditableRootFromNode(range.commonAncestorContainer)
+			)
+		},
+		[getEditableRootFromNode],
+	)
+
+	const isRangeInEditableArea = useCallback(range => {
+		const editableRoot = getEditableRootFromRange(range)
+		if (!editableRoot) return false
+		return editableRoot.getAttribute('contenteditable') !== 'false'
+	}, [getEditableRootFromRange])
 
 	const captureSelectionRange = useCallback(() => {
 		if (!editingRef.current) return
@@ -735,38 +825,101 @@ const SystemWord = () => {
 		} catch {
 			return
 		}
+		const editableRoot = getEditableRootFromRange(range)
+		if (!editableRoot) return
+		activeEditableRef.current = editableRoot
 		if (!isRangeInEditableArea(range)) return
 		savedSelectionRef.current = range.cloneRange()
-	}, [isRangeInEditableArea])
+	}, [getEditableRootFromRange, isRangeInEditableArea])
 
 	const restoreSelectionRange = useCallback(() => {
 		if (!editingRef.current) return false
-		const savedRange = savedSelectionRef.current
-		if (!savedRange || !isRangeInEditableArea(savedRange)) return false
-
 		const selection = window.getSelection()
 		if (!selection) return false
 
-		const focusNode =
-			savedRange.startContainer?.nodeType === Node.TEXT_NODE
-				? savedRange.startContainer.parentElement
-				: savedRange.startContainer
-		const editableRoot =
-			focusNode && typeof focusNode.closest === 'function'
-				? focusNode.closest('.page-content.editable, .editable-table td')
-				: null
-		if (editableRoot && typeof editableRoot.focus === 'function') {
-			editableRoot.focus({ preventScroll: true })
+		const savedRange = savedSelectionRef.current
+		if (savedRange && isRangeInEditableArea(savedRange)) {
+			const editableRoot = getEditableRootFromRange(savedRange)
+			if (editableRoot && typeof editableRoot.focus === 'function') {
+				editableRoot.focus({ preventScroll: true })
+				activeEditableRef.current = editableRoot
+			}
+
+			selection.removeAllRanges()
+			try {
+				selection.addRange(savedRange)
+				return true
+			} catch {
+				// fallback below
+			}
 		}
 
-		selection.removeAllRanges()
+		const fallbackEditable = activeEditableRef.current
+		if (
+			!fallbackEditable ||
+			!fallbackEditable.isConnected ||
+			fallbackEditable.getAttribute('contenteditable') === 'false'
+		) {
+			return false
+		}
+
+		if (typeof fallbackEditable.focus === 'function') {
+			fallbackEditable.focus({ preventScroll: true })
+		}
+
 		try {
-			selection.addRange(savedRange)
+			const fallbackRange = document.createRange()
+			fallbackRange.selectNodeContents(fallbackEditable)
+			fallbackRange.collapse(false)
+			selection.removeAllRanges()
+			selection.addRange(fallbackRange)
+			savedSelectionRef.current = fallbackRange.cloneRange()
 			return true
 		} catch {
 			return false
 		}
-	}, [isRangeInEditableArea])
+	}, [getEditableRootFromRange, isRangeInEditableArea])
+
+	const findEditableFallback = useCallback(() => {
+		const active = activeEditableRef.current
+		if (
+			active &&
+			active.isConnected &&
+			active.getAttribute('contenteditable') !== 'false'
+		) {
+			return active
+		}
+		const firstEditable = document.querySelector(
+			'.editable-table td[contenteditable="true"], .page-content.editable[contenteditable="true"], .editable[contenteditable="true"]',
+		)
+		return firstEditable || null
+	}, [])
+
+	const ensureEditorSelection = useCallback(() => {
+		if (!editingRef.current) return false
+		if (restoreSelectionRange()) return true
+
+		const editableRoot = findEditableFallback()
+		if (!editableRoot) return false
+		if (typeof editableRoot.focus === 'function') {
+			editableRoot.focus({ preventScroll: true })
+		}
+
+		const selection = window.getSelection()
+		if (!selection) return false
+		try {
+			const range = document.createRange()
+			range.selectNodeContents(editableRoot)
+			range.collapse(false)
+			selection.removeAllRanges()
+			selection.addRange(range)
+			savedSelectionRef.current = range.cloneRange()
+			activeEditableRef.current = editableRoot
+			return true
+		} catch {
+			return false
+		}
+	}, [findEditableFallback, restoreSelectionRange])
 
 	const updateEditorStats = useCallback(() => {
 		const allPageContents = Array.from(
@@ -824,7 +977,8 @@ const SystemWord = () => {
 		(command, value = null) => {
 			if (!editingRef.current) return false
 
-			restoreSelectionRange()
+			const hasSelection = ensureEditorSelection()
+			if (!hasSelection) return false
 			try {
 				document.execCommand('styleWithCSS', false, true)
 			} catch {
@@ -853,7 +1007,7 @@ const SystemWord = () => {
 		},
 		[
 			captureSelectionRange,
-			restoreSelectionRange,
+			ensureEditorSelection,
 			syncToolbarState,
 			updateEditorStats,
 		],
@@ -864,7 +1018,7 @@ const SystemWord = () => {
 
 	const handleInsertLink = () => {
 		if (!editingRef.current) return
-		restoreSelectionRange()
+		ensureEditorSelection()
 		const linkValue = window.prompt('Havolani kiriting (https://...)')
 		if (!linkValue) return
 		runEditorCommand('createLink', linkValue.trim())
@@ -872,7 +1026,10 @@ const SystemWord = () => {
 
 	useEffect(() => {
 		editingRef.current = editing
-		if (!editing) savedSelectionRef.current = null
+		if (!editing) {
+			savedSelectionRef.current = null
+			activeEditableRef.current = null
+		}
 	}, [editing])
 
 	useEffect(() => {
@@ -885,27 +1042,59 @@ const SystemWord = () => {
 	useEffect(() => {
 		if (!editing) return
 
+		const syncActiveEditable = () => {
+			const selection = window.getSelection()
+			if (!selection || selection.rangeCount === 0) return
+			let range = null
+			try {
+				range = selection.getRangeAt(0)
+			} catch {
+				return
+			}
+			const editableRoot = getEditableRootFromRange(range)
+			if (editableRoot) {
+				activeEditableRef.current = editableRoot
+			}
+		}
+
 		const onSelectionChange = () => {
 			captureSelectionRange()
+			syncActiveEditable()
 		}
 		const onMouseUp = () => {
 			captureSelectionRange()
+			syncActiveEditable()
 			syncToolbarState()
 		}
 		const onKeyUp = () => {
 			captureSelectionRange()
+			syncActiveEditable()
 			syncToolbarState()
+		}
+		const onFocusIn = event => {
+			const editableRoot = getEditableRootFromNode(event.target)
+			if (editableRoot) {
+				activeEditableRef.current = editableRoot
+			}
 		}
 
 		document.addEventListener('selectionchange', onSelectionChange)
 		document.addEventListener('mouseup', onMouseUp)
 		document.addEventListener('keyup', onKeyUp)
+		document.addEventListener('focusin', onFocusIn)
 		return () => {
 			document.removeEventListener('selectionchange', onSelectionChange)
 			document.removeEventListener('mouseup', onMouseUp)
 			document.removeEventListener('keyup', onKeyUp)
+			document.removeEventListener('focusin', onFocusIn)
 		}
-	}, [captureSelectionRange, editing, syncToolbarState])
+	}, [
+		captureSelectionRange,
+		editing,
+		getEditableRootFromNode,
+		getEditableRootFromRange,
+		syncToolbarState,
+	])
 
 	const computeRowSpanMeta = (rows, key) => {
 		const meta = rows.map((_, idx) => ({
@@ -1207,110 +1396,259 @@ const SystemWord = () => {
 		[],
 	)
 
+	const parsePx = value => {
+		const parsed = Number.parseFloat(value)
+		return Number.isFinite(parsed) ? parsed : 0
+	}
+
+	const resolveSystemPageMetrics = useCallback(pageEl => {
+		if (!pageEl) return null
+		const pageContent = pageEl.querySelector('.page-content')
+		if (!pageContent) return null
+
+		const pageStyle = window.getComputedStyle(pageEl)
+		const pageHeight = pageEl.clientHeight
+		const paddingTop = parsePx(pageStyle.paddingTop)
+		const paddingBottom = parsePx(pageStyle.paddingBottom)
+		const topImg = pageEl.querySelector('.system-top-img')
+		const bottomImg = pageEl.querySelector('.system-bottom-img')
+		const pageNumber = pageEl.querySelector('.page-number')
+
+		let topBoundary = paddingTop
+		if (topImg) {
+			const topImageBottom = topImg.offsetTop + topImg.offsetHeight + 10
+			if (topImageBottom > topBoundary) topBoundary = topImageBottom
+		}
+
+		let bottomBoundary = pageHeight - paddingBottom
+		if (bottomImg) {
+			const bottomImageTop = bottomImg.offsetTop - 10
+			if (bottomImageTop < bottomBoundary) bottomBoundary = bottomImageTop
+		}
+		if (pageNumber) {
+			const pageNumberTop = pageNumber.offsetTop - 8
+			if (pageNumberTop < bottomBoundary) bottomBoundary = pageNumberTop
+		}
+
+		const maxHeight = Math.max(180, Math.floor(bottomBoundary - topBoundary))
+		const marginTop = Math.max(0, Math.floor(topBoundary - paddingTop))
+
+		return { maxHeight, marginTop }
+	}, [])
+
+	const applySystemPageContentMetrics = useCallback(() => {
+		const pages = Array.from(document.querySelectorAll('.a4.system-c'))
+		pages.forEach(pageEl => {
+			const pageContent = pageEl.querySelector('.page-content')
+			if (!pageContent) return
+			const metrics = resolveSystemPageMetrics(pageEl)
+			if (!metrics) return
+			pageEl.style.setProperty(
+				'--system-page-content-height',
+				`${metrics.maxHeight}px`,
+			)
+			pageEl.style.setProperty(
+				'--system-page-content-offset-top',
+				`${metrics.marginTop}px`,
+			)
+			pageContent.dataset.pageMaxHeight = String(metrics.maxHeight)
+			pageContent.style.overflow = 'hidden'
+		})
+	}, [resolveSystemPageMetrics])
+
+	const refreshRiskMeasureConfig = useCallback(() => {
+		const tables = Array.from(document.querySelectorAll('.system-risk-table'))
+		if (!tables.length) return
+		const safeBottomGap = editing
+			? RISK_TABLE_BOTTOM_SAFE_GAP_EDITING_PX
+			: RISK_TABLE_BOTTOM_SAFE_GAP_PX
+
+		const pickByLabel = marker =>
+			tables.find(table => {
+				const labelEl = table
+					.closest('.page-content')
+					?.querySelector('.system-table-label')
+				const label = (labelEl?.textContent || '').toLowerCase()
+				return label.includes(marker)
+			})
+
+		const firstRiskTable = pickByLabel('3-jadval') || tables[0]
+		const contRiskTable = pickByLabel('davomi') || null
+
+		const resolveBlockHeight = (table, fallback) => {
+			if (!table) return fallback
+			const pageContent = table.closest('.page-content')
+			if (!pageContent) return fallback
+			const pageMaxHeight = Number(pageContent.dataset.pageMaxHeight || 0)
+			const contentHeight =
+				Number.isFinite(pageMaxHeight) && pageMaxHeight > 0
+					? pageMaxHeight
+					: pageContent.clientHeight
+			const available = contentHeight - table.offsetTop - safeBottomGap
+			return Math.max(220, Math.floor(available))
+		}
+
+		const tableWidthSource =
+			firstRiskTable?.clientWidth ||
+			firstRiskTable?.closest('.page-content')?.clientWidth ||
+			RISK_TABLE_DEFAULT_WIDTH_PX
+		const tableWidthPx = Math.max(
+			RISK_TABLE_MIN_WIDTH_PX,
+			Math.floor(tableWidthSource),
+		)
+
+		const firstPageMaxHeightPx = resolveBlockHeight(
+			firstRiskTable,
+			RISK_FIRST_PAGE_BASE_MAX_HEIGHT_PX,
+		)
+		const contPageMaxHeightPx = resolveBlockHeight(
+			contRiskTable,
+			RISK_CONT_PAGE_BASE_MAX_HEIGHT_PX,
+		)
+
+		setRiskMeasureConfig(prev => {
+			if (
+				prev.tableWidthPx === tableWidthPx &&
+				prev.firstPageMaxHeightPx === firstPageMaxHeightPx &&
+				prev.contPageMaxHeightPx === contPageMaxHeightPx
+			) {
+				return prev
+			}
+			return {
+				tableWidthPx,
+				firstPageMaxHeightPx,
+				contPageMaxHeightPx,
+			}
+		})
+	}, [editing])
+
+	const queueRiskLayoutRefresh = useCallback(() => {
+		window.requestAnimationFrame(() => {
+			applySystemPageContentMetrics()
+			refreshRiskMeasureConfig()
+			window.requestAnimationFrame(() => {
+				applySystemPageContentMetrics()
+				refreshRiskMeasureConfig()
+			})
+		})
+	}, [applySystemPageContentMetrics, refreshRiskMeasureConfig])
+
 	const createNewA4Page = () => {
-		// Get the container where pages are stored
-		const wordContainer = document.querySelector('.word-container')
+		const wordContainer =
+			document.querySelector('.word-pages') ||
+			document.querySelector('.word-container')
 		if (!wordContainer) return
 
-		// Get last page to copy styling
-		const lastPage = wordContainer.querySelector('.a4:last-child')
-		const pageNumber = wordContainer.querySelectorAll('.a4').length
+		const pageNumber = wordContainer.querySelectorAll('.a4').length + 1
 
-		// Create new A4 page
 		const newPage = document.createElement('div')
-		newPage.className = 'a4'
-		newPage.style.backgroundImage =
-			pageNumber % 2 === 0
-				? `url("/assets/word/2.png")`
-				: `url("/assets/word/3.png")`
+		newPage.className = 'a4 system-c'
+		const useEvenSkin = pageNumber % 2 === 0
+		const topSrc = useEvenSkin
+			? '/assets/system/ax-tops.png'
+			: '/assets/system/ax-top.png'
+		const bottomSrc = useEvenSkin
+			? '/assets/system/ax-bottoms.jpg'
+			: '/assets/system/ax-bottom.jpg'
 
-		// Add page title
-		const pageTitle = document.createElement('div')
-		pageTitle.className = 'page-title'
-		pageTitle.innerHTML = `<div>"${appName}"</div><div>mobil ilovasi</div>`
-		newPage.appendChild(pageTitle)
+		const topImage = document.createElement('img')
+		topImage.className = 'system-top-img w-full min-w-full'
+		topImage.src = topSrc
+		topImage.alt = ''
+		newPage.appendChild(topImage)
 
-		// Add page content
+		const bottomImage = document.createElement('img')
+		bottomImage.className = 'system-bottom-img w-full min-w-full'
+		bottomImage.src = bottomSrc
+		bottomImage.alt = ''
+		newPage.appendChild(bottomImage)
+
 		const pageContent = document.createElement('div')
 		pageContent.className = 'page-content editable'
 		newPage.appendChild(pageContent)
 
-		// Add page number
 		const pageNumber_div = document.createElement('div')
-		pageNumber_div.className = 'page-number flex justify-center mt-auto'
-		pageNumber_div.innerHTML = `<span>${pageNumber}</span>`
+		pageNumber_div.className =
+			'page-number flex justify-center mt-auto text-white items-center'
+		pageNumber_div.style.bottom = '40px'
+		pageNumber_div.innerHTML = `<span class="text-white max-w-[60%] mt-[20px]">${appName} | ${pageNumber}</span>`
 		newPage.appendChild(pageNumber_div)
 
-		// Add to container
 		wordContainer.appendChild(newPage)
+		applySystemPageContentMetrics()
 
-		// Re-attach event listeners to new page
 		const editables = document.querySelectorAll('.editable')
 		editables.forEach(el => {
 			el.contentEditable = editing
-			el.style.outline = editing ? '1px dashed #4f46e5' : 'none'
+			el.style.outline = 'none'
+			el.style.boxShadow = editing
+				? 'inset 0 0 0 1px rgba(79, 70, 229, 0.22)'
+				: 'none'
 		})
 
 		return newPage
 	}
 	const handlePageOverflow = () => {
+		applySystemPageContentMetrics()
 		let a4Pages = document.querySelectorAll('.a4')
-		const MAX_HEIGHT = 850
+		const readPageMaxHeight = pageContent => {
+			if (!pageContent) return 850
+			const dataHeight = Number(pageContent.dataset.pageMaxHeight || 0)
+			if (Number.isFinite(dataHeight) && dataHeight > 0) return dataHeight
+			const measured = pageContent.clientHeight
+			if (Number.isFinite(measured) && measured > 0) return measured
+			const fallback = Number.parseFloat(
+				window.getComputedStyle(pageContent).maxHeight,
+			)
+			return Number.isFinite(fallback) && fallback > 0 ? fallback : 850
+		}
 
-		// Multiple iterations to ensure all overflow is handled and empty spaces are filled
 		for (let iteration = 0; iteration < 10; iteration++) {
-			a4Pages = document.querySelectorAll('.a4') // Refresh pages list
+			a4Pages = document.querySelectorAll('.a4')
 			let hasChanges = false
 
-			// Step 1: Handle overflow - move content to next page if too much
 			for (let pageIndex = 0; pageIndex < a4Pages.length; pageIndex++) {
 				const pageEl = a4Pages[pageIndex]
 				const pageContent = pageEl.querySelector('.page-content')
-				if (!pageContent) continue
+				if (!pageContent || !pageContent.classList.contains('editable'))
+					continue
 
 				const actualHeight = pageContent.scrollHeight
+				const maxHeight = readPageMaxHeight(pageContent)
 
-				if (actualHeight > MAX_HEIGHT) {
+				if (actualHeight > maxHeight) {
 					const children = Array.from(pageContent.children)
 					let currentHeight = 0
 					let splitAtIndex = -1
 
-					// Smart height-based split with minimum content check
 					for (let i = 0; i < children.length; i++) {
 						const childHeight = children[i].offsetHeight || 0
-						if (currentHeight + childHeight > MAX_HEIGHT) {
+						if (currentHeight + childHeight > maxHeight) {
 							splitAtIndex = i
 							break
 						}
 						currentHeight += childHeight
 					}
 
-					// If we found a split point, move content
 					if (splitAtIndex > 0 && splitAtIndex < children.length) {
 						hasChanges = true
-						// Create a copy of elements to move (to avoid array mutation issues)
 						const toMove = Array.from(children).slice(splitAtIndex)
 
-						// Get or create next page
 						let nextPageEl = a4Pages[pageIndex + 1]
 						if (!nextPageEl) {
 							nextPageEl = createNewA4Page()
-							// Refresh pages list after creating new page
 							a4Pages = document.querySelectorAll('.a4')
 						}
 
 						const nextPageContent = nextPageEl.querySelector('.page-content')
 						if (nextPageContent) {
-							// Move elements to next page (in reverse order to avoid index issues)
 							for (let i = toMove.length - 1; i >= 0; i--) {
 								const el = toMove[i]
-								// Check if element is still in DOM before removing
 								if (el && el.parentNode === pageContent) {
 									nextPageContent.insertBefore(
 										el.cloneNode(true),
 										nextPageContent.firstChild,
 									)
-									// Remove from current page only if it's still a child
 									if (el.parentNode === pageContent) {
 										el.remove()
 									}
@@ -1325,15 +1663,24 @@ const SystemWord = () => {
 			for (let pageIndex = 0; pageIndex < a4Pages.length - 1; pageIndex++) {
 				const currentPageEl = a4Pages[pageIndex]
 				const currentPageContent = currentPageEl.querySelector('.page-content')
-				if (!currentPageContent) continue
+				if (
+					!currentPageContent ||
+					!currentPageContent.classList.contains('editable')
+				)
+					continue
 
 				const currentHeight = currentPageContent.scrollHeight
-				const availableSpace = MAX_HEIGHT - currentHeight
+				const currentMaxHeight = readPageMaxHeight(currentPageContent)
+				const availableSpace = currentMaxHeight - currentHeight
 
 				if (availableSpace > 20) {
 					const nextPageEl = a4Pages[pageIndex + 1]
 					const nextPageContent = nextPageEl.querySelector('.page-content')
-					if (!nextPageContent) continue
+					if (
+						!nextPageContent ||
+						!nextPageContent.classList.contains('editable')
+					)
+						continue
 
 					const nextPageChildren = Array.from(nextPageContent.children)
 					if (nextPageChildren.length === 0) continue
@@ -1382,7 +1729,45 @@ const SystemWord = () => {
 				break
 			}
 		}
+		applySystemPageContentMetrics()
 	}
+
+	useEffect(() => {
+		let raf = window.requestAnimationFrame(() => {
+			applySystemPageContentMetrics()
+			refreshRiskMeasureConfig()
+		})
+
+		const onResize = () => {
+			window.cancelAnimationFrame(raf)
+			raf = window.requestAnimationFrame(() => {
+				applySystemPageContentMetrics()
+				refreshRiskMeasureConfig()
+				if (editingRef.current) {
+					handlePageOverflow()
+				}
+			})
+		}
+
+		window.addEventListener('resize', onResize)
+		return () => {
+			window.cancelAnimationFrame(raf)
+			window.removeEventListener('resize', onResize)
+		}
+	}, [
+		applySystemPageContentMetrics,
+		refreshRiskMeasureConfig,
+		editing,
+		zoom,
+		pages1,
+		pages2,
+		pages3,
+		sectionTablePages,
+		systemAccountsRows,
+		highVuln,
+		mediumVuln,
+		lowVuln,
+	])
 
 	const handleImageResize = () => {
 		const images = document.querySelectorAll('.page-content img')
@@ -1400,6 +1785,8 @@ const SystemWord = () => {
 	}
 
 	useEffect(() => {
+		applySystemPageContentMetrics()
+		refreshRiskMeasureConfig()
 		const editables = document.querySelectorAll('.editable')
 
 		const attachImageResizeHandler = () => {
@@ -1467,247 +1854,323 @@ const SystemWord = () => {
 		if (editing) {
 			attachImageResizeHandler()
 		}
-		const handleInput = e => {
-			// Just handle images on input, don't trigger page overflow
-			handleImageResize()
-			attachImageResizeHandler()
-			updateEditorStats()
-
-			// Immediately check if content overflows and trim it
-			const editables = document.querySelectorAll('.page-content')
-			editables.forEach(pageContent => {
-				const MAX_HEIGHT = 900
-				if (pageContent.scrollHeight > MAX_HEIGHT) {
-					// Find and remove excess content
-					const children = Array.from(pageContent.children)
-					let currentHeight = 0
-
-					for (let i = 0; i < children.length; i++) {
-						const child = children[i]
-						currentHeight += child.offsetHeight
-
-						if (currentHeight > MAX_HEIGHT) {
-							// Remove this and all subsequent elements
-							for (let j = children.length - 1; j >= i; j--) {
-								children[j].remove()
-							}
-							break
-						}
-					}
-				}
+		let overflowFrame = null
+		const resolveEditableOverflowState = target => {
+			const pageContent =
+				target && typeof target.closest === 'function'
+					? target.closest('.page-content')
+					: null
+			if (!pageContent) {
+				return { isOverflowing: false, hasLargeFreeSpace: false }
+			}
+			const dataHeight = Number(pageContent.dataset.pageMaxHeight || 0)
+			const maxHeight =
+				Number.isFinite(dataHeight) && dataHeight > 0
+					? dataHeight
+					: pageContent.clientHeight
+			if (!maxHeight) {
+				return { isOverflowing: false, hasLargeFreeSpace: false }
+			}
+			const diff = pageContent.scrollHeight - maxHeight
+			return {
+				isOverflowing: diff > 1,
+				hasLargeFreeSpace: diff < -80,
+			}
+		}
+		const scheduleOverflow = (force = false) => {
+			if (!force) return
+			if (overflowFrame !== null) return
+			overflowFrame = requestAnimationFrame(() => {
+				overflowFrame = null
+				handlePageOverflow()
 			})
 		}
 
-		const handlePaste = e => {
-			// Handle images in clipboard
-			const items = (e.clipboardData || e.originalEvent.clipboardData).items
-			let hasImage = false
+		const handleInput = e => {
+			handleImageResize()
+			attachImageResizeHandler()
+			updateEditorStats()
+			const inputType = e?.inputType || ''
+			const isStructureMutation =
+				inputType === 'insertParagraph' ||
+				inputType === 'insertLineBreak' ||
+				inputType.startsWith('delete')
+			const { isOverflowing, hasLargeFreeSpace } = resolveEditableOverflowState(
+				e?.currentTarget,
+			)
+			scheduleOverflow(isStructureMutation || isOverflowing || hasLargeFreeSpace)
+		}
 
-			for (let item of items) {
-				if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
-					hasImage = true
-					// Prevent default paste behavior only for images to insert custom HTML
-					e.preventDefault()
+		const extractImageDataUrlFromHtml = html => {
+			if (!html || typeof html !== 'string') return ''
+			try {
+				const doc = new DOMParser().parseFromString(html, 'text/html')
+				const img = doc.querySelector('img[src]')
+				const src = (img?.getAttribute('src') || '').trim()
+				return src.startsWith('data:image/') ? src : ''
+			} catch {
+				return ''
+			}
+		}
 
-					const clipboardFile = item.getAsFile()
-					const reader = new FileReader()
+		const dataUrlToImageFile = async dataUrl => {
+			const response = await fetch(dataUrl)
+			const blob = await response.blob()
+			const safeType = blob?.type || 'image/png'
+			const ext = safeType.includes('png')
+				? 'png'
+				: safeType.includes('jpeg') || safeType.includes('jpg')
+					? 'jpg'
+					: safeType.includes('webp')
+						? 'webp'
+						: 'png'
+			return new File([blob], `paste-${Date.now()}.${ext}`, { type: safeType })
+		}
 
-					reader.onload = event => {
-						const imgElement = document.createElement('img')
-						imgElement.src = event.target.result
+		const insertPastedImage = (
+			clipboardFile,
+			editableRoot,
+			previewSrc = null,
+		) => {
+			imageLog('insertPastedImage', {
+				hasFile: Boolean(clipboardFile),
+				fileName: clipboardFile?.name,
+				fileType: clipboardFile?.type,
+				fileSize: clipboardFile?.size,
+				hasPreviewSrc: Boolean(previewSrc),
+			})
+			const imgElement = document.createElement('img')
+			if (imgElement.dataset.pasteInit === 'true') return
+			imgElement.dataset.pasteInit = 'true'
 
-						// MUHIM: src keyinroq o'zgarsa ham cheksiz sikl bo'lmasligi uchun
-						// bu blok faqat 1 marta ishlasin
-						if (imgElement.dataset.pasteInit === 'true') return
-						imgElement.dataset.pasteInit = 'true'
+			imgElement.addEventListener(
+				'load',
+				() => {
+					const maxWidth = 500
+					if (imgElement.width > maxWidth) {
+						const aspectRatio = imgElement.height / imgElement.width
+						imgElement.style.width = maxWidth + 'px'
+						imgElement.style.height = maxWidth * aspectRatio + 'px'
+					} else {
+						imgElement.style.width = imgElement.width + 'px'
+						imgElement.style.height = imgElement.height + 'px'
+					}
 
-						imgElement.addEventListener(
-							'load',
-							() => {
-								// Image loaded, resize it
-								const maxWidth = 500
-								if (imgElement.width > maxWidth) {
-									const aspectRatio = imgElement.height / imgElement.width
-									imgElement.style.width = maxWidth + 'px'
-									imgElement.style.height = maxWidth * aspectRatio + 'px'
+					imgElement.style.cursor = 'ew-resize'
+					imgElement.style.display = 'inline-block'
+					imgElement.style.border = '1px solid #ddd'
+					imgElement.style.margin = '10px auto'
+					imgElement.style.userSelect = 'none'
+					imgElement.className = 'resizable-image'
+
+					setTimeout(() => {
+						const selection = window.getSelection()
+						const wrapper = document.createElement('p')
+						wrapper.style.textAlign = 'center'
+						wrapper.appendChild(imgElement)
+						if (
+							selection &&
+							selection.rangeCount > 0 &&
+							editableRoot &&
+							editableRoot.contains(
+								selection.getRangeAt(0).commonAncestorContainer,
+							)
+						) {
+							const range = selection.getRangeAt(0)
+							range.insertNode(wrapper)
+							range.setStartAfter(wrapper)
+							range.collapse(true)
+							selection.removeAllRanges()
+							selection.addRange(range)
+						} else if (editableRoot) {
+							editableRoot.appendChild(wrapper)
+						}
+
+						if (clipboardFile) {
+							if (imgElement.dataset.uploadStarted === 'true') return
+							imgElement.dataset.uploadStarted = 'true'
+
+							imgElement.style.opacity = '0.7'
+							imgElement.dataset.uploading = 'true'
+							Promise.resolve()
+								.then(() => handlePasteImage(clipboardFile, imgElement))
+								.catch(err =>
+									imageLogError('insertPastedImage upload failed', err),
+								)
+								.finally(() => {
+									imgElement.style.opacity = '1'
+									delete imgElement.dataset.uploading
+								})
+						}
+
+						editables.forEach(el => {
+							void el.offsetHeight
+						})
+
+						setTimeout(() => {
+							if (imgElement && imgElement.parentNode) {
+								if (imgElement.dataset.resizable) {
+									imgElement.style.cursor = editing ? 'ew-resize' : 'default'
+									imgElement.style.border = editing ? '1px solid #ddd' : 'none'
 								} else {
-									imgElement.style.width = imgElement.width + 'px'
-									imgElement.style.height = imgElement.height + 'px'
-								}
+									imgElement.dataset.resizable = 'true'
+									imgElement.style.cursor = editing ? 'ew-resize' : 'default'
+									imgElement.style.display = 'inline-block'
+									imgElement.style.userSelect = 'none'
+									imgElement.style.border = editing ? '1px solid #ddd' : 'none'
+									imgElement.style.margin = '10px auto'
 
-								// Set styles for resize
-								imgElement.style.cursor = 'ew-resize'
-								imgElement.style.display = 'inline-block'
-								imgElement.style.border = '1px solid #ddd'
-								imgElement.style.margin = '10px auto'
-								imgElement.style.userSelect = 'none'
-								imgElement.className = 'resizable-image'
+									let startX, startY, startWidth, startHeight
 
-								// Insert image after a slight delay to allow paste to complete
-								setTimeout(() => {
-									// Get current selection and insert image
-									const selection = window.getSelection()
-									if (selection.rangeCount > 0) {
-										const range = selection.getRangeAt(0)
-										const wrapper = document.createElement('p')
-										wrapper.style.textAlign = 'center'
-										wrapper.appendChild(imgElement)
-										range.insertNode(wrapper)
+									const onPointerMove = e => {
+										if (!editing) return
+										e.preventDefault()
+										e.stopPropagation()
 
-										// Move cursor after image
-										range.setStartAfter(wrapper)
-										range.collapse(true)
-										selection.removeAllRanges()
-										selection.addRange(range)
+										const deltaX = e.clientX - startX
+										const newWidth = Math.max(
+											100,
+											Math.min(800, startWidth + deltaX),
+										)
+										const aspectRatio = startHeight / startWidth
+										const newHeight = newWidth * aspectRatio
+
+										imgElement.style.width = `${newWidth}px`
+										imgElement.style.height = `${newHeight}px`
+										imgElement.style.display = 'inline-block'
+										imgElement.style.maxWidth = '100%'
 									}
 
-									// Upload pasted image to server via RPC
-									if (clipboardFile) {
-										// 1 martadan ko'p upload bo'lmasin (src yangilansa ham)
-										if (imgElement.dataset.uploadStarted === 'true') return
-										imgElement.dataset.uploadStarted = 'true'
+									const onPointerUp = e => {
+										e.preventDefault()
+										e.stopPropagation()
+										document.removeEventListener('pointermove', onPointerMove)
+										document.removeEventListener('pointerup', onPointerUp)
 
-										imgElement.style.opacity = '0.7'
-										imgElement.dataset.uploading = 'true'
-										Promise.resolve()
-											.then(() => handlePasteImage(clipboardFile, imgElement))
-											.catch(err => console.log(err))
-											.finally(() => {
-												imgElement.style.opacity = '1'
-												delete imgElement.dataset.uploading
-											})
-									}
-
-									// Trigger reflow and handle overflow
-									editables.forEach(el => {
-										void el.offsetHeight
-									})
-
-									// Attach resize handler to the new image with a small delay
-									setTimeout(() => {
-										// Ensure image is in DOM before attaching handler
-										if (imgElement && imgElement.parentNode) {
-											// Use the same approach as makeImagesResizable for consistency
-											if (imgElement.dataset.resizable) {
-												// Already has handler, just update styles
-												imgElement.style.cursor = editing
-													? 'ew-resize'
-													: 'default'
-												imgElement.style.border = editing
-													? '1px solid #ddd'
-													: 'none'
-											} else {
-												// Mark as resizable
-												imgElement.dataset.resizable = 'true'
-												imgElement.style.cursor = editing
-													? 'ew-resize'
-													: 'default'
-												imgElement.style.display = 'inline-block'
-												imgElement.style.userSelect = 'none'
-												imgElement.style.border = editing
-													? '1px solid #ddd'
-													: 'none'
-												imgElement.style.margin = '10px auto'
-
-												// Use pointer events for better compatibility (same as makeImagesResizable)
-												let startX, startY, startWidth, startHeight
-
-												const onPointerMove = e => {
-													if (!editing) return
-													e.preventDefault()
-													e.stopPropagation()
-
-													const deltaX = e.clientX - startX
-													const newWidth = Math.max(
-														100,
-														Math.min(800, startWidth + deltaX),
-													)
-													const aspectRatio = startHeight / startWidth
-													const newHeight = newWidth * aspectRatio
-
-													imgElement.style.width = `${newWidth}px`
-													imgElement.style.height = `${newHeight}px`
-													imgElement.style.display = 'inline-block'
-													imgElement.style.maxWidth = '100%'
-												}
-
-												const onPointerUp = e => {
-													e.preventDefault()
-													e.stopPropagation()
-													document.removeEventListener(
-														'pointermove',
-														onPointerMove,
-													)
-													document.removeEventListener('pointerup', onPointerUp)
-
-													// Trigger reflow after resize
-													editables.forEach(el => {
-														void el.offsetHeight
-													})
-
-													// Handle page overflow after resize
-													handlePageOverflow()
-												}
-
-												imgElement.addEventListener(
-													'pointerdown',
-													e => {
-														if (!editing) return
-
-														e.preventDefault()
-														e.stopPropagation()
-
-														startX = e.clientX
-														startY = e.clientY
-														startWidth =
-															imgElement.offsetWidth ||
-															parseInt(imgElement.style.width) ||
-															imgElement.width
-														startHeight =
-															imgElement.offsetHeight ||
-															parseInt(imgElement.style.height) ||
-															imgElement.height
-
-														document.addEventListener(
-															'pointermove',
-															onPointerMove,
-														)
-														document.addEventListener('pointerup', onPointerUp)
-													},
-													{ once: false, passive: false },
-												)
-											}
-										}
-
-										// Also call attachImageResizeHandler to ensure all images have handlers
-										attachImageResizeHandler()
+										editables.forEach(el => {
+											void el.offsetHeight
+										})
 
 										handlePageOverflow()
-									}, 300)
-								}, 50)
-							},
-							{ once: true },
-						)
-					}
+									}
 
-					if (clipboardFile) {
-						reader.readAsDataURL(clipboardFile)
-					}
-				}
+									imgElement.addEventListener(
+										'pointerdown',
+										e => {
+											if (!editing) return
+
+											e.preventDefault()
+											e.stopPropagation()
+
+											startX = e.clientX
+											startY = e.clientY
+											startWidth =
+												imgElement.offsetWidth ||
+												parseInt(imgElement.style.width) ||
+												imgElement.width
+											startHeight =
+												imgElement.offsetHeight ||
+												parseInt(imgElement.style.height) ||
+												imgElement.height
+
+											document.addEventListener('pointermove', onPointerMove)
+											document.addEventListener('pointerup', onPointerUp)
+										},
+										{ once: false, passive: false },
+									)
+								}
+							}
+
+							attachImageResizeHandler()
+							handlePageOverflow()
+						}, 300)
+					}, 50)
+				},
+				{ once: true },
+			)
+
+			if (previewSrc) {
+				imageLog('insertPastedImage set preview src')
+				imgElement.src = previewSrc
+				return
 			}
 
-			// If it's not an image, allow default paste behavior for text
-			if (!hasImage) {
-				// Allow default paste for text content
-				setTimeout(() => {
-					handlePageOverflow()
-				}, 50)
+			if (!clipboardFile) {
+				imageLogError('insertPastedImage skipped: file missing and no preview')
+				return
 			}
+			const reader = new FileReader()
+			reader.onload = event => {
+				imageLog('insertPastedImage file reader loaded')
+				imgElement.src = event.target.result
+			}
+			reader.readAsDataURL(clipboardFile)
+		}
+
+		const handlePaste = async e => {
+			const clipboard = e.clipboardData || e.originalEvent?.clipboardData
+			const items = Array.from(clipboard?.items || [])
+			const imageFiles = []
+			imageLog('handlePaste start', {
+				itemsCount: items.length,
+				filesCount: Array.from(clipboard?.files || []).length,
+			})
+
+			items.forEach(item => {
+				if (item?.kind !== 'file') return
+				if (!item?.type?.startsWith('image/')) return
+				const file = item.getAsFile()
+				if (file) imageFiles.push(file)
+			})
+
+			if (!imageFiles.length) {
+				const fallbackFiles = Array.from(clipboard?.files || []).filter(file =>
+					file?.type?.startsWith('image/'),
+				)
+				imageFiles.push(...fallbackFiles)
+			}
+
+			if (imageFiles.length) {
+				e.preventDefault()
+				imageLog(
+					'handlePaste image files found',
+					imageFiles.map(file => ({
+						name: file?.name,
+						type: file?.type,
+						size: file?.size,
+					})),
+				)
+				imageFiles.forEach(file => {
+					insertPastedImage(file, e.currentTarget)
+				})
+				return
+			}
+
+			const htmlPayload = clipboard?.getData?.('text/html') || ''
+			const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
+			if (htmlDataUrl) {
+				e.preventDefault()
+				imageLog('handlePaste html image payload detected')
+				let fileFromHtml = null
+				try {
+					fileFromHtml = await dataUrlToImageFile(htmlDataUrl)
+				} catch {}
+				insertPastedImage(fileFromHtml, e.currentTarget, htmlDataUrl)
+				return
+			}
+			imageLog('handlePaste no image payload detected')
+
+			setTimeout(() => {
+				handlePageOverflow()
+			}, 50)
 		}
 
 		editables.forEach(el => {
 			el.contentEditable = editing
-			el.style.outline = editing ? '1px dashed #4f46e5' : 'none'
+			el.style.outline = 'none'
+			el.style.boxShadow = editing
+				? 'inset 0 0 0 1px rgba(79, 70, 229, 0.22)'
+				: 'none'
 
 			if (editing) {
 				el.addEventListener('input', handleInput)
@@ -1725,58 +2188,134 @@ const SystemWord = () => {
 			cell.contentEditable = editing
 			if (editing) {
 				cell.style.outline = '1px dashed #4f46e5'
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 
 				// Table cells'ga paste handler qo'shish
-				const handleTableCellPaste = e => {
-					const items = (e.clipboardData || e.originalEvent.clipboardData).items
-					let hasImage = false
+				const handleTableCellPaste = async e => {
+					const clipboard = e.clipboardData || e.originalEvent?.clipboardData
+					const items = Array.from(clipboard?.items || [])
+					const imageFiles = []
+					imageLog('handleTableCellPaste start', {
+						itemsCount: items.length,
+						filesCount: Array.from(clipboard?.files || []).length,
+					})
 
-					for (let item of items) {
-						if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
-							hasImage = true
-							e.preventDefault()
+					items.forEach(item => {
+						if (item?.kind !== 'file') return
+						if (!item?.type?.startsWith('image/')) return
+						const file = item.getAsFile()
+						if (file) imageFiles.push(file)
+					})
 
-							const blob = item.getAsFile()
-							const reader = new FileReader()
-
-							reader.onload = event => {
-								const imgElement = document.createElement('img')
-								imgElement.src = event.target.result // Base64 sifatida saqlangan
-								imgElement.style.maxWidth = '100%'
-								imgElement.style.height = 'auto'
-								imgElement.style.display = 'block'
-								imgElement.style.margin = '5px 0'
-
-								const selection = window.getSelection()
-								if (selection.rangeCount > 0) {
-									const range = selection.getRangeAt(0)
-									range.insertNode(imgElement)
-									range.setStartAfter(imgElement)
-									range.collapse(true)
-									selection.removeAllRanges()
-									selection.addRange(range)
-								}
-							}
-
-							reader.readAsDataURL(blob)
-						}
+					if (!imageFiles.length) {
+						const fallbackFiles = Array.from(clipboard?.files || []).filter(
+							file => file?.type?.startsWith('image/'),
+						)
+						imageFiles.push(...fallbackFiles)
 					}
 
-					if (!hasImage) {
+					const insertImageToCell = (file, previewSrc = null) => {
+						imageLog('insertImageToCell', {
+							hasFile: Boolean(file),
+							fileName: file?.name,
+							fileType: file?.type,
+							fileSize: file?.size,
+							hasPreviewSrc: Boolean(previewSrc),
+						})
+						const imgElement = document.createElement('img')
+						imgElement.style.maxWidth = '100%'
+						imgElement.style.height = 'auto'
+						imgElement.style.display = 'block'
+						imgElement.style.margin = '5px 0'
+
+						const targetCell = e.currentTarget
+						const selection = window.getSelection()
+						if (
+							selection &&
+							selection.rangeCount > 0 &&
+							targetCell &&
+							targetCell.contains(
+								selection.getRangeAt(0).commonAncestorContainer,
+							)
+						) {
+							const range = selection.getRangeAt(0)
+							range.insertNode(imgElement)
+							range.setStartAfter(imgElement)
+							range.collapse(true)
+							selection.removeAllRanges()
+							selection.addRange(range)
+						} else if (targetCell) {
+							targetCell.appendChild(imgElement)
+						}
+
+						if (file) {
+							Promise.resolve()
+								.then(() => handlePasteImage(file, imgElement))
+								.catch(err =>
+									imageLogError('insertImageToCell upload failed', err),
+								)
+						}
 						setTimeout(() => {
 							handlePageOverflow()
 						}, 50)
+
+						if (previewSrc) {
+							imgElement.src = previewSrc
+							return
+						}
+
+						if (!file) return
+						const reader = new FileReader()
+						reader.onload = event => {
+							imgElement.src = event.target.result
+						}
+						reader.readAsDataURL(file)
 					}
+
+					if (imageFiles.length) {
+						e.preventDefault()
+						imageLog(
+							'handleTableCellPaste image files found',
+							imageFiles.map(file => ({
+								name: file?.name,
+								type: file?.type,
+								size: file?.size,
+							})),
+						)
+						imageFiles.forEach(file => insertImageToCell(file))
+						return
+					}
+
+					const htmlPayload = clipboard?.getData?.('text/html') || ''
+					const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
+					if (htmlDataUrl) {
+						e.preventDefault()
+						imageLog('handleTableCellPaste html image payload detected')
+						let fileFromHtml = null
+						try {
+							fileFromHtml = await dataUrlToImageFile(htmlDataUrl)
+						} catch {}
+						insertImageToCell(fileFromHtml, htmlDataUrl)
+						return
+					}
+					imageLog('handleTableCellPaste no image payload detected')
+
+					setTimeout(() => {
+						handlePageOverflow()
+					}, 50)
 				}
 
+				cell._pasteHandler = handleTableCellPaste
 				cell.addEventListener('paste', handleTableCellPaste)
 			} else {
 				cell.style.outline = 'none'
-				// Paste listeners'ni olib tashlash
-				const allCells = document.querySelectorAll('.editable-table td')
-				allCells.forEach(c => {
-					c.removeEventListener('paste', c._pasteHandler)
-				})
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 			}
 		})
 
@@ -1784,9 +2323,27 @@ const SystemWord = () => {
 			editables.forEach(el => {
 				el.removeEventListener('input', handleInput)
 				el.removeEventListener('paste', handlePaste)
+				el.style.boxShadow = 'none'
+			})
+			if (overflowFrame !== null) {
+				cancelAnimationFrame(overflowFrame)
+				overflowFrame = null
+			}
+			const allCells = document.querySelectorAll('.editable-table td')
+			allCells.forEach(cell => {
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 			})
 		}
-	}, [editing, pages1, updateEditorStats])
+	}, [
+		editing,
+		pages1,
+		updateEditorStats,
+		applySystemPageContentMetrics,
+		refreshRiskMeasureConfig,
+	])
 
 	useEffect(() => {
 		const allPageContent = document.querySelectorAll('.page-content')
@@ -1828,6 +2385,43 @@ const SystemWord = () => {
 	useEffect(() => {
 		const handleKeyDown = e => {
 			if (!editing) return
+			const targetEl = e.target instanceof Element ? e.target : null
+			const tagName = targetEl?.tagName?.toLowerCase() || ''
+			if (
+				tagName === 'textarea' ||
+				tagName === 'input' ||
+				tagName === 'select' ||
+				tagName === 'button'
+			) {
+				return
+			}
+
+			const targetEditable =
+				targetEl && typeof targetEl.closest === 'function'
+					? targetEl.closest('.editable, .editable-table td')
+					: null
+			const selection = window.getSelection()
+			let selectionEditable = null
+			if (selection && selection.rangeCount > 0) {
+				let range = null
+				try {
+					range = selection.getRangeAt(0)
+				} catch {
+					range = null
+				}
+				if (range) {
+					selectionEditable = getEditableRootFromRange(range)
+				}
+			}
+
+			const activeEditable = targetEditable || selectionEditable
+			if (
+				!activeEditable ||
+				activeEditable.getAttribute('contenteditable') === 'false'
+			) {
+				return
+			}
+			activeEditableRef.current = activeEditable
 
 			if (e.ctrlKey) {
 				const key = e.key.toLowerCase()
@@ -1835,20 +2429,19 @@ const SystemWord = () => {
 
 				switch (key) {
 					case 'e':
-						document.execCommand('justifyCenter')
+						runEditorCommand('justifyCenter')
 						break
 					case 'l':
-						document.execCommand('justifyLeft')
+						runEditorCommand('justifyLeft')
 						break
 					case 'r':
-						document.execCommand('justifyRight')
+						runEditorCommand('justifyRight')
 						break
 					case 'j':
 						// Apply justify alignment using both execCommand and CSS for better compatibility
-						document.execCommand('justifyFull')
+						runEditorCommand('justifyFull')
 						// Also apply CSS text-align for better cross-browser support
-						const selection = window.getSelection()
-						if (selection.rangeCount > 0) {
+						if (selection && selection.rangeCount > 0) {
 							const range = selection.getRangeAt(0)
 							const container = range.commonAncestorContainer
 							const block =
@@ -1870,8 +2463,7 @@ const SystemWord = () => {
 			if (e.shiftKey && e.key === 'Backspace') {
 				e.preventDefault()
 
-				const selection = window.getSelection()
-				if (selection.rangeCount > 0) {
+				if (selection && selection.rangeCount > 0) {
 					const range = selection.getRangeAt(0)
 					const currentPageContent =
 						range.commonAncestorContainer.nodeType === Node.TEXT_NODE
@@ -1908,36 +2500,16 @@ const SystemWord = () => {
 			}
 
 			// Handle Enter key for page overflow
-			// Textarea va input elementlarida Enter ishlashiga ruxsat berish
 			if (e.key === 'Enter') {
-				const tagName = e.target.tagName.toLowerCase()
-				if (tagName === 'textarea' || tagName === 'input') {
-					return
-				}
-				e.preventDefault()
-				const selection = window.getSelection()
-				if (selection.rangeCount > 0) {
-					const range = selection.getRangeAt(0)
-					const br = document.createElement('br')
-					range.insertNode(br)
-					range.setStartAfter(br)
-					range.collapse(true)
-					selection.removeAllRanges()
-					selection.addRange(range)
-				}
 				setTimeout(() => {
 					handlePageOverflow()
 				}, 10)
+				return
 			}
 
 			if (e.key === 'Tab') {
-				const tagName = e.target.tagName.toLowerCase()
-				if (tagName === 'textarea' || tagName === 'input') {
-					return
-				}
 				e.preventDefault()
-				const selection = window.getSelection()
-				if (!selection.rangeCount) return
+				if (!selection || !selection.rangeCount) return
 				const range = selection.getRangeAt(0)
 				const tabNode = document.createTextNode(
 					'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0',
@@ -1947,12 +2519,15 @@ const SystemWord = () => {
 				range.collapse(true)
 				selection.removeAllRanges()
 				selection.addRange(range)
+				setTimeout(() => {
+					handlePageOverflow()
+				}, 10)
 			}
 		}
 
 		document.addEventListener('keydown', handleKeyDown)
 		return () => document.removeEventListener('keydown', handleKeyDown)
-	}, [editing])
+	}, [editing, getEditableRootFromRange, runEditorCommand])
 
 	const paginateHtml = html => {
 		const measure = document.createElement('div')
@@ -2099,32 +2674,54 @@ const SystemWord = () => {
 								return item
 							})
 					: []
-				setNewVuln(flatVulnData)
+				const sanitizedVulnData = flatVulnData.map(item =>
+					sanitizePersistedImageHtml(item),
+				)
+				setNewVuln(sanitizedVulnData)
 
-				const normalizeVulnField = rf => {
-					if (!rf) return []
-					if (Array.isArray(rf)) {
-						return rf
-							.flat()
-							.filter(Boolean)
-							.map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
-							.filter(x => x.a1 != null && x.a3)
-					}
-					if (typeof rf === 'object') {
-						const one = { a1: rf.a1, a2: rf.a2, a3: rf.a3, a4: rf.a4 }
-						return one.a1 != null && one.a3 ? [one] : []
-					}
-					return []
+				const normalizeVulnField = (rf, expectedLevel = null) => {
+					const list = Array.isArray(rf) ? rf.flat() : rf ? [rf] : []
+					return list
+						.filter(Boolean)
+						.map(v => {
+							const rawA1 = Number(v?.a1)
+							const rawA2 = Number(v?.a2)
+							let level = rawA1
+							let count = rawA2
+
+							if (
+								Number.isFinite(expectedLevel) &&
+								expectedLevel >= 1 &&
+								expectedLevel <= 3 &&
+								rawA1 !== expectedLevel &&
+								rawA2 === expectedLevel
+							) {
+								level = rawA2
+								count = rawA1
+							} else if (
+								!(rawA1 >= 1 && rawA1 <= 3) &&
+								rawA2 >= 1 &&
+								rawA2 <= 3
+							) {
+								level = rawA2
+								count = rawA1
+							}
+
+							if (!(level >= 1 && level <= 3) || !v?.a3) return null
+
+							return {
+								a1: level,
+								a2: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+								a3: v.a3,
+								a4: v?.a4,
+							}
+						})
+						.filter(Boolean)
 				}
 
-				const fallbackList = Array.isArray(fallbackRiskTable)
-					? fallbackRiskTable
-							.filter(Boolean)
-							.map(({ a1, a2, a3, a4 }) => ({ a1, a2, a3, a4 }))
-							.filter(x => x.a1 != null && x.a3)
-					: []
+				const fallbackList = normalizeVulnField(fallbackRiskTable)
 
-				const highVuln1Raw = normalizeVulnField(raw)
+				const highVuln1Raw = normalizeVulnField(raw, 1)
 				const highVuln1 =
 					highVuln1Raw.length > 0
 						? highVuln1Raw
@@ -2134,7 +2731,7 @@ const SystemWord = () => {
 
 				const raw1 = res[1]?.[12]
 
-				const mVRaw = normalizeVulnField(raw1)
+				const mVRaw = normalizeVulnField(raw1, 2)
 				const mV =
 					mVRaw.length > 0
 						? mVRaw
@@ -2143,7 +2740,7 @@ const SystemWord = () => {
 
 				const raw2 = res[1]?.[11]
 
-				const lVRaw = normalizeVulnField(raw2)
+				const lVRaw = normalizeVulnField(raw2, 3)
 				const lV =
 					lVRaw.length > 0
 						? lVRaw
@@ -2206,7 +2803,7 @@ const SystemWord = () => {
 
 								// Agar cellData HTML bo'lsa (rasmlar bilan), innerHTML sifatida qo'shamiz
 								if (cellData.includes('<img') || cellData.includes('<IMG')) {
-									cell.innerHTML = cellData
+									cell.innerHTML = sanitizePersistedImageHtml(cellData)
 								} else {
 									cell.innerText = cellData
 								}
@@ -2303,7 +2900,7 @@ const SystemWord = () => {
 	}
 
 	const handleSaveDocFromModal = docVuln => {
-		// console.log("Childdan keldi:", docVuln);
+		if (!docVuln?.vuln || !Array.isArray(docVuln.vuln?.[1])) return
 		generateVulnHtml(docVuln.vuln)
 		const html = vulnerabilityTemplates[docVuln.type]
 		// console.log("HTML:", html);
@@ -2327,6 +2924,39 @@ const SystemWord = () => {
 		return doc.body.textContent || ''
 	}
 
+	const sanitizePersistedImageHtml = html => {
+		if (!html || typeof html !== 'string') return html
+		try {
+			const parser = new DOMParser()
+			const doc = parser.parseFromString(html, 'text/html')
+			const imgs = Array.from(doc.body.querySelectorAll('img'))
+			if (!imgs.length) return html
+
+			imgs.forEach(img => {
+				const fileIdRaw =
+					img.getAttribute('data-file-id') || img.dataset?.fileId || ''
+				const fileId = String(fileIdRaw || '').trim()
+				const src = (img.getAttribute('src') || '').trim()
+
+				if (fileId) {
+					img.setAttribute('data-file-id', fileId)
+					img.removeAttribute('data-src-resolved')
+					img.removeAttribute('data-upload-progress')
+					img.removeAttribute('data-uploading')
+					img.removeAttribute('data-upload-started')
+					img.removeAttribute('data-paste-init')
+
+					return
+				}
+			})
+
+			return doc.body.innerHTML
+		} catch (error) {
+			imageLogError('sanitizePersistedImageHtml error', error)
+			return html
+		}
+	}
+
 	const riskRows = useMemo(() => {
 		const items = [
 			...(highVuln || []),
@@ -2339,7 +2969,7 @@ const SystemWord = () => {
 				const countRaw = v?.a2 ?? 1
 				const count = Number(countRaw)
 				const name = stripHtml(v?.a3 || '').trim()
-				const resourceLabel = extractResourceHost(v?.a4 || '') || 'Umumiy'
+				const resourceLabel = normalizeResourceLabel(v?.a4 || '')
 				return {
 					type: 'vuln',
 					level,
@@ -2380,13 +3010,16 @@ const SystemWord = () => {
 		for (const r of resources) {
 			const map = byResource.get(r)
 			if (!map || map.size === 0) continue
-			out.push({ type: 'resource', label: r })
+			const shouldShowResourceHeader = (r || '').toLowerCase() !== 'umumiy'
+			if (shouldShowResourceHeader) {
+				out.push({ type: 'resource', label: r })
+			}
 
 			const grouped = Array.from(map.values())
 			grouped.sort((x, y) => {
 				const px = levelPriority(x.level)
 				const py = levelPriority(y.level)
-				if (px !== py) return px - py // Yuqori -> O‘rta -> Past
+				if (px !== py) return px - py
 				return (x.name || '').localeCompare(y.name || '', 'uz')
 			})
 
@@ -2397,13 +3030,61 @@ const SystemWord = () => {
 	}, [highVuln, mediumVuln, lowVuln, objectLinks])
 
 	const { riskFirstPageRows, riskContinuationPages } = useMemo(() => {
-		const first = takeRiskRows(riskRows, 0, 6)
-		const cont = chunkRiskColumnPages(riskRows, first.nextIndex, 14, 14)
+		const first = takeRiskRowsByHeight(
+			riskRows,
+			0,
+			riskMeasureConfig.firstPageMaxHeightPx,
+			riskMeasureConfig.tableWidthPx,
+			editing,
+		)
+		const cont = chunkRiskPagesByHeight(
+			riskRows,
+			first.nextIndex,
+			riskMeasureConfig.contPageMaxHeightPx,
+			riskMeasureConfig.tableWidthPx,
+			editing,
+		)
 		return { riskFirstPageRows: first.page, riskContinuationPages: cont }
-	}, [riskRows])
+	}, [riskRows, riskMeasureConfig, editing])
+
+	const pageNumberPlan = useMemo(() => {
+		const firstPageNumber = 5
+		const section1Page = firstPageNumber
+		const section2IntroPage = section1Page + 1
+		const section3PrepPage = section2IntroPage + 1
+		const sectionTableExtraCount = Math.max(
+			0,
+			(sectionTablePages || []).length - 1,
+		)
+		const additionalInfoPage = section3PrepPage + 1 + sectionTableExtraCount
+		const accountsExtraCount = Math.max(
+			0,
+			(systemAccountsPages || []).length - 1,
+		)
+		const section2SummaryPage = additionalInfoPage + 1 + accountsExtraCount
+		const riskContinuationCount = (riskContinuationPages || []).length
+		const detailStartPage = section2SummaryPage + 1 + riskContinuationCount
+		const detailPagesCount = (pages3 || []).length
+		const section3Page = detailStartPage + detailPagesCount
+
+		return {
+			firstPageNumber,
+			section1Page,
+			section2IntroPage,
+			section3PrepPage,
+			sectionTableExtraCount,
+			additionalInfoPage,
+			accountsExtraCount,
+			section2SummaryPage,
+			riskContinuationCount,
+			detailStartPage,
+			detailPagesCount,
+			section3Page,
+		}
+	}, [sectionTablePages, systemAccountsPages, riskContinuationPages, pages3])
 
 	const tocVulnerabilityItems = useMemo(() => {
-		const DETAIL_START_PAGE = 17
+		const DETAIL_START_PAGE = pageNumberPlan.detailStartPage
 
 		const titleToResource = new Map()
 		;(riskRows || [])
@@ -2433,7 +3114,7 @@ const SystemWord = () => {
 				if (!title || seen.has(title)) return
 				seen.add(title)
 
-				const resourceLabel = titleToResource.get(title) || 'Umumiy'
+				const resourceLabel = titleToResource.get(title) || ''
 				const pageNum = DETAIL_START_PAGE + pageIdx
 
 				entries.push({
@@ -2444,20 +3125,23 @@ const SystemWord = () => {
 			})
 		})
 
-		const orderHosts = (objectLinks || []).map(extractResourceHost)
+		const orderHosts = (objectLinks || [])
+			.map(extractResourceHost)
+			.filter(Boolean)
 		const resourceRank = host => {
+			if (host === NO_RESOURCE_KEY) return Number.MAX_SAFE_INTEGER
 			const h = extractResourceHost(host || '')
 			const idx = orderHosts.indexOf(h)
-			return idx === -1 ? Number.MAX_SAFE_INTEGER : idx
+			return idx === -1 ? Number.MAX_SAFE_INTEGER - 1 : idx
 		}
 
 		// group by resource (risk table tartibiga yaqin bo'lishi uchun)
 		const grouped = new Map()
 		for (const e of entries) {
-			const host =
-				extractResourceHost(e.resourceLabel) || e.resourceLabel || 'Umumiy'
-			if (!grouped.has(host)) grouped.set(host, [])
-			grouped.get(host).push(e)
+			const host = extractResourceHost(e.resourceLabel || '')
+			const resourceKey = host || NO_RESOURCE_KEY
+			if (!grouped.has(resourceKey)) grouped.set(resourceKey, [])
+			grouped.get(resourceKey).push(e)
 		}
 
 		const resources = Array.from(grouped.keys()).sort((a, b) => {
@@ -2468,13 +3152,21 @@ const SystemWord = () => {
 		})
 
 		const out = []
-		for (const res of resources) {
-			const items = grouped.get(res) || []
+		for (const resourceKey of resources) {
+			const items = grouped.get(resourceKey) || []
 			if (!items.length) continue
 			items.sort(
 				(a, b) => a.pageNum - b.pageNum || a.title.localeCompare(b.title, 'uz'),
 			)
-			out.push({ type: 'subheader', title: `“${res}” veb-resursi` })
+			const shouldShowResourceHeader =
+				resourceKey !== NO_RESOURCE_KEY &&
+				(resourceKey || '').toLowerCase() !== 'umumiy'
+			if (shouldShowResourceHeader) {
+				out.push({
+					type: 'subheader',
+					title: `“${resourceKey}” veb-resursi`,
+				})
+			}
 			for (const it of items) {
 				out.push({
 					type: 'row',
@@ -2487,44 +3179,60 @@ const SystemWord = () => {
 
 		return {
 			items: out,
-			section3Page: String(DETAIL_START_PAGE + (pages3?.length || 0)),
+			section3Page: String(pageNumberPlan.section3Page),
 		}
-	}, [riskRows, pages3, objectLinks])
+	}, [riskRows, pages3, objectLinks, NO_RESOURCE_KEY, pageNumberPlan])
 
 	const tocItems = useMemo(() => {
 		const base = [
 			{
 				type: 'section',
-				page: '5',
+				page: String(pageNumberPlan.section1Page),
 				section: 'BIRINCHI BO‘LIM.',
 				head: 'UMUMIY MA’LUMOTLAR',
 			},
-			{ type: 'row', title: 'Atamalar va ta’riflar', page: '5' },
-			{ type: 'row', title: 'Ekspertiza o‘tkazish uchun asos', page: '6' },
-			{ type: 'row', title: 'Ekspertiza obyekti', page: '6' },
-			{ type: 'row', title: 'Ekspertiza o‘tkazish tartibi', page: '6' },
+			{
+				type: 'row',
+				title: 'Atamalar va ta’riflar',
+				page: String(pageNumberPlan.section1Page),
+			},
+			{
+				type: 'row',
+				title: 'Ekspertiza o‘tkazish uchun asos',
+				page: String(pageNumberPlan.section2IntroPage),
+			},
+			{
+				type: 'row',
+				title: 'Ekspertiza obyekti',
+				page: String(pageNumberPlan.section2IntroPage),
+			},
+			{
+				type: 'row',
+				title: 'Ekspertiza o‘tkazish tartibi',
+				page: String(pageNumberPlan.section2IntroPage),
+			},
 			{
 				type: 'row',
 				title: 'Ekspertiza yuzasidan qo‘shimcha ma’lumotlar',
-				page: '8',
+				page: String(pageNumberPlan.additionalInfoPage),
 				large: true,
 			},
 			{
 				type: 'section',
-				page: '10',
+				page: String(pageNumberPlan.section2SummaryPage),
 				section: 'IKKINCHI BO‘LIM.',
 				head: 'EKSPERTIZA NATIJALARI',
 			},
 			{
 				type: 'row',
 				title: 'Ekspertiza natijalari to‘g‘risida umumlashtirilgan ma’lumot',
-				page: '10',
+				page: String(pageNumberPlan.section2SummaryPage),
 				large: true,
 			},
 			{
 				type: 'row',
 				title: 'Ekspertiza natijalari bo‘yicha batafsil izoh',
-				page: '14',
+				page: String(pageNumberPlan.detailStartPage),
 				large: true,
 			},
 		]
@@ -2539,17 +3247,26 @@ const SystemWord = () => {
 		]
 
 		return [...base, ...(tocVulnerabilityItems.items || []), ...tail]
-	}, [tocVulnerabilityItems])
+	}, [tocVulnerabilityItems, pageNumberPlan])
 
 	const tocItemHtml = useMemo(
 		() => tocItems.map(item => buildTocItemHtml(item)),
 		[tocItems],
 	)
 
+	const updateTocPageHtml = useCallback((pageIndex, html) => {
+		setTocPages(prev => {
+			const next = Array.isArray(prev) ? [...prev] : []
+			next[pageIndex] = [html]
+			return next
+		})
+	}, [])
+
 	useEffect(() => {
+		if (editing) return
 		const pages = paginateTocItems(tocItemHtml)
 		setTocPages(pages)
-	}, [tocItemHtml])
+	}, [tocItemHtml, editing])
 
 	// Sarlavha matnini solishtirish uchun normalizatsiya (bo'shliq, apostrof)
 	const normalizeTitle = s =>
@@ -2585,21 +3302,29 @@ const SystemWord = () => {
 
 	// Zaiflikni jadvaldan va batafsil bo'limdan o'chirish (darajasi, nomi, tarifi, oqibatlari, tavsiyalar)
 	const deleteVulnerability = row => {
+		if (!editingRef.current) return
 		if (!row || row?.type !== 'vuln') return
 		const level = Number(row?.level)
 		const name = (row?.name || '').trim()
 		const resourceLabel = (row?.resourceLabel || '').trim()
 		if (!name) return
 		const nameNorm = normalizeTitle(name)
+		const targetResource = normalizeResourceLabel(resourceLabel || '')
+		const isGeneralResource = value => {
+			const host = normalizeResourceLabel(value || '')
+			return !host || host.toLowerCase() === 'umumiy'
+		}
 
 		const matchVuln = v => {
 			const vLevel = Number(v?.a1)
 			const vName = stripHtml(v?.a3 || '').trim()
-			const vResource = extractResourceHost(v?.a4 || '') || 'Umumiy'
+			const vResource = normalizeResourceLabel(v?.a4 || '')
+			const resourceMatch =
+				isGeneralResource(targetResource) && isGeneralResource(vResource)
+					? true
+					: vResource === targetResource
 			return (
-				vLevel === level &&
-				normalizeTitle(vName) === nameNorm &&
-				vResource === resourceLabel
+				vLevel === level && normalizeTitle(vName) === nameNorm && resourceMatch
 			)
 		}
 
@@ -2611,6 +3336,7 @@ const SystemWord = () => {
 			setLowVuln(prev => (prev || []).filter(v => !matchVuln(v)))
 
 		setAllVuln(prev => (prev || []).filter(v => !matchVuln(v)))
+		queueRiskLayoutRefresh()
 
 		// Pastdagi batafsil bo'limdan: sarlavha, darajasi, tarifi, oqibatlari, tavsiyalar — barcha bloklarni o'chirish
 		// newVuln sahifa HTML yoki bloklar bo'lishi mumkin, avval bloklarga yoyib keyin o'chiramiz
@@ -2660,10 +3386,93 @@ const SystemWord = () => {
 		})
 	}
 
-	const renderRiskTableBody = (pageRows, keyPrefix) => {
+	const updateVulnerabilityRow = (row, patch = {}) => {
+		if (!editingRef.current) return
+		if (!row || row?.type !== 'vuln') return
+
+		const level = Number(row?.level)
+		const name = (row?.name || '').trim()
+		const resourceLabel = (row?.resourceLabel || '').trim()
+		const targetResource = normalizeResourceLabel(resourceLabel || '')
+		const isGeneralResource = value => {
+			const host = normalizeResourceLabel(value || '')
+			return !host || host.toLowerCase() === 'umumiy'
+		}
+		const nameNorm = normalizeTitle(name)
+		const nextNameRaw =
+			patch?.name != null ? stripHtml(String(patch.name || '')) : name
+		const nextName = nextNameRaw.trim()
+		const nextCountRaw =
+			patch?.count != null ? Number(patch.count) : Number(row?.count)
+		const nextCount =
+			Number.isFinite(nextCountRaw) && nextCountRaw > 0
+				? Math.floor(nextCountRaw)
+				: 1
+
+		if (!nextName) return
+		if (
+			normalizeTitle(nextName) === nameNorm &&
+			nextCount === Number(row?.count)
+		) {
+			return
+		}
+
+		const matchVuln = v => {
+			const vLevel = Number(v?.a1)
+			const vName = stripHtml(v?.a3 || '').trim()
+			const vResource = normalizeResourceLabel(v?.a4 || '')
+			const resourceMatch =
+				isGeneralResource(targetResource) && isGeneralResource(vResource)
+					? true
+					: vResource === targetResource
+			return (
+				vLevel === level && normalizeTitle(vName) === nameNorm && resourceMatch
+			)
+		}
+
+		const patchItem = item => ({
+			...item,
+			a1: level,
+			a2: nextCount,
+			a3: nextName,
+			a4: normalizeResourceLabel(item?.a4 || targetResource),
+		})
+
+		const updateList = list => {
+			const safe = Array.isArray(list) ? list : []
+			const out = []
+			let replaced = false
+
+			for (const item of safe) {
+				if (!matchVuln(item)) {
+					out.push(item)
+					continue
+				}
+				if (!replaced) {
+					out.push(patchItem(item))
+					replaced = true
+				}
+			}
+
+			return replaced ? out : safe
+		}
+
+		if (level === 1) setHighVuln(prev => updateList(prev))
+		else if (level === 2) setMediumVuln(prev => updateList(prev))
+		else if (level === 3) setLowVuln(prev => updateList(prev))
+
+		setAllVuln(prev => updateList(prev))
+		queueRiskLayoutRefresh()
+	}
+
+	const renderRiskTableBody = (
+		pageRows,
+		keyPrefix,
+		showDeleteColumn = false,
+	) => {
 		const rows = Array.isArray(pageRows) ? pageRows : []
 		const meta = computeRiskLevelRowspanMeta(rows)
-		const colspan = editing ? 4 : 3
+		const colspan = showDeleteColumn ? 4 : 3
 
 		return rows.map((row, idx) => {
 			if (row?.type === 'resource') {
@@ -2683,13 +3492,60 @@ const SystemWord = () => {
 							{riskLevelText(row?.level)}
 						</td>
 					)}
-					<td className='risk-name'>{row?.name}</td>
-					<td className='risk-count'>{row?.count}</td>
-					{editing && (
+					<td className='risk-name'>
+						{showDeleteColumn ? (
+							<textarea
+								defaultValue={row?.name || ''}
+								onBlur={e => {
+									updateVulnerabilityRow(row, { name: e.target.value })
+								}}
+								onKeyDown={e => {
+									if (e.key === 'Enter') {
+										e.preventDefault()
+										e.currentTarget.blur()
+									}
+								}}
+								rows={1}
+								className='w-full bg-transparent outline-none resize-none overflow-hidden text-center leading-snug'
+							/>
+						) : (
+							row?.name
+						)}
+					</td>
+					<td className='risk-count'>
+						{showDeleteColumn ? (
+							<input
+								type='number'
+								min={1}
+								defaultValue={row?.count ?? 1}
+								onBlur={e => {
+									updateVulnerabilityRow(row, { count: e.target.value })
+								}}
+								onKeyDown={e => {
+									if (e.key === 'Enter') {
+										e.preventDefault()
+										e.currentTarget.blur()
+									}
+								}}
+								className='w-full bg-transparent outline-none text-center'
+							/>
+						) : (
+							row?.count
+						)}
+					</td>
+					{showDeleteColumn && (
 						<td className='risk-delete p-1' contentEditable={false}>
 							<button
 								type='button'
-								onClick={() => deleteVulnerability(row)}
+								onMouseDown={e => {
+									e.preventDefault()
+									e.stopPropagation()
+								}}
+								onClick={e => {
+									e.preventDefault()
+									e.stopPropagation()
+									deleteVulnerability(row)
+								}}
 								className='w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center mx-auto'
 								title="Zaiflikni o'chirish"
 							>
@@ -2787,9 +3643,14 @@ const SystemWord = () => {
 
 	const handleSubmit = async docVuln => {
 		try {
-			console.log(docVuln)
-			const level = docVuln?.vuln?.[1]?.[0]
+			const level = Number(docVuln?.vuln?.[1]?.[0])
 			if (!level) return
+			const vulnCountRaw = Number(docVuln?.vulnCount)
+			const vulnCount =
+				Number.isFinite(vulnCountRaw) && vulnCountRaw > 0
+					? Math.floor(vulnCountRaw)
+					: 1
+			const resourceLabel = normalizeResourceLabel(docVuln?.resource || '')
 
 			const fieldMap = {
 				1: 13,
@@ -2804,9 +3665,10 @@ const SystemWord = () => {
 				19: id,
 				[field]: [
 					{
-						a1: docVuln?.vulnCount,
-						a2: level,
+						a1: level,
+						a2: vulnCount,
 						a3: docVuln?.vuln?.[1]?.[1],
+						a4: resourceLabel,
 					},
 				],
 			}
@@ -2821,9 +3683,10 @@ const SystemWord = () => {
 					setLowVuln(prev => [...(prev || []), newItem])
 
 				setAllVuln(prev => [...(prev || []), newItem])
+				setVulnUm(prev => [...(prev || []), newItem])
 			}
 			setPlatform('umumiy')
-			setVulnUm(prev => [...prev, payload])
+			queueRiskLayoutRefresh()
 
 			const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload)
 
@@ -2831,9 +3694,6 @@ const SystemWord = () => {
 				if (field === 11) {
 				}
 			}
-
-			console.log('Yuborilgan payload:', payload)
-			console.log('Response:', res)
 		} catch (error) {
 			console.error(error)
 		}
@@ -2962,6 +3822,18 @@ const SystemWord = () => {
 	}, [pages1, editing, newVuln, htmlContent])
 
 	const saveAllChanges = async () => {
+		const allDocImages = Array.from(
+			document.querySelectorAll('.page-content img'),
+		)
+		allDocImages.forEach(img => {
+			if (!img?.dataset) return
+			delete img.dataset.srcResolved
+			delete img.dataset.uploadProgress
+			delete img.dataset.uploading
+			delete img.dataset.uploadStarted
+			delete img.dataset.pasteInit
+		})
+
 		const allPages = document.querySelectorAll('.new-content')
 
 		let allBlocks = []
@@ -2999,7 +3871,10 @@ const SystemWord = () => {
 		// console.log(allBlocks);
 
 		// pagination qayta hisoblanadi
-		const paged = paginateContent(allBlocks)
+		const sanitizedBlocks = allBlocks.map(item =>
+			sanitizePersistedImageHtml(item),
+		)
+		const paged = paginateContent(sanitizedBlocks)
 
 		// Table ma'lumotlarini o'qish (rasmlar bilan base64 da)
 		const extractTableData = () => {
@@ -3023,7 +3898,7 @@ const SystemWord = () => {
 
 						// Agar katakda rasm bo'lsa, HTML sifatida saqlaymiz (base64 bilan)
 						if (images.length > 0) {
-							return cell.innerHTML
+							return sanitizePersistedImageHtml(cell.innerHTML)
 						}
 
 						return cellText
@@ -3093,9 +3968,29 @@ const SystemWord = () => {
 		toast.success('Barcha o‘zgarishlar saqlandi')
 	}
 
+	useEffect(() => {
+		shortcutActionsRef.current.save = saveAllChanges
+	}, [saveAllChanges])
+
+	useEffect(() => {
+		shortcutActionsRef.current.openModal = () => openModal(expertize)
+	}, [expertize])
+
+	useEffect(() => {
+		shortcutActionsRef.current.print = handlePrint
+	}, [handlePrint])
+
 	const handlePasteImage = async (file, imgElement) => {
 		try {
-			if (!file) return null
+			if (!file) {
+				imageLogError('handlePasteImage skipped: file is missing')
+				return null
+			}
+			imageLog('handlePasteImage start', {
+				fileName: file?.name,
+				fileType: file?.type,
+				fileSize: file?.size,
+			})
 
 			const safeType = file.type || 'image/png'
 			const extFromType = safeType.includes('png')
@@ -3112,63 +4007,150 @@ const SystemWord = () => {
 				file instanceof File
 					? new File([file], safeName, { type: safeType })
 					: file
+			imageLog('handlePasteImage upload prepared', {
+				safeName,
+				safeType,
+				size: uploadFile?.size,
+			})
 
 			const imageRes = await uploadFileViaRpc(stRef, uploadFile, id, p => {
 				if (imgElement) imgElement.dataset.uploadProgress = String(p)
 			})
+			imageLog('handlePasteImage upload response', imageRes)
 
 			// console.log(imageRes)
 
 			const fileId = imageRes?.fileId || imageRes?.result?.fileId
+			const responseSizeRaw =
+				imageRes?.size ??
+				imageRes?.result?.size ??
+				uploadFile?.size ??
+				file?.size
+			const responseSize = Number(responseSizeRaw)
+			const safeUploadedSize =
+				Number.isFinite(responseSize) && responseSize > 0
+					? Math.floor(responseSize)
+					: undefined
+			imageLog('handlePasteImage parsed response', {
+				fileId,
+				safeUploadedSize,
+			})
 			if (fileId && imgElement) {
 				imgElement.dataset.fileId = fileId
 				imgElement.dataset.uploaded = 'true'
+				if (safeUploadedSize) {
+					imgElement.dataset.fileSize = String(safeUploadedSize)
+				}
 			}
 
-			if (fileId && imgElement) {
-				const srcUrl = await downloadFileAll(fileId, imageRes?.size)
+			if (fileId && imgElement && safeUploadedSize) {
+				const srcUrl = await downloadFileAll(fileId, safeUploadedSize)
 				if (srcUrl) imgElement.src = srcUrl
+				imageLog('handlePasteImage preview source resolved', {
+					fileId,
+					hasSrcUrl: Boolean(srcUrl),
+				})
+			}
+			if (!fileId) {
+				imageLogError('handlePasteImage failed: fileId not found in response')
+				return null
 			}
 
-			const updateRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
+			setUploadedFilesMeta(prev => ({
+				...(prev || {}),
+				[fileId]: safeUploadedSize,
+				[`files/${String(fileId).replace(/^files\//i, '')}`]: safeUploadedSize,
+			}))
+
+			const saveRes = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, {
 				19: id,
-				15: { 1: fileId, 2: imageRes?.size },
+				15: safeUploadedSize
+					? { 1: fileId, 2: safeUploadedSize }
+					: { 1: fileId },
 			})
-			// console.log(updateRes)
+			imageLog('handlePasteImage field15 save response', saveRes)
 			return fileId || null
 		} catch (error) {
-			// console.log(error);
+			imageLogError('handlePasteImage error', error)
 			return null
 		}
 	}
 
 	const downloadFileAll = async (id, size) => {
-		if (!id) return null
+		if (!id) {
+			imageLogError('downloadFileAll skipped: id missing')
+			return null
+		}
 		const fid = String(id).replace(/^files\//i, '')
 		const cacheKey = `files/${fid}`
 
-		const cached = localStorage.getItem(cacheKey)
-		if (cached && cached.startsWith('blob:')) return cached
-
 		const safeSize = Number(size)
-		const blob = await downloadFileViaRpcNew(
-			stRef,
-			fid,
-			fid,
-			Number.isFinite(safeSize) ? safeSize : undefined,
-			() => {},
-		)
-		const url = URL.createObjectURL(blob)
-		// localStorage.setItem(cacheKey, url);
-		return url
+		if (!Number.isFinite(safeSize) || safeSize <= 0) {
+			imageLogError('downloadFileAll invalid size', { fid, size })
+			return null
+		}
+		const objectUrlKey = `${cacheKey}:${Math.floor(safeSize)}`
+		const cacheMap = fileUrlCacheRef.current
+		const inflightMap = fileDownloadInflightRef.current
+		const cachedUrl = cacheMap.get(objectUrlKey)
+		if (cachedUrl) {
+			imageLog('downloadFileAll cache hit', { fid, cacheKey: objectUrlKey })
+			return cachedUrl
+		}
+		const inflight = inflightMap.get(objectUrlKey)
+		if (inflight) {
+			imageLog('downloadFileAll await inflight', {
+				fid,
+				cacheKey: objectUrlKey,
+			})
+			return await inflight
+		}
+
+		imageLog('downloadFileAll request', { fid, safeSize })
+		const task = (async () => {
+			const blob = await downloadFileViaRpcNew(
+				stRef,
+				fid,
+				fid,
+				safeSize,
+				() => {},
+			)
+			const url = URL.createObjectURL(blob)
+			cacheMap.set(objectUrlKey, url)
+			imageLog('downloadFileAll success', {
+				fid,
+				blobSize: blob?.size,
+				hasUrl: Boolean(url),
+			})
+			return url
+		})()
+		inflightMap.set(objectUrlKey, task)
+		try {
+			return await task
+		} finally {
+			inflightMap.delete(objectUrlKey)
+		}
 	}
+
+	useEffect(() => {
+		return () => {
+			try {
+				const cacheMap = fileUrlCacheRef.current
+				Array.from(cacheMap.values()).forEach(url => {
+					if (typeof url === 'string' && url.startsWith('blob:')) {
+						URL.revokeObjectURL(url)
+					}
+				})
+				cacheMap.clear()
+				fileDownloadInflightRef.current.clear()
+			} catch {}
+		}
+	}, [])
 
 	// ORDER_GET_ID dan kelgan 15-field bo'yicha rasmlarni URL qilib qo'yish
 	useEffect(() => {
 		if (editing) return
 		const meta = uploadedFilesMeta || {}
-		const keys = Object.keys(meta)
-		if (!keys.length) return
 
 		let cancelled = false
 
@@ -3176,10 +4158,19 @@ const SystemWord = () => {
 			const imgs = Array.from(
 				document.querySelectorAll('.page-content img[data-file-id]'),
 			)
+			imageLog('resolveStoredImages start', {
+				imagesCount: imgs.length,
+				metaKeys: Object.keys(meta || {}).length,
+			})
 			for (const img of imgs) {
 				if (cancelled) return
 				if (!img) continue
-				if (img.dataset.srcResolved === 'true') continue
+				const currentSrc = (img.getAttribute('src') || '').trim()
+				const skipResolved =
+					img.dataset.srcResolved === 'true' &&
+					currentSrc.length > 0 &&
+					!currentSrc.startsWith('blob:')
+				if (skipResolved) continue
 
 				const dfidRaw =
 					img.getAttribute('data-file-id') || img.dataset.fileId || ''
@@ -3187,8 +4178,24 @@ const SystemWord = () => {
 
 				const dfid = dfidRaw.toString().trim()
 				const fid = dfid.replace(/^files\//i, '')
-
-				const size = meta[dfid] ?? meta[fid] ?? meta[`files/${fid}`]
+				const attrSizeRaw =
+					img.getAttribute('data-file-size') || img.dataset.fileSize || ''
+				const attrSize = Number(attrSizeRaw)
+				const metaSize = meta[dfid] ?? meta[fid] ?? meta[`files/${fid}`]
+				const size = Number.isFinite(Number(metaSize))
+					? Number(metaSize)
+					: Number.isFinite(attrSize)
+						? attrSize
+						: undefined
+				if (!(Number.isFinite(size) && size > 0)) {
+					imageLogError('resolveStoredImages skip invalid size', {
+						dfid,
+						metaSize,
+						attrSizeRaw,
+					})
+					continue
+				}
+				img.dataset.fileSize = String(Math.floor(size))
 
 				try {
 					const url = await downloadFileAll(fid, size)
@@ -3196,10 +4203,10 @@ const SystemWord = () => {
 					if (url) {
 						img.src = url
 						img.dataset.srcResolved = 'true'
+						imageLog('resolveStoredImages resolved', { fid, size })
 					}
 				} catch (e) {
-					// ignore single image failure
-					console.log(e)
+					imageLogError('resolveStoredImages error', { fid, size, error: e })
 				}
 			}
 		}
@@ -3209,7 +4216,7 @@ const SystemWord = () => {
 		return () => {
 			cancelled = true
 		}
-	}, [editing, uploadedFilesMeta, htmlContent, pages3])
+	}, [editing, uploadedFilesMeta, pages3])
 
 	const addNewTr = () => {
 		setRows(prev => [
@@ -3236,7 +4243,81 @@ const SystemWord = () => {
 		runEditorCommand('fontSize', TOOLBAR_FONT_SIZE_TO_EXEC[value] ?? '4')
 	}
 
+	const renderShortcutBadge = key => (
+		<span className='ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded border border-white/60 bg-white/20 px-1 text-[10px] font-semibold leading-none text-white'>
+			{key}
+		</span>
+	)
+
+	useEffect(() => {
+		const isTypingTarget = target => {
+			if (!(target instanceof Element)) return false
+			const tag = (target.tagName || '').toLowerCase()
+			if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
+			if (target.isContentEditable) return true
+			const editableAncestor =
+				typeof target.closest === 'function'
+					? target.closest('[contenteditable="true"]')
+					: null
+			return Boolean(editableAncestor)
+		}
+
+		const handleShortcutKeyDown = e => {
+			if (e.defaultPrevented) return
+			if (e.ctrlKey || e.metaKey || e.altKey) return
+			if (e.repeat) return
+			if (isTypingTarget(e.target)) return
+
+			const key = (e.key || '').toLowerCase()
+			const code = e.code || ''
+			const isShortcut = (letter, keyCode) =>
+				key === letter || code === keyCode
+
+			if (isShortcut('p', 'KeyP')) {
+				e.preventDefault()
+				shortcutActionsRef.current.print?.()
+				return
+			}
+
+			if (isShortcut('e', 'KeyE')) {
+				if (!editingRef.current) {
+					e.preventDefault()
+					setEditing(true)
+				}
+				return
+			}
+
+			if (!editingRef.current) return
+
+			if (isShortcut('b', 'KeyB')) {
+				e.preventDefault()
+				shortcutActionsRef.current.openModal?.()
+				return
+			}
+
+			if (isShortcut('s', 'KeyS')) {
+				e.preventDefault()
+				shortcutActionsRef.current.save?.()
+			}
+		}
+
+		document.addEventListener('keydown', handleShortcutKeyDown)
+		return () => {
+			document.removeEventListener('keydown', handleShortcutKeyDown)
+		}
+	}, [])
+
 	const currentPages = pages3
+	let renderedPageNumber = pageNumberPlan.section1Page
+	const renderPageNumberLabel = () => {
+		const pageNumber = renderedPageNumber
+		renderedPageNumber += 1
+		return (
+			<span className='text-white max-w-[60%] mt-[20px]'>
+				{appName} | {pageNumber}
+			</span>
+		)
+	}
 	return (
 		<>
 			<ExpertizeModal
@@ -3248,7 +4329,10 @@ const SystemWord = () => {
 				resourceOptions={objectLinks}
 			/>
 
-			<div className='word-container dark:text-[#333] relative' ref={printRef}>
+			<div
+				className={`word-container dark:text-[#333] relative ${editing ? 'editing' : ''}`}
+				ref={printRef}
+			>
 				<div
 					className={`sticky top-20 z-50 mb-3 print-btns ${!editing && 'right-5'}`}
 				>
@@ -3284,6 +4368,7 @@ const SystemWord = () => {
 									>
 										<IoIosAddCircleOutline size={18} />
 										Zaiflik qo'shish
+										{renderShortcutBadge('B')}
 									</button>
 								)}
 								<button
@@ -3295,7 +4380,8 @@ const SystemWord = () => {
 										width='1.1em'
 										height='1.1em'
 									></iconify-icon>
-									Hisobot
+									Chop etish
+									{renderShortcutBadge('P')}
 								</button>
 								<div
 									className='edit-btn-global'
@@ -3312,12 +4398,14 @@ const SystemWord = () => {
 											<div className='bg-green-500 hover:bg-green-600'>
 												<FaSave />
 												<span>Saqlash </span>
+												{renderShortcutBadge('S')}
 											</div>
 										</div>
 									) : (
 										<div className='change-btn flex gap-2 cursor-pointer rounded-lg h-9'>
 											<div className='bg-[#bb9769] hover:bg-[#a07f5a]'>
 												<FaPen /> <span>Tahrirlash</span>
+												{renderShortcutBadge('E')}
 											</div>
 										</div>
 									)}
@@ -3326,25 +4414,6 @@ const SystemWord = () => {
 						</div>
 					</div>
 				</div>
-				<div className='fixed bottom-5 z-50 mb-3 print-btns'>
-					<div className='mt-2 rounded-2xl border border-slate-300 bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-sm backdrop-blur'>
-						<span className='mr-4'>
-							Holat: {editing ? 'Tahrirlash rejimi' : "Ko'rish rejimi"}
-						</span>
-						<span className='mr-4'>So'zlar: {editorStats.words}</span>
-						<span className='mr-4'>Belgilar: {editorStats.characters}</span>
-						<span>
-							Oxirgi saqlash:{' '}
-							{lastSavedAt
-								? lastSavedAt.toLocaleTimeString([], {
-										hour: '2-digit',
-										minute: '2-digit',
-									})
-								: "Hozircha yo'q"}
-						</span>
-					</div>
-				</div>
-
 				<div className='word-pages' style={{ zoom: `${zoom}%` }}>
 					<div className='a4 first-a4 system system-first'>
 						<div className='page-content'>
@@ -3360,10 +4429,19 @@ const SystemWord = () => {
 							key={`toc-${pageIndex}`}
 							className={`a4 ${pageIndex % 2 === 0 ? 'mundarija1 system-m1' : 'mundarija2 system-m2'}`}
 						>
-							<div className='page-content top editable'>
+							<div className='page-content top'>
 								<div
-									className={`mundarija-content mundarija-content-system ${pageIndex === 0 ? 'first' : ''}`}
-									dangerouslySetInnerHTML={{ __html: pageItems.join('') }}
+									className={`mundarija-content mundarija-content-system editable ${pageIndex === 0 ? 'first' : ''}`}
+									contentEditable={editing}
+									suppressContentEditableWarning
+									onInput={e =>
+										updateTocPageHtml(pageIndex, e.currentTarget.innerHTML)
+									}
+									dangerouslySetInnerHTML={{
+										__html: Array.isArray(pageItems)
+											? pageItems.join('')
+											: pageItems || '',
+									}}
 								/>
 							</div>
 						</div>
@@ -3427,9 +4505,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 5
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					<div className='a4 system-c system-text-page'>
@@ -3533,9 +4609,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 6
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					<div className='a4 system-c system-text-page'>
@@ -3605,9 +4679,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 7
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 
@@ -3659,9 +4731,7 @@ const SystemWord = () => {
 								className='page-number flex justify-center mt-auto text-white items-center'
 								style={{ bottom: '40px' }}
 							>
-								<span className='text-white max-w-[60%] mt-[20px]'>
-									{appName} | {7 + pageIndex + 1}
-								</span>
+								{renderPageNumberLabel()}
 							</div>
 						</div>
 					))}
@@ -3694,16 +4764,7 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 5 % 2 === 0 ? `end` : `start`,
-								marginRight: 5 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
+
 						<div className='page-content editable'>
 							<table className='system-table mb-5'>
 								<thead>
@@ -3767,9 +4828,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | {7 + sectionTablePages.length}
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					{systemAccountsPages.slice(1).map((pageRows, extraIdx) => {
@@ -3792,16 +4851,7 @@ const SystemWord = () => {
 									src='/assets/system/ax-bottoms.jpg'
 									alt=''
 								/>
-								<div
-									className='page-title'
-									style={{
-										textAlign: 5 % 2 === 0 ? `end` : `start`,
-										marginRight: 5 % 2 === 0 ? `50px` : `0px`,
-									}}
-								>
-									<div>“{appName}”</div>
-									<div>mobil ilovasi</div>
-								</div>
+
 								<div className='page-content editable'>
 									{renderSystemAccountsTable({
 										pageRows,
@@ -3813,9 +4863,7 @@ const SystemWord = () => {
 									className='page-number flex justify-center mt-auto text-white items-center'
 									style={{ bottom: '40px' }}
 								>
-									<span className='text-white max-w-[60%] mt-[20px]'>
-										{appName} | {7 + sectionTablePages.length + pageIndex}
-									</span>
+									{renderPageNumberLabel()}
 								</div>
 							</div>
 						)
@@ -3848,16 +4896,7 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 7 % 2 === 0 ? `end` : `start`,
-								marginRight: 7 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
+
 						<div className='page-content editable'>
 							<div className='system-section-header'>
 								<div className='system-section-title'>IKKINCHI BO‘LIM.</div>
@@ -3911,17 +4950,31 @@ const SystemWord = () => {
 										ma’lumot 3-jadvalda taqdim qilingan.
 									</p>
 									<div className='system-table-label'>3-jadval</div>
-									<table className='system-risk-table'>
+									<table
+										key={`risk-main-${editing ? 'edit' : 'view'}`}
+										className='system-risk-table'
+										contentEditable={false}
+										suppressContentEditableWarning
+									>
 										<thead>
 											<tr>
 												<th>Xavflilik darajasi</th>
 												<th>Aniqlangan zaiflik</th>
 												<th>Soni</th>
-												{editing && <th style={{ width: '48px' }}></th>}
+												{editing && (
+													<th
+														className='risk-delete-head'
+														style={{ width: '48px' }}
+													></th>
+												)}
 											</tr>
 										</thead>
 										<tbody>
-											{renderRiskTableBody(riskFirstPageRows || [], 'risk')}
+											{renderRiskTableBody(
+												riskFirstPageRows || [],
+												'risk',
+												editing,
+											)}
 										</tbody>
 									</table>
 								</div>
@@ -3931,14 +4984,12 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 10
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					{riskContinuationPages.length > 0 && (
 						<>
-							{riskContinuationPages.map((p, pageIdx) => {
+							{riskContinuationPages.map((rows, pageIdx) => {
 								const virtualIndex = 8 + pageIdx // 8 sahifadagi fon tartibi (oldingi kabi)
 								const isEven = virtualIndex % 2 === 0
 
@@ -3971,65 +5022,46 @@ const SystemWord = () => {
 												/>
 											</>
 										)}
-										<div
-											className='page-title'
-											style={{
-												textAlign: isEven ? `end` : `start`,
-												marginRight: isEven ? `50px` : `0px`,
-											}}
-										>
-											<div>“{appName}”</div>
-											<div>mobil ilovasi</div>
-										</div>
+
 										<div className='page-content editable'>
 											<div className='system-table-label'>
 												3-jadval (davomi)
 											</div>
 											<div className='system-risk-columns'>
-												<table className='system-risk-table'>
+												<table
+													key={`risk-cont-${pageIdx}-${editing ? 'edit' : 'view'}`}
+													className='system-risk-table'
+													contentEditable={false}
+													suppressContentEditableWarning
+												>
 													<thead>
 														<tr>
 															<th>Xavflilik darajasi</th>
 															<th>Aniqlangan zaiflik</th>
 															<th>Soni</th>
-															{editing && <th style={{ width: '48px' }}></th>}
+															{editing && (
+																<th
+																	className='risk-delete-head'
+																	style={{ width: '48px' }}
+																></th>
+															)}
 														</tr>
 													</thead>
 													<tbody>
 														{renderRiskTableBody(
-															p.left || [],
-															`riskl-${pageIdx}`,
+															rows || [],
+															`riskc-${pageIdx}`,
+															editing,
 														)}
 													</tbody>
 												</table>
-
-												{!!(p.right || []).length && (
-													<table className='system-risk-table'>
-														<thead>
-															<tr>
-																<th>Xavflilik darajasi</th>
-																<th>Aniqlangan zaiflik</th>
-																<th>Soni</th>
-																{editing && <th style={{ width: '48px' }}></th>}
-															</tr>
-														</thead>
-														<tbody>
-															{renderRiskTableBody(
-																p.right || [],
-																`riskr-${pageIdx}`,
-															)}
-														</tbody>
-													</table>
-												)}
 											</div>
 										</div>
 										<div
 											className='page-number flex justify-center mt-auto text-white items-center'
 											style={{ bottom: '40px' }}
 										>
-											<span className='text-white max-w-[60%] mt-[20px]'>
-												{appName} | {11 + pageIdx}
-											</span>
+											{renderPageNumberLabel()}
 										</div>
 									</div>
 								)
@@ -4067,17 +5099,6 @@ const SystemWord = () => {
 										/>
 									</>
 								)}
-								<div
-									className='page-title'
-									style={{
-										width: '85%',
-										textAlign: pageIndex % 2 === 0 ? 'end' : 'start',
-										marginRight: pageIndex % 2 === 0 ? '50px' : '0px',
-									}}
-								>
-									<div>“{appName}”</div>
-									<div>mobil ilovasi</div>
-								</div>
 
 								<div className='page-content editable new-content'>
 									<div className='system-two-col-flow'>
@@ -4091,9 +5112,7 @@ const SystemWord = () => {
 									className='page-number flex justify-center mt-auto text-white items-center'
 									style={{ bottom: '40px' }}
 								>
-									<span className='text-white max-w-[60%] mt-[20px]'>
-										{appName} | {pageIndex + 17}
-									</span>
+									{renderPageNumberLabel()}
 								</div>
 							</div>
 						))}
@@ -4126,16 +5145,7 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 10 % 2 === 0 ? `end` : `start`,
-								marginRight: 10 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
+
 						<div className='page-content editable'>
 							<div className='system-section-header'>
 								<div className='system-section-title'>UCHINCHI BO‘LIM.</div>
@@ -4208,9 +5218,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 13
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					<div className='a4 system-c'>
@@ -4241,16 +5249,7 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 10 % 2 === 0 ? `end` : `start`,
-								marginRight: 10 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
+
 						<div className='page-content editable relative h-full'>
 							<div className='system-section-header'>
 								<div className='font-semibold text-left text-xl'>
@@ -4276,7 +5275,7 @@ const SystemWord = () => {
 								</div>
 							</div>
 
-							<div className='absolute bottom-20'>
+							<div className='absolute bottom-6'>
 								<div className='system-col'>
 									<p className='system-paragraph'>
 										Ro'yhat tartib raqami{' '}
@@ -4312,9 +5311,7 @@ const SystemWord = () => {
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 14
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					<div className='a4 system-c'>
@@ -4345,24 +5342,12 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 10 % 2 === 0 ? `end` : `start`,
-								marginRight: 10 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
 
 						<div
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 15
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 					<div className='a4 system-c'>
@@ -4393,24 +5378,12 @@ const SystemWord = () => {
 								/>
 							</>
 						)}
-						<div
-							className='page-title'
-							style={{
-								textAlign: 10 % 2 === 0 ? `end` : `start`,
-								marginRight: 10 % 2 === 0 ? `50px` : `0px`,
-							}}
-						>
-							<div>“{appName}”</div>
-							<div>mobil ilovasi</div>
-						</div>
 
 						<div
 							className='page-number flex justify-center mt-auto text-white items-center'
 							style={{ bottom: '40px' }}
 						>
-							<span className='text-white max-w-[60%] mt-[20px]'>
-								{appName} | 15
-							</span>
+							{renderPageNumberLabel()}
 						</div>
 					</div>
 

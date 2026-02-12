@@ -111,7 +111,6 @@
 }
 
 .page-content {
-	padding-top: 20px;
 	font-size: 14px;
 	line-height: 1.6;
 	white-space: normal;
@@ -250,6 +249,41 @@
 .word-container .a4 .page-content table tbody tr td {
 	padding-top: 3px;
 	padding-bottom: 3px;
+}
+
+.word-container .page-content h1,
+.word-container .page-content h2,
+.word-container .page-content h3,
+.word-container .page-content h4,
+.word-container .page-content h5,
+.word-container .page-content h6 {
+	font-weight: 700;
+	line-height: 1.25;
+	margin: 0.4em 0 0.25em;
+}
+
+.word-container .page-content h1 {
+	font-size: 2em;
+}
+
+.word-container .page-content h2 {
+	font-size: 1.5em;
+}
+
+.word-container .page-content h3 {
+	font-size: 1.17em;
+}
+
+.word-container .page-content h4 {
+	font-size: 1em;
+}
+
+.word-container .page-content h5 {
+	font-size: 0.83em;
+}
+
+.word-container .page-content h6 {
+	font-size: 0.67em;
 }
 
 p strong[data-title='Yuqori '] {
@@ -863,6 +897,15 @@ table.depart-table {
 	overflow: visible !important;
 }
 
+.word-container.editing .a4.system-c {
+	height: 297mm !important;
+	min-height: 297mm !important;
+}
+
+.word-container.editing .a4.system-c .page-content {
+	overflow: hidden !important;
+}
+
 .page-content .text img {
 	display: block;
 	margin: 0 auto;
@@ -969,12 +1012,15 @@ object #save {
 .a4.system-c {
 	background-image: none !important;
 	position: relative;
+	--system-page-content-height: 850px;
+	--system-page-content-offset-top: 0px;
 }
 
 .system-text-page .page-content {
-	padding-top: 56px;
-	max-height: 890px !important;
-	height: 890px;
+	height: var(--system-page-content-height) !important;
+	min-height: var(--system-page-content-height) !important;
+	max-height: var(--system-page-content-height) !important;
+	margin-top: var(--system-page-content-offset-top) !important;
 }
 
 .system-section-header {
@@ -1186,9 +1232,10 @@ object #save {
 	width: 83px;
 }
 
-.system-risk-table th:last-child,
-.system-risk-table td:last-child {
+.system-risk-table th.risk-delete-head,
+.system-risk-table td.risk-delete {
 	width: 52px;
+	min-width: 52px;
 }
 
 .system-risk-table .risk-resource td {
@@ -1223,6 +1270,21 @@ object #save {
 .system-risk-columns > .system-risk-table {
 	align-self: start;
 	height: auto;
+}
+
+.word-container:not(.editing) .system-risk-table td.risk-delete,
+.word-container:not(.editing) .system-risk-table th.risk-delete-head,
+.word-container:not(.editing) .system-risk-table thead th:empty {
+	display: none !important;
+}
+
+.word-container:not(.editing) .system-risk-table th:nth-child(4),
+.word-container:not(.editing) .system-risk-table td:nth-child(4) {
+	display: none !important;
+	width: 0 !important;
+	min-width: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
 }
 
 .system-top-img {
@@ -1321,8 +1383,10 @@ background-item.is-visible:not(.backwards) {
 }
 
 .word-container .a4.system-c .page-content {
-	height: 890px;
-	max-height: 890px;
+	height: var(--system-page-content-height);
+	min-height: var(--system-page-content-height);
+	max-height: var(--system-page-content-height);
+	margin-top: var(--system-page-content-offset-top);
 }
 
 .word-container .a4.system-c .page-content table {
@@ -1342,9 +1406,10 @@ background-item.is-visible:not(.backwards) {
 }
 
 .word-container .a4.system-c .page-content.new-content {
-	height: 812px;
-	min-height: 812px;
-	max-height: 812px;
+	height: var(--system-page-content-height);
+	min-height: var(--system-page-content-height);
+	max-height: var(--system-page-content-height);
+	margin-top: var(--system-page-content-offset-top);
 }
 
 .loaderSpinner {

@@ -30,6 +30,9 @@ const TOOLBAR_BLOCK_OPTIONS = [
 	{ label: 'Sarlavha 1', value: 'h1' },
 	{ label: 'Sarlavha 2', value: 'h2' },
 	{ label: 'Sarlavha 3', value: 'h3' },
+	{ label: 'Sarlavha 4', value: 'h4' },
+	{ label: 'Sarlavha 5', value: 'h5' },
+	{ label: 'Sarlavha 6', value: 'h6' },
 	{ label: 'Iqtibos', value: 'blockquote' },
 ]
 const TOOLBAR_FONT_SIZE_TO_EXEC = {
@@ -158,12 +161,24 @@ const parseVulnByLevel = payloads => {
 		medium = [],
 		low = []
 	;(payloads || []).forEach(p => {
-		const arr = p[13] || p[12] || p[11]
-		const list = Array.isArray(arr) ? arr : arr ? [arr] : []
+		const candidate = p?.[13] ?? p?.[12] ?? p?.[11] ?? (p?.a1 != null ? [p] : [])
+		const list = Array.isArray(candidate)
+			? candidate.flat().filter(Boolean)
+			: candidate
+				? [candidate]
+				: []
 		list.forEach(v => {
-			if (!v || v.a1 == null) return
-			const item = { a1: v.a1, a2: v.a2, a3: v.a3 }
-			const lev = Number(v.a1) || v.a1
+			if (!v) return
+			const lev = Number(v?.a1 ?? v?.level)
+			if (![1, 2, 3].includes(lev)) return
+			const countValue = Number(v?.a2 ?? v?.count)
+			const item = {
+				a1: lev,
+				a2: Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 1,
+				a3: v?.a3 ?? v?.name,
+				a4: v?.a4,
+			}
+			if (!item.a3) return
 			if (lev === 1) high.push(item)
 			else if (lev === 2) medium.push(item)
 			else if (lev === 3) low.push(item)
@@ -693,130 +708,142 @@ const Word = () => {
 
 		attachImageResizeHandler()
 		updateAllImagesVisual()
-		const handleInput = e => {
-			// Just handle images on input, don't trigger page overflow
-			handleImageResize()
-			attachImageResizeHandler()
-
-			// Immediately check if content overflows and trim it
-			const editables = document.querySelectorAll('.page-content')
-			editables.forEach(pageContent => {
-				const MAX_HEIGHT = 900
-				if (pageContent.scrollHeight > MAX_HEIGHT) {
-					// Find and remove excess content
-					const children = Array.from(pageContent.children)
-					let currentHeight = 0
-
-					for (let i = 0; i < children.length; i++) {
-						const child = children[i]
-						currentHeight += child.offsetHeight
-
-						if (currentHeight > MAX_HEIGHT) {
-							// Remove this and all subsequent elements
-							for (let j = children.length - 1; j >= i; j--) {
-								children[j].remove()
-							}
-							break
-						}
-					}
-				}
+		let overflowFrame = null
+		const scheduleOverflow = () => {
+			if (overflowFrame !== null) return
+			overflowFrame = requestAnimationFrame(() => {
+				overflowFrame = null
+				handlePageOverflow()
 			})
 		}
 
-		const handlePaste = e => {
-			// Handle images in clipboard
-			const items = (e.clipboardData || e.originalEvent.clipboardData).items
-			let hasImage = false
+		const handleInput = e => {
+			handleImageResize()
+			attachImageResizeHandler()
+			scheduleOverflow()
+		}
 
-			for (let item of items) {
-				if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
-					hasImage = true
-					// Prevent default paste behavior only for images to insert custom HTML
-					e.preventDefault()
+		const extractImageDataUrlFromHtml = html => {
+			if (!html || typeof html !== 'string') return ''
+			try {
+				const doc = new DOMParser().parseFromString(html, 'text/html')
+				const img = doc.querySelector('img[src]')
+				const src = (img?.getAttribute('src') || '').trim()
+				return src.startsWith('data:image/') ? src : ''
+			} catch {
+				return ''
+			}
+		}
 
-					const blob = item.getAsFile()
-					const reader = new FileReader()
+		const insertPastedImage = (file, editableRoot, previewSrc = null) => {
+			const imgElement = document.createElement('img')
+			imgElement.onload = () => {
+				const maxWidth = 500
+				if (imgElement.width > maxWidth) {
+					const aspectRatio = imgElement.height / imgElement.width
+					imgElement.style.width = maxWidth + 'px'
+					imgElement.style.height = maxWidth * aspectRatio + 'px'
+				} else {
+					imgElement.style.width = imgElement.width + 'px'
+					imgElement.style.height = imgElement.height + 'px'
+				}
 
-					reader.onload = event => {
-						const imgElement = document.createElement('img')
-						imgElement.src = event.target.result
+				imgElement.style.cursor = 'ew-resize'
+				imgElement.style.display = 'inline-block'
+				imgElement.style.border = '1px solid #ddd'
+				imgElement.style.margin = '10px auto'
+				imgElement.style.userSelect = 'none'
+				imgElement.className = 'resizable-image'
 
-						imgElement.onload = () => {
-							// Image loaded, resize it
-							const maxWidth = 500
-							if (imgElement.width > maxWidth) {
-								const aspectRatio = imgElement.height / imgElement.width
-								imgElement.style.width = maxWidth + 'px'
-								imgElement.style.height = maxWidth * aspectRatio + 'px'
-							} else {
-								imgElement.style.width = imgElement.width + 'px'
-								imgElement.style.height = imgElement.height + 'px'
-							}
-
-							// Set styles for resize
-							imgElement.style.cursor = 'ew-resize'
-							imgElement.style.display = 'inline-block'
-							imgElement.style.border = '1px solid #ddd'
-							imgElement.style.margin = '10px auto'
-							imgElement.style.userSelect = 'none'
-							imgElement.className = 'resizable-image'
-
-							// Insert image after a slight delay to allow paste to complete
-							setTimeout(() => {
-								// Get current selection and insert image
-								const selection = window.getSelection()
-								if (selection.rangeCount > 0) {
-									const range = selection.getRangeAt(0)
-									const wrapper = document.createElement('p')
-									wrapper.style.textAlign = 'center'
-									wrapper.appendChild(imgElement)
-									range.insertNode(wrapper)
-
-									// Move cursor after image
-									range.setStartAfter(wrapper)
-									range.collapse(true)
-									selection.removeAllRanges()
-									selection.addRange(range)
-								}
-
-								// Trigger reflow and handle overflow
-								editables.forEach(el => {
-									void el.offsetHeight
-								})
-
-								// Attach resize handler to the new image with a small delay
-								setTimeout(() => {
-									// Ensure image is in DOM before attaching handler
-									if (imgElement && imgElement.parentNode) {
-										imgElement.style.cursor = editing ? 'ew-resize' : 'default'
-										imgElement.style.display = 'inline-block'
-										imgElement.style.userSelect = 'none'
-										imgElement.style.border = editing
-											? '1px solid #ddd'
-											: 'none'
-										imgElement.style.margin = '10px auto'
-									}
-
-									// Also call attachImageResizeHandler to ensure all images have handlers
-									attachImageResizeHandler()
-
-									handlePageOverflow()
-								}, 300)
-							}, 50)
-						}
+				setTimeout(() => {
+					const selection = window.getSelection()
+					const wrapper = document.createElement('p')
+					wrapper.style.textAlign = 'center'
+					wrapper.appendChild(imgElement)
+					if (
+						selection &&
+						selection.rangeCount > 0 &&
+						editableRoot &&
+						editableRoot.contains(selection.getRangeAt(0).commonAncestorContainer)
+					) {
+						const range = selection.getRangeAt(0)
+						range.insertNode(wrapper)
+						range.setStartAfter(wrapper)
+						range.collapse(true)
+						selection.removeAllRanges()
+						selection.addRange(range)
+					} else if (editableRoot) {
+						editableRoot.appendChild(wrapper)
 					}
 
-					reader.readAsDataURL(blob)
-				}
-			}
+					editables.forEach(el => {
+						void el.offsetHeight
+					})
 
-			// If it's not an image, allow default paste behavior for text
-			if (!hasImage) {
-				// Allow default paste for text content
-				setTimeout(() => {
-					handlePageOverflow()
+					setTimeout(() => {
+						if (imgElement && imgElement.parentNode) {
+							imgElement.style.cursor = editing ? 'ew-resize' : 'default'
+							imgElement.style.display = 'inline-block'
+							imgElement.style.userSelect = 'none'
+							imgElement.style.border = editing ? '1px solid #ddd' : 'none'
+							imgElement.style.margin = '10px auto'
+						}
+
+						attachImageResizeHandler()
+						handlePageOverflow()
+					}, 300)
 				}, 50)
 			}
+
+			if (previewSrc) {
+				imgElement.src = previewSrc
+				return
+			}
+
+			if (!file) return
+			const reader = new FileReader()
+			reader.onload = event => {
+				imgElement.src = event.target.result
+			}
+			reader.readAsDataURL(file)
+		}
+
+		const handlePaste = e => {
+			const clipboard = e.clipboardData || e.originalEvent?.clipboardData
+			const items = Array.from(clipboard?.items || [])
+			const imageFiles = []
+
+			items.forEach(item => {
+				if (item?.kind !== 'file') return
+				if (!item?.type?.startsWith('image/')) return
+				const file = item.getAsFile()
+				if (file) imageFiles.push(file)
+			})
+
+			if (!imageFiles.length) {
+				const fallbackFiles = Array.from(clipboard?.files || []).filter(file =>
+					file?.type?.startsWith('image/'),
+				)
+				imageFiles.push(...fallbackFiles)
+			}
+
+			if (imageFiles.length) {
+				e.preventDefault()
+				imageFiles.forEach(file => insertPastedImage(file, e.currentTarget))
+				return
+			}
+
+			const htmlPayload = clipboard?.getData?.('text/html') || ''
+			const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
+			if (htmlDataUrl) {
+				e.preventDefault()
+				insertPastedImage(null, e.currentTarget, htmlDataUrl)
+				return
+			}
+
+			setTimeout(() => {
+				handlePageOverflow()
+			}, 50)
 		}
 
 		editables.forEach(el => {
@@ -839,58 +866,100 @@ const Word = () => {
 			cell.contentEditable = editing
 			if (editing) {
 				cell.style.outline = '1px dashed #4f46e5'
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 
 				// Table cells'ga paste handler qo'shish
 				const handleTableCellPaste = e => {
-					const items = (e.clipboardData || e.originalEvent.clipboardData).items
-					let hasImage = false
+					const clipboard = e.clipboardData || e.originalEvent?.clipboardData
+					const items = Array.from(clipboard?.items || [])
+					const imageFiles = []
 
-					for (let item of items) {
-						if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
-							hasImage = true
-							e.preventDefault()
+					items.forEach(item => {
+						if (item?.kind !== 'file') return
+						if (!item?.type?.startsWith('image/')) return
+						const file = item.getAsFile()
+						if (file) imageFiles.push(file)
+					})
 
-							const blob = item.getAsFile()
-							const reader = new FileReader()
-
-							reader.onload = event => {
-								const imgElement = document.createElement('img')
-								imgElement.src = event.target.result // Base64 sifatida saqlangan
-								imgElement.style.maxWidth = '100%'
-								imgElement.style.height = 'auto'
-								imgElement.style.display = 'block'
-								imgElement.style.margin = '5px 0'
-
-								const selection = window.getSelection()
-								if (selection.rangeCount > 0) {
-									const range = selection.getRangeAt(0)
-									range.insertNode(imgElement)
-									range.setStartAfter(imgElement)
-									range.collapse(true)
-									selection.removeAllRanges()
-									selection.addRange(range)
-								}
-							}
-
-							reader.readAsDataURL(blob)
-						}
+					if (!imageFiles.length) {
+						const fallbackFiles = Array.from(clipboard?.files || []).filter(file =>
+							file?.type?.startsWith('image/'),
+						)
+						imageFiles.push(...fallbackFiles)
 					}
 
-					if (!hasImage) {
+					const insertImageToCell = (file, previewSrc = null) => {
+						const imgElement = document.createElement('img')
+						imgElement.style.maxWidth = '100%'
+						imgElement.style.height = 'auto'
+						imgElement.style.display = 'block'
+						imgElement.style.margin = '5px 0'
+
+						const targetCell = e.currentTarget
+						const selection = window.getSelection()
+						if (
+							selection &&
+							selection.rangeCount > 0 &&
+							targetCell &&
+							targetCell.contains(selection.getRangeAt(0).commonAncestorContainer)
+						) {
+							const range = selection.getRangeAt(0)
+							range.insertNode(imgElement)
+							range.setStartAfter(imgElement)
+							range.collapse(true)
+							selection.removeAllRanges()
+							selection.addRange(range)
+						} else if (targetCell) {
+							targetCell.appendChild(imgElement)
+						}
+
 						setTimeout(() => {
 							handlePageOverflow()
 						}, 50)
+
+						if (previewSrc) {
+							imgElement.src = previewSrc
+							return
+						}
+
+						if (!file) return
+						const reader = new FileReader()
+						reader.onload = event => {
+							imgElement.src = event.target.result
+						}
+						reader.readAsDataURL(file)
 					}
+
+					if (imageFiles.length) {
+						e.preventDefault()
+						imageFiles.forEach(file => insertImageToCell(file))
+						return
+					}
+
+					const htmlPayload = clipboard?.getData?.('text/html') || ''
+					const htmlDataUrl = extractImageDataUrlFromHtml(htmlPayload)
+					if (htmlDataUrl) {
+						e.preventDefault()
+						insertImageToCell(null, htmlDataUrl)
+						return
+					}
+
+					setTimeout(() => {
+						handlePageOverflow()
+					}, 50)
 				}
 
+				cell._pasteHandler = handleTableCellPaste
 				cell.addEventListener('paste', handleTableCellPaste)
 			} else {
 				cell.style.outline = 'none'
-				// Paste listeners'ni olib tashlash
-				const allCells = document.querySelectorAll('.editable-table td')
-				allCells.forEach(c => {
-					c.removeEventListener('paste', c._pasteHandler)
-				})
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 			}
 		})
 
@@ -898,6 +967,17 @@ const Word = () => {
 			editables.forEach(el => {
 				el.removeEventListener('input', handleInput)
 				el.removeEventListener('paste', handlePaste)
+			})
+			if (overflowFrame !== null) {
+				cancelAnimationFrame(overflowFrame)
+				overflowFrame = null
+			}
+			const allCells = document.querySelectorAll('.editable-table td')
+			allCells.forEach(cell => {
+				if (cell._pasteHandler) {
+					cell.removeEventListener('paste', cell._pasteHandler)
+					delete cell._pasteHandler
+				}
 			})
 		}
 	}, [editing, pages1])
@@ -1147,8 +1227,12 @@ const Word = () => {
 					typeof field8Data[0] === 'string'
 				) {
 					try {
-						const tablesFromField8 = JSON.parse(field8Data[0])
-						setTableData(tablesFromField8)
+						const dataFromField8 = JSON.parse(field8Data[0])
+						if (dataFromField8?.tables) {
+							setTableData(dataFromField8.tables)
+						} else {
+							setTableData(dataFromField8)
+						}
 						vulnData = field8Data.slice(1) // Table ma'lumotlaridan keyingi qolganlarni ol
 					} catch (err) {
 						vulnData = field8Data // Agar parse qilsa xatolik bo'lsa, dastlabkisini ishla
@@ -1197,30 +1281,128 @@ const Word = () => {
 					return grouped
 				}
 
-				setNewVuln(splitVulnByPlatform(flatVulnData))
+				const groupedVulnBlocks = splitVulnByPlatform(flatVulnData)
+				setNewVuln(groupedVulnBlocks)
 
-				const highVuln1 = Array.isArray(raw)
-					? raw.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-					: [{ a1: raw.a1, a2: raw.a2, a3: raw.a3 }]
+				const normalizeVulnField = (rf, expectedLevel = null) => {
+					const list = Array.isArray(rf) ? rf.flat() : rf ? [rf] : []
+					return list
+						.filter(Boolean)
+						.map(v => {
+							const rawA1 = Number(v?.a1)
+							const rawA2 = Number(v?.a2)
+							let level = rawA1
+							let count = rawA2
+
+							if (
+								Number.isFinite(expectedLevel) &&
+								expectedLevel >= 1 &&
+								expectedLevel <= 3 &&
+								rawA1 !== expectedLevel &&
+								rawA2 === expectedLevel
+							) {
+								level = rawA2
+								count = rawA1
+							} else if (
+								!(rawA1 >= 1 && rawA1 <= 3) &&
+								rawA2 >= 1 &&
+								rawA2 <= 3
+							) {
+								level = rawA2
+								count = rawA1
+							}
+
+							if (!(level >= 1 && level <= 3) || !v?.a3) return null
+							return {
+								a1: level,
+								a2:
+									Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+								a3: v.a3,
+								a4: v?.a4,
+							}
+						})
+						.filter(Boolean)
+				}
+
+				const normalizeTitleKey = value =>
+					(value || '')
+						.toString()
+						.trim()
+						.replace(/\s+/g, ' ')
+						.toLowerCase()
+
+				const parseLevelFromText = value => {
+					const text = (value || '').toString().toLowerCase()
+					if (text.includes('yuqori')) return 1
+					if (text.includes("o'rta") || text.includes('o‘rta')) return 2
+					if (text.includes('past')) return 3
+					return 1
+				}
+
+				const extractPlatformEntries = blocks => {
+					const entries = []
+					;(blocks || []).forEach(block => {
+						if (!block || typeof block !== 'string') return
+						if (block.includes('class="exp-title"')) {
+							const rawTitle = stripHtml(block)
+							const title = rawTitle.replace(/^2\.2\.\d+\s*/g, '').trim()
+							if (title) entries.push({ title, level: null })
+							return
+						}
+						if (block.includes('class="exp-d"') && entries.length) {
+							const lastIndex = entries.length - 1
+							if (entries[lastIndex].level == null) {
+								entries[lastIndex].level = parseLevelFromText(stripHtml(block))
+							}
+						}
+					})
+					return entries
+				}
+
+				const buildPlatformVulnList = (blocks, poolMap) =>
+					extractPlatformEntries(blocks).map(entry => {
+						const key = normalizeTitleKey(entry.title)
+						const queue = poolMap.get(key)
+						if (queue && queue.length) return queue.shift()
+						return {
+							a1: entry.level || 1,
+							a2: 1,
+							a3: entry.title,
+						}
+					})
+
+				const highVuln1 = normalizeVulnField(raw, 1)
 
 				setHighVuln(highVuln1)
 
 				const raw1 = res[1]?.[12]
 
-				const mV = Array.isArray(raw1)
-					? raw1.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-					: [{ a1: raw1.a1, a2: raw1.a2, a3: raw1.a3 }]
+				const mV = normalizeVulnField(raw1, 2)
 				setMediumVuln(mV)
 
 				const raw2 = res[1]?.[11]
 
-				const lV = Array.isArray(raw2)
-					? raw2.flat().map(({ a1, a2, a3 }) => ({ a1, a2, a3 }))
-					: [{ a1: raw2.a1, a2: raw2.a2, a3: raw2.a3 }]
+				const lV = normalizeVulnField(raw2, 3)
 				setLowVuln(lV)
 
-				// console.log(res[1]?.[13]);
-				setAllVuln([...highVuln1, ...mV, ...lV])
+				const allLoadedVuln = [...highVuln1, ...mV, ...lV]
+				setAllVuln(allLoadedVuln)
+
+				const poolByTitle = new Map()
+				allLoadedVuln.forEach(item => {
+					const key = normalizeTitleKey(stripHtml(item?.a3 || ''))
+					if (!key) return
+					if (!poolByTitle.has(key)) poolByTitle.set(key, [])
+					poolByTitle.get(key).push({ ...item })
+				})
+
+				setVulnAndroid(
+					buildPlatformVulnList(groupedVulnBlocks.android || [], poolByTitle),
+				)
+				setVulnIOS(buildPlatformVulnList(groupedVulnBlocks.ios || [], poolByTitle))
+				setVulnUm(
+					buildPlatformVulnList(groupedVulnBlocks.umumiy || [], poolByTitle),
+				)
 
 				// Table ma'lumotlari field 8 ning 0-indexidan olingan
 			} else if (res.status === METHOD.BAD_REQUEST) {
@@ -1356,7 +1538,11 @@ const Word = () => {
 	}
 
 	const handleSaveDocFromModal = docVuln => {
-		// console.log("Childdan keldi:", docVuln);
+		if (!docVuln?.vuln || !Array.isArray(docVuln.vuln?.[1])) return
+		if (!docVuln?.platform) {
+			toast.error("Platformani tanlang")
+			return
+		}
 		setPlatform(docVuln.platform)
 		generateVulnHtml(docVuln.vuln, docVuln.platform)
 		const html = vulnerabilityTemplates[docVuln.type]
@@ -1471,8 +1657,14 @@ const Word = () => {
 	const handleSubmit = async docVuln => {
 		try {
 			// console.log(docVuln);
-			const level = docVuln?.vuln?.[1]?.[0]
+			const level = Number(docVuln?.vuln?.[1]?.[0])
 			if (!level) return
+			const vulnCountRaw = Number(docVuln?.vulnCount)
+			const vulnCount =
+				Number.isFinite(vulnCountRaw) && vulnCountRaw > 0
+					? Math.floor(vulnCountRaw)
+					: 1
+			const resourceLabel = docVuln?.resource || 'Umumiy'
 
 			const fieldMap = {
 				1: 13,
@@ -1488,24 +1680,33 @@ const Word = () => {
 				[field]: [
 					{
 						a1: level,
-						a2: docVuln?.vulnCount,
+						a2: vulnCount,
 						a3: docVuln?.vuln?.[1]?.[1],
+						a4: resourceLabel,
 					},
 				],
 			}
 
 			// console.log(docVuln);
 			setPlatform(docVuln.platform)
+			const newItem = payload?.[field]?.[0]
+			if (!newItem) return
+
+			if (Number(level) === 1) setHighVuln(prev => [...(prev || []), newItem])
+			else if (Number(level) === 2)
+				setMediumVuln(prev => [...(prev || []), newItem])
+			else if (Number(level) === 3)
+				setLowVuln(prev => [...(prev || []), newItem])
+			setAllVuln(prev => [...(prev || []), newItem])
 
 			if (docVuln.platform === 'android') {
-				setVulnAndroid(prev => [...prev, payload])
+				setVulnAndroid(prev => [...(prev || []), newItem])
 			} else if (docVuln.platform === 'ios') {
-				setVulnIOS(prev => [...prev, payload])
+				setVulnIOS(prev => [...(prev || []), newItem])
 			} else if (docVuln.platform === 'umumiy') {
-				setVulnUm(prev => [...prev, payload])
+				setVulnUm(prev => [...(prev || []), newItem])
 			}
 
-			return
 			const res = await sendRpcRequest(stRef, METHOD.ORDER_UPDATE, payload)
 
 			if (res.status == METHOD.OK) {
