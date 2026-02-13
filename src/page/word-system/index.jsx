@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FaPen, FaSave } from 'react-icons/fa'
 import { useReactToPrint } from 'react-to-print'
 import { useParams } from 'react-router-dom'
@@ -50,8 +50,6 @@ const TOOLBAR_FONT_SIZE_TO_EXEC = {
 const IMAGE_UPLOAD_LOG_TAG = '[word-system:image]'
 const imageLog = (...args) => console.log(IMAGE_UPLOAD_LOG_TAG, ...args)
 const imageLogError = (...args) => console.error(IMAGE_UPLOAD_LOG_TAG, ...args)
-const IMAGE_PLACEHOLDER_SRC =
-	'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 const CARET_ANCHOR_HTML =
 	'<p class="system-paragraph word-caret-anchor" data-caret-anchor="true"><br /></p>'
 const UUID_RESOURCE_RE =
@@ -1195,7 +1193,9 @@ const SystemWord = () => {
 
 		while (node) {
 			if (
-				node.matches?.('p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span')
+				node.matches?.(
+					'p,div,li,blockquote,h1,h2,h3,h4,h5,h6,td,th,figcaption,span',
+				)
 			) {
 				const blockedContainer =
 					node.classList?.contains('system-two-col-flow') ||
@@ -2754,7 +2754,11 @@ const SystemWord = () => {
 			// Model pagination yoqilganida har bir Enter/Delete da state sync qilish caretni
 			// qayta render sababli abzas boshiga olib ketadi. Bu holatda DOM ni saqlab,
 			// sync ni blur/save/explicit action paytiga qoldiramiz.
-			if (modelPaginationRef.current && isNewContentEditable && isCaretSensitiveEdit) {
+			if (
+				modelPaginationRef.current &&
+				isNewContentEditable &&
+				isCaretSensitiveEdit
+			) {
 				return
 			}
 
@@ -2909,12 +2913,9 @@ const SystemWord = () => {
 				imageLogError('insertPastedImage skipped: file missing and no preview')
 				return
 			}
-			const reader = new FileReader()
-			reader.onload = event => {
-				imageLog('insertPastedImage file reader loaded')
-				imgElement.src = event.target.result
-			}
-			reader.readAsDataURL(clipboardFile)
+			// Previewni data URL emas, blob URL orqali ko'rsatamiz
+			const blobUrl = URL.createObjectURL(clipboardFile)
+			imgElement.src = blobUrl
 		}
 
 		const handlePaste = async e => {
@@ -2963,61 +2964,48 @@ const SystemWord = () => {
 				)
 				// word/index.jsx dagi kabi: FileReader → img.onload → setTimeout 50 insert → setTimeout 300 resize + overflow
 				imageFiles.forEach(file => {
-					const reader = new FileReader()
-					reader.onload = event => {
-						const imgElement = document.createElement('img')
-						imgElement.src = event.target.result
-						imgElement.onload = () => {
-							const maxWidth = 500
-							if (imgElement.width > maxWidth) {
-								const aspectRatio = imgElement.height / imgElement.width
-								imgElement.style.width = maxWidth + 'px'
-								imgElement.style.height = maxWidth * aspectRatio + 'px'
-							} else {
-								imgElement.style.width = imgElement.width + 'px'
-								imgElement.style.height = imgElement.height + 'px'
-							}
-							imgElement.style.cursor = 'nwse-resize'
-							imgElement.style.display = 'inline-block'
-							imgElement.style.border = '1px solid #ddd'
-							imgElement.style.margin = '10px auto'
-							imgElement.style.userSelect = 'none'
-							imgElement.className = 'resizable-image'
+					const blobUrl = URL.createObjectURL(file)
+					const imgElement = document.createElement('img')
+					imgElement.src = blobUrl
+					imgElement.onload = () => {
+						const maxWidth = 500
+						if (imgElement.width > maxWidth) {
+							const aspectRatio = imgElement.height / imgElement.width
+							imgElement.style.width = maxWidth + 'px'
+							imgElement.style.height = maxWidth * aspectRatio + 'px'
+						} else {
+							imgElement.style.width = imgElement.width + 'px'
+							imgElement.style.height = imgElement.height + 'px'
+						}
+						imgElement.style.cursor = 'nwse-resize'
+						imgElement.style.display = 'inline-block'
+						imgElement.style.border = '1px solid #ddd'
+						imgElement.style.margin = '10px auto'
+						imgElement.style.userSelect = 'none'
+						imgElement.className = 'resizable-image'
 
-							setTimeout(() => {
-								const wrapper = document.createElement('span')
-								wrapper.style.display = 'block'
-								wrapper.style.textAlign = 'center'
-								wrapper.style.margin = '10px 0'
-								wrapper.appendChild(imgElement)
-								// Saqlangan joyga kiritamiz (setTimeout dan keyin selection yo‘qoladi)
-								try {
-									const canUseSavedRange = Boolean(
-										savedRange &&
-										savedRange.startContainer?.isConnected &&
-										targetEditable &&
-										targetEditable.contains(savedRange.commonAncestorContainer),
-									)
-									if (canUseSavedRange) {
-										savedRange.insertNode(wrapper)
-										savedRange.setStartAfter(wrapper)
-										savedRange.collapse(true)
-										if (selection) {
-											selection.removeAllRanges()
-											selection.addRange(savedRange)
-										}
-									} else {
-										if (targetInsertContainer?.isConnected) {
-											targetInsertContainer.appendChild(wrapper)
-										} else {
-											document
-												.querySelector(
-													'.page-content.editable.new-content .system-two-col-flow, .page-content.editable',
-												)
-												?.appendChild(wrapper)
-										}
+						setTimeout(() => {
+							const wrapper = document.createElement('span')
+							wrapper.style.display = 'block'
+							wrapper.style.textAlign = 'center'
+							wrapper.style.margin = '10px 0'
+							wrapper.appendChild(imgElement)
+							try {
+								const canUseSavedRange = Boolean(
+									savedRange &&
+									savedRange.startContainer?.isConnected &&
+									targetEditable &&
+									targetEditable.contains(savedRange.commonAncestorContainer),
+								)
+								if (canUseSavedRange) {
+									savedRange.insertNode(wrapper)
+									savedRange.setStartAfter(wrapper)
+									savedRange.collapse(true)
+									if (selection) {
+										selection.removeAllRanges()
+										selection.addRange(savedRange)
 									}
-								} catch {
+								} else {
 									if (targetInsertContainer?.isConnected) {
 										targetInsertContainer.appendChild(wrapper)
 									} else {
@@ -3028,33 +3016,42 @@ const SystemWord = () => {
 											?.appendChild(wrapper)
 									}
 								}
-								editables.forEach(el => {
-									void el.offsetHeight
-								})
-								setTimeout(() => {
-									if (imgElement && imgElement.parentNode) {
-										imgElement.style.cursor = editingRef.current
-											? 'nwse-resize'
-											: 'default'
-										imgElement.style.border = editingRef.current
-											? '1px solid #ddd'
-											: 'none'
-										imgElement.style.margin = '10px auto'
-									}
-									syncImageEditingStyles()
-									handlePageOverflow()
-									if (file && imgElement) {
-										Promise.resolve()
-											.then(() => handlePasteImage(file, imgElement))
-											.catch(err =>
-												imageLogError('handlePaste upload failed', err),
-											)
-									}
-								}, 300)
-							}, 50)
-						}
+							} catch {
+								if (targetInsertContainer?.isConnected) {
+									targetInsertContainer.appendChild(wrapper)
+								} else {
+									document
+										.querySelector(
+											'.page-content.editable.new-content .system-two-col-flow, .page-content.editable',
+										)
+										?.appendChild(wrapper)
+								}
+							}
+							editables.forEach(el => {
+								void el.offsetHeight
+							})
+							setTimeout(() => {
+								if (imgElement && imgElement.parentNode) {
+									imgElement.style.cursor = editingRef.current
+										? 'nwse-resize'
+										: 'default'
+									imgElement.style.border = editingRef.current
+										? '1px solid #ddd'
+										: 'none'
+									imgElement.style.margin = '10px auto'
+								}
+								syncImageEditingStyles()
+								handlePageOverflow()
+								if (file && imgElement) {
+									Promise.resolve()
+										.then(() => handlePasteImage(file, imgElement))
+										.catch(err =>
+											imageLogError('handlePaste upload failed', err),
+										)
+								}
+							}, 300)
+						}, 50)
 					}
-					reader.readAsDataURL(file)
 				})
 				return
 			}
@@ -3187,11 +3184,8 @@ const SystemWord = () => {
 						}
 
 						if (!file) return
-						const reader = new FileReader()
-						reader.onload = event => {
-							imgElement.src = event.target.result
-						}
-						reader.readAsDataURL(file)
+						const blobUrl = URL.createObjectURL(file)
+						imgElement.src = blobUrl
 					}
 
 					if (imageFiles.length) {
@@ -3806,11 +3800,11 @@ const SystemWord = () => {
 		return doc.body.textContent || ''
 	}
 
-	const sanitizePersistedImageHtml = html => {
-		if (!html || typeof html !== 'string') return html
-		try {
-			const parser = new DOMParser()
-			const doc = parser.parseFromString(html, 'text/html')
+const sanitizePersistedImageHtml = html => {
+	if (!html || typeof html !== 'string') return html
+	try {
+		const parser = new DOMParser()
+		const doc = parser.parseFromString(html, 'text/html')
 			const imgs = Array.from(doc.body.querySelectorAll('img'))
 			if (!imgs.length) return html
 
@@ -3820,29 +3814,48 @@ const SystemWord = () => {
 				const currentSrc = (img.getAttribute('src') || '').trim()
 				const inferredFileId = inferFileIdFromSrc(currentSrc)
 				const fileId = String(fileIdRaw || inferredFileId || '').trim()
-				const src = (img.getAttribute('src') || '').trim()
 
 				if (fileId) {
 					img.setAttribute('data-file-id', fileId)
-					if (isBrokenFileSrcValue(src)) {
-						img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
-					}
-					img.removeAttribute('data-src-resolved')
-					img.removeAttribute('data-upload-progress')
-					img.removeAttribute('data-uploading')
-					img.removeAttribute('data-upload-started')
-					img.removeAttribute('data-paste-init')
-
-					return
 				}
+
+				// data/blob/Base64 srclarni saqlamaymiz; faqat placeholder yoki bo'sh
+				if (currentSrc.startsWith('data:') || currentSrc.startsWith('blob:')) {
+					img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+				} else if (isBrokenFileSrcValue(currentSrc)) {
+					img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+				}
+
+				img.removeAttribute('data-src-resolved')
+				img.removeAttribute('data-upload-progress')
+				img.removeAttribute('data-uploading')
+				img.removeAttribute('data-upload-started')
+				img.removeAttribute('data-paste-init')
 			})
 
-			return doc.body.innerHTML
-		} catch (error) {
-			imageLogError('sanitizePersistedImageHtml error', error)
-			return html
-		}
+		return doc.body.innerHTML
+	} catch (error) {
+		imageLogError('sanitizePersistedImageHtml error', error)
+		return html
 	}
+}
+
+const sanitizeLiveImageElement = img => {
+	if (!(img instanceof HTMLImageElement)) return
+	const src = (img.getAttribute('src') || '').trim()
+	const fileId = (img.getAttribute('data-file-id') || img.dataset?.fileId || '').trim()
+	if (!fileId) {
+		img.removeAttribute('src')
+		img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+	} else if (src.startsWith('data:') || src.startsWith('blob:') || isBrokenFileSrcValue(src)) {
+		img.setAttribute('src', IMAGE_PLACEHOLDER_SRC)
+	}
+	img.removeAttribute('data-src-resolved')
+	img.removeAttribute('data-upload-progress')
+	img.removeAttribute('data-uploading')
+	img.removeAttribute('data-upload-started')
+	img.removeAttribute('data-paste-init')
+}
 
 	const normalizeNewContentBlockHtml = html => {
 		if (!html || typeof html !== 'string') return html
@@ -4759,7 +4772,8 @@ const SystemWord = () => {
 				const root = container.firstElementChild
 				if (!root || container.children.length !== 1) return [html]
 				const tag = (root.tagName || '').toLowerCase()
-				const canUnwrap = tag === 'div' || tag === 'section' || tag === 'article'
+				const canUnwrap =
+					tag === 'div' || tag === 'section' || tag === 'article'
 				if (!canUnwrap) return [html]
 				if (root.attributes.length > 0) return [html]
 				const children = Array.from(root.childNodes)
@@ -4791,10 +4805,22 @@ const SystemWord = () => {
 				if (!root || container.children.length !== 1) return null
 
 				const tag = (root.tagName || '').toLowerCase()
-				const supported = ['p', 'div', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+				const supported = [
+					'p',
+					'div',
+					'li',
+					'blockquote',
+					'h1',
+					'h2',
+					'h3',
+					'h4',
+					'h5',
+					'h6',
+				]
 				if (!supported.includes(tag)) return null
 				if (root.children.length > 0) return null
-				if (root.querySelector('img,table,ul,ol,video,audio,iframe,canvas,svg')) return null
+				if (root.querySelector('img,table,ul,ol,video,audio,iframe,canvas,svg'))
+					return null
 
 				const originalText = root.textContent || ''
 				const normalizedText = originalText.replace(/\s+/g, ' ').trim()
@@ -4976,6 +5002,10 @@ const SystemWord = () => {
 			const pageBlocks = []
 			Array.from(normalizedChildren).forEach(child => {
 				if (!child) return
+				// live DOMdagi img src larini tozalab tashlaymiz (data/blob -> placeholder)
+				if (child.querySelectorAll) {
+					child.querySelectorAll('img').forEach(sanitizeLiveImageElement)
+				}
 				if (child.tagName === 'DIV') {
 					const hasNestedDivs = child.querySelector('div') !== null
 					const hasImportantClass =
@@ -5273,6 +5303,8 @@ const SystemWord = () => {
 				if (safeUploadedSize) {
 					imgElement.dataset.fileSize = String(safeUploadedSize)
 				}
+				// data/blob url ni saqlamaslik uchun placeholder
+				imgElement.src = IMAGE_PLACEHOLDER_SRC
 			}
 
 			// Tahrir rejimida blob URL o‘rnatilmaydi — rasm data URL da qoladi, sahifa yuqoriga sakramaydi.
@@ -6768,7 +6800,7 @@ const SystemWord = () => {
 						>
 							{renderPageNumberLabel()}
 						</div>
-						</div>
+					</div>
 					<div className='a4 system-c'>
 						{10 % 2 === 0 ? (
 							<>
@@ -6864,78 +6896,78 @@ const SystemWord = () => {
 					</div>
 					{!removedStaticPageIds.tailEmpty1 && (
 						<div className='a4 system-c' data-static-page-id='tailEmpty1'>
-						{10 % 2 === 0 ? (
-							<>
-								<img
-									className='system-top-img w-full min-w-full'
-									src='/assets/system/ax-tops.png'
-									alt=''
-								/>
-								<img
-									className='system-bottom-img w-full min-w-full'
-									src='/assets/system/ax-bottoms.jpg'
-									alt=''
-								/>
-							</>
-						) : (
-							<>
-								<img
-									className='system-top-img w-full min-w-full'
-									src='/assets/system/ax-top.png'
-									alt=''
-								/>
-								<img
-									className='system-bottom-img w-full min-w-full'
-									src='/assets/system/ax-bottom.jpg'
-									alt=''
-								/>
-							</>
-						)}
+							{10 % 2 === 0 ? (
+								<>
+									<img
+										className='system-top-img w-full min-w-full'
+										src='/assets/system/ax-tops.png'
+										alt=''
+									/>
+									<img
+										className='system-bottom-img w-full min-w-full'
+										src='/assets/system/ax-bottoms.jpg'
+										alt=''
+									/>
+								</>
+							) : (
+								<>
+									<img
+										className='system-top-img w-full min-w-full'
+										src='/assets/system/ax-top.png'
+										alt=''
+									/>
+									<img
+										className='system-bottom-img w-full min-w-full'
+										src='/assets/system/ax-bottom.jpg'
+										alt=''
+									/>
+								</>
+							)}
 
-						<div
-							className='page-number flex justify-center mt-auto text-white items-center'
-							style={{ bottom: '40px' }}
-						>
-							{renderPageNumberLabel()}
-						</div>
+							<div
+								className='page-number flex justify-center mt-auto text-white items-center'
+								style={{ bottom: '40px' }}
+							>
+								{renderPageNumberLabel()}
+							</div>
 						</div>
 					)}
 					{!removedStaticPageIds.tailEmpty2 && (
 						<div className='a4 system-c' data-static-page-id='tailEmpty2'>
-						{10 % 2 === 0 ? (
-							<>
-								<img
-									className='system-top-img w-full min-w-full'
-									src='/assets/system/ax-tops.png'
-									alt=''
-								/>
-								<img
-									className='system-bottom-img w-full min-w-full'
-									src='/assets/system/ax-bottoms.jpg'
-									alt=''
-								/>
-							</>
-						) : (
-							<>
-								<img
-									className='system-top-img w-full min-w-full'
-									src='/assets/system/ax-top.png'
-									alt=''
-								/>
-								<img
-									className='system-bottom-img w-full min-w-full'
-									src='/assets/system/ax-bottom.jpg'
-									alt=''
-								/>
-							</>
-						)}
+							{10 % 2 === 0 ? (
+								<>
+									<img
+										className='system-top-img w-full min-w-full'
+										src='/assets/system/ax-tops.png'
+										alt=''
+									/>
+									<img
+										className='system-bottom-img w-full min-w-full'
+										src='/assets/system/ax-bottoms.jpg'
+										alt=''
+									/>
+								</>
+							) : (
+								<>
+									<img
+										className='system-top-img w-full min-w-full'
+										src='/assets/system/ax-top.png'
+										alt=''
+									/>
+									<img
+										className='system-bottom-img w-full min-w-full'
+										src='/assets/system/ax-bottom.jpg'
+										alt=''
+									/>
+								</>
+							)}
 
-						<div
-							className='page-number flex justify-center mt-auto text-white items-center'
-							style={{ bottom: '40px' }}
-						>
-							{renderPageNumberLabel()}
-						</div>
+							<div
+								className='page-number flex justify-center mt-auto text-white items-center'
+								style={{ bottom: '40px' }}
+							>
+								{renderPageNumberLabel()}
+							</div>
 						</div>
 					)}
 

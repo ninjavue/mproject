@@ -978,6 +978,14 @@ const Word = () => {
 		})
 	}
 
+	const sanitizeLiveImageElement = img => {
+		if (!(img instanceof HTMLImageElement)) return
+		const src = (img.getAttribute('src') || '').trim()
+		if (src.startsWith('data:') || src.startsWith('blob:')) {
+			img.removeAttribute('src')
+		}
+	}
+
 	useEffect(() => {
 		const editables = document.querySelectorAll('.editable')
 
@@ -1070,20 +1078,20 @@ const Word = () => {
 			scheduleOverflow()
 		}
 
-		const extractImageDataUrlFromHtml = html => {
-			if (!html || typeof html !== 'string') return ''
-			try {
-				const doc = new DOMParser().parseFromString(html, 'text/html')
-				const img = doc.querySelector('img[src]')
-				const src = (img?.getAttribute('src') || '').trim()
-				return src.startsWith('data:image/') ? src : ''
-			} catch {
-				return ''
-			}
+	const extractImageDataUrlFromHtml = html => {
+		if (!html || typeof html !== 'string') return ''
+		try {
+			const doc = new DOMParser().parseFromString(html, 'text/html')
+			const img = doc.querySelector('img[src]')
+			const src = (img?.getAttribute('src') || '').trim()
+			return src.startsWith('data:image/') ? src : ''
+		} catch {
+			return ''
 		}
+	}
 
-		const insertPastedImage = (file, editableRoot, previewSrc = null) => {
-			const imgElement = document.createElement('img')
+	const insertPastedImage = (file, editableRoot, previewSrc = null) => {
+		const imgElement = document.createElement('img')
 			imgElement.onload = () => {
 				const maxWidth = 500
 				if (imgElement.width > maxWidth) {
@@ -1144,18 +1152,15 @@ const Word = () => {
 				}, 50)
 			}
 
-			if (previewSrc) {
-				imgElement.src = previewSrc
-				return
-			}
-
-			if (!file) return
-			const reader = new FileReader()
-			reader.onload = event => {
-				imgElement.src = event.target.result
-			}
-			reader.readAsDataURL(file)
+		if (previewSrc) {
+			imgElement.src = previewSrc
+			return
 		}
+
+		if (!file) return
+		const blobUrl = URL.createObjectURL(file)
+		imgElement.src = blobUrl
+	}
 
 		const handlePaste = e => {
 			const clipboard = e.clipboardData || e.originalEvent?.clipboardData
@@ -1277,11 +1282,8 @@ const Word = () => {
 						}
 
 						if (!file) return
-						const reader = new FileReader()
-						reader.onload = event => {
-							imgElement.src = event.target.result
-						}
-						reader.readAsDataURL(file)
+						const blobUrl = URL.createObjectURL(file)
+						imgElement.src = blobUrl
 					}
 
 					if (imageFiles.length) {
@@ -2228,6 +2230,9 @@ const Word = () => {
 
 		allPages.forEach(page => {
 			Array.from(page.children).forEach(child => {
+				if (child.querySelectorAll) {
+					child.querySelectorAll('img').forEach(sanitizeLiveImageElement)
+				}
 				// Agar child o'zi div bo'lsa va uning ichida yana div'lar bo'lsa,
 				// faqat ichki kontentni olish - bu div'lar takrorlanib qolmasligi uchun
 				if (child.tagName === 'DIV') {
